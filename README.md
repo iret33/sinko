@@ -144,6 +144,7 @@ Use it together with Screen Time (iPhone) or Family Link (Android). More in the 
 | [`docs/how-it-works.md`](docs/how-it-works.md) | Pi-hole groups, the live picture, the block lists, files on the box |
 | [`docs/product-image.md`](docs/product-image.md), [`docs/selling.md`](docs/selling.md) | Making and selling ready-made boxes |
 | [`docs/hardware-test-checklist.md`](docs/hardware-test-checklist.md) | What to test on a real box before a release or a sale |
+| [`hardware/case/`](hardware/case/README.md) | A case to print for the Orange Pi Zero 3, with the parts list (English and Arabic) |
 | [`docs/maintainers/`](docs/maintainers) | Architecture and contracts; releasing |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md), [`SECURITY.md`](SECURITY.md), [`CHANGELOG.md`](CHANGELOG.md) | Helping, reporting a vulnerability, what changed |
 
@@ -163,7 +164,8 @@ pull-request checklist: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 ## Licences and names
 
 - Sinko's code is **GPL-3.0-or-later** ([`LICENSE`](LICENSE), [`COPYING.md`](COPYING.md)); the block lists in `lists/` are
-  public domain (CC0); the bundled font, IBM Plex Sans Arabic, is under the SIL Open Font License (`web/fonts/OFL.txt`).
+  public domain (CC0); the bundled font, IBM Plex Sans Arabic, is under the SIL Open Font License (`web/fonts/OFL.txt`);
+  the case in `hardware/case/` is under CC BY-SA 4.0.
 - "Sinko" and its logo are the project's marks ([`TRADEMARK.md`](TRADEMARK.md)). Third-party software and trademarks are
   listed in [`NOTICE`](NOTICE).
 - Pi-hole is a registered trademark of Pi-hole LLC and is licensed under the EUPL-1.2. Sinko is independent software that

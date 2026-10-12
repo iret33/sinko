@@ -47,7 +47,8 @@ that promises more than the README does. Recommend Screen Time (iPhone) or Famil
   2 GB is a comfortable default.
 * Sell a **complete kit**: the board, a certified 5 V power supply with the right plug for your market, a high-endurance
   microSD card (16 GB is plenty; Sinko needs a couple of gigabytes, and the space beyond the image's size is not used,
-  see [`product-image.md`](product-image.md)), a case with a little cooling, an Ethernet cable.
+  see [`product-image.md`](product-image.md)), a case with a little cooling (the project's own case is free to print, with
+  a parts list: [`hardware/case/`](../hardware/case/README.md)), an Ethernet cable.
   A bad power supply or a worn card causes most "it stopped working" calls.
 * Electrical safety, radio (the board has Wi-Fi and Bluetooth, which Sinko does not use; the box works on Ethernet),
   import and consumer-warranty rules differ by country (for example CE/UKCA in Europe, GCC conformity marking and TRA
