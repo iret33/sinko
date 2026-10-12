@@ -9,6 +9,7 @@ without even the implied warranty of merchantability or fitness for a particular
 |---|---|
 | Code, page, scripts, documentation | GPL-3.0-or-later ([`LICENSE`](LICENSE)), except for the marks below |
 | `lists/` (the `*.txt` block lists **and** `services.json`, the app catalogue) | CC0 1.0, public domain dedication ([`lists/LICENSE`](lists/LICENSE)); reuse them freely |
+| `hardware/case/` (the case to print: its files, pictures and CadQuery source) | CC BY-SA 4.0 ([`hardware/case/README.md`](hardware/case/README.md#licence)), except the Sinko logo engraved on the lid, which is one of the marks below |
 | `web/fonts/` (IBM Plex Sans Arabic, 2019 IBM Corp.) | SIL Open Font License 1.1 ([`web/fonts/OFL.txt`](web/fonts/OFL.txt)) |
 | The Sinko name and logo: `web/icon.svg`, `web/icon-*.png`, `web/apple-touch-icon.png`, everything in `docs/img/` | The project's marks, **not** GPL: see below |
 
