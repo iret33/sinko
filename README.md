@@ -27,6 +27,13 @@ Parental controls that live on a small box in your home, in Arabic and English.<
 </p>
 
 <p align="center">
+  <a href="hardware/case/README.md"><img src="hardware/case/img/hero.jpg" alt="The Sinko box case: a white lid with a round fan grille and the Sinko logo engraved on top, on a thin teal base, with small vent holes in the front" width="480"></a><br>
+  <sub><b>The Sinko box case</b>, free to print: closed on every side except power and Ethernet, with a small silent fan.<br>
+  <a href="hardware/case/README.md">Files, parts list and how to put it together</a> · <a href="https://www.pcbway.com/project/shareproject/Sinko_box_a_minimal_fan_cooled_case_for_the_Orange_Pi_Zero_3_508ebe8e.html#cnclink">Get it printed on PCBWay</a><br>
+  <span dir="rtl" lang="ar">علبة صندوق سينكو، مجانية للطباعة، مع قائمة القطع وطريقة التجميع</span></sub>
+</p>
+
+<p align="center">
   <img src="docs/img/desktop-en.png" alt="The main page on a computer. Left: Children are online, 3 of 19 apps blocked, a Turn internet off button, a note that a newer Sinko is ready, and the live picture drawn as a circuit board, with Sara's iPad, Ali's phone and everyone else above the family box, a black hole beside it and the internet below. Right: the quick modes Homework, Free time and Offline break, and the apps and sites, with TikTok, YouTube and Roblox blocked" width="720"><br>
   <sub>The main page on a computer: what is happening now and the live picture on the left, quick modes and the apps on the right</sub>
 </p>
