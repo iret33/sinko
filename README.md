@@ -19,7 +19,7 @@ Parental controls that live on a small box in your home, in Arabic and English.<
   <a href="COPYING.md"><img alt="Licence: GPL-3.0-or-later" src="https://img.shields.io/badge/licence-GPL--3.0--or--later-0F766E"></a>
   <img alt="Pi-hole v6" src="https://img.shields.io/badge/Pi--hole-v6-96060C?logo=pihole&logoColor=white">
   <img alt="Orange Pi Zero 3" src="https://img.shields.io/badge/Orange%20Pi-Zero%203-F26B21">
-  <img alt="Languages: Arabic and English" src="https://img.shields.io/badge/%D8%A7%D9%84%D8%B9%D8%B1%D8%A8%D9%8A%D8%A9-English-1E2547">
+  <img alt="Languages: Arabic and English" src="docs/img/badge-languages.svg">
   <a href="CONTRIBUTING.md"><img alt="Contributions welcome" src="https://img.shields.io/badge/contributions-welcome-0F766E"></a>
 </p>
 <p align="center">
