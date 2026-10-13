@@ -54,7 +54,8 @@ class ReleaseBuild(unittest.TestCase):
 
     def test_what_a_box_needs_is_inside(self):
         for need in ("bin/sinko", "install.sh", "uninstall.sh", "VERSION", "LICENSE", "NOTICE", "web/index.html",
-                     "web/app.js", "lists/services.json", "systemd/sinko.service", "systemd/sinko-lists.timer"):
+                     "web/app.js", "lists/services.json", "systemd/sinko.service", "systemd/sinko-lists.timer",
+                     "model/host-model.json"):
             self.assertIn("sinko/" + need, self.members)
 
     def test_what_the_documents_send_a_seller_to_look_for_is_inside(self):

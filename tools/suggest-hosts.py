@@ -19,6 +19,8 @@ seeded, nothing that depends on the order of a set).
 import argparse
 import collections
 import datetime
+import importlib.machinery
+import importlib.util
 import io
 import json
 import math
@@ -37,8 +39,6 @@ UMBRELLA_URL = "https://s3-us-west-1.amazonaws.com/umbrella-static/top-1m.csv.zi
 MAX_DOWNLOAD = 64 * 1024 * 1024         # the zip is about 10 MB; anything much bigger is not the list
 MAX_NAMES = 2_000_000
 
-THRESHOLD = 0.98          # how sure the model must be before a name is suggested
-MIN_WORD = 5              # an app's word ("tiktok", "twimg") is at least this long: "fb" or "x" would match everything
 NEGATIVES = 300_000       # ordinary names the model learns from in each half (a sample, to keep a run to minutes)
 PER_SITE = 40             # at most this many examples of one app's site, so googlevideo.com does not drown the rest
 POSITIVE_SHARE = 0.02     # all the app examples together weigh this much of the ordinary names: a name is rarely an app's
@@ -50,30 +50,23 @@ RATE_WHICH = 0.3
 PRUNE = 0.05              # weights smaller than this are left out of a saved model
 SHOW = 40                 # groups shown per app and section; the rest are counted
 
-# Platforms that carry many companies' names. Their own labels say nothing about the app ("akamaized" is not Steam),
-# so they are cut off before a name is read, and a suggestion never blocks one of them as a whole.
-SHARED = {
-    "akamaihd.net", "akamaized.net", "akamai.net", "akamaiedge.net", "edgesuite.net", "edgekey.net", "akadns.net",
-    "akamaitechnologies.com", "fastly.net", "map.fastly.net", "fastlylb.net", "cloudflare.net", "cdn.cloudflare.net",
-    "cloudflare.com", "cloudfront.net", "amazonaws.com", "awsglobalaccelerator.com", "elb.amazonaws.com",
-    "azureedge.net", "azurefd.net", "trafficmanager.net", "cloudapp.net", "cloudapp.azure.com", "windows.net",
-    "footprint.net", "llnwd.net", "edgecastcdn.net", "cdn77.org", "b-cdn.net", "omtrdc.net", "2o7.net",
-    "l.google.com", "googleapis.com", "googleusercontent.com", "gstatic.com", "ggpht.com", "googlevideo.com",
-    "appspot.com", "1e100.net", "fbcdn.net", "github.io", "githubusercontent.com", "herokuapp.com", "vercel.app",
-    "netlify.app", "pages.dev", "workers.dev", "firebaseapp.com", "web.app", "wpengine.com", "shopify.com",
-    "myshopify.com", "wixsite.com", "blogspot.com", "fandom.com", "wordpress.com", "tumblr.com",
-}
-# Never suggested as a whole, whatever the model says: tests/test_core.py refuses a list that blocks any of them.
-NEVER = SHARED | {
-    "google.com", "apple.com", "icloud.com", "microsoft.com", "microsoftonline.com", "live.com", "windows.com",
-    "office.com", "office.net", "msftncsi.com", "msftconnecttest.com", "github.com", "raw.githubusercontent.com",
-}
-SECOND_LEVEL = {"co", "com", "net", "org", "gov", "edu", "ac", "or", "ne", "go", "gob", "nic", "ltd", "plc"}
-TLDISH = re.compile(r"(?:[a-z]{2}|com|net|org|info|biz|io|tv|me|app|dev|gg|xyz|online|site|tech|cloud|live|media|"
-                    r"games|game|group|link|top|club|vip|pro|world|global|asia|mobi|name|cc|ws|us|eu)\Z")
-HOST_RE = re.compile(r"[a-z0-9_](?:[a-z0-9_-]{0,62}\.)+[a-z0-9-]{1,63}\Z")
-DIGITS = re.compile(r"[0-9]+")
 REF_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/~^-]{0,100}\Z")      # never starts with "-": it reaches git's command line
+
+
+def _box_program():
+    """bin/sinko, loaded as a module: how a name is read and scored lives there, so that the box and this training can
+    never read a name differently."""
+    loader = importlib.machinery.SourceFileLoader("sinko_program", os.path.join(ROOT, "bin", "sinko"))
+    spec = importlib.util.spec_from_loader("sinko_program", loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
+box = _box_program()
+SHARED, NEVER, HOST_RE, THRESHOLD = box.SHARED, box.NEVER, box.HOST_RE, box.MODEL_THRESHOLD
+site, unwrap, app_labels, features, sigmoid = box.site, box.unwrap, box.app_labels, box.features, box.sigmoid
+Cover, Model, app_words, matcher, carries, zone = box.Cover, box.Model, box.app_words, box.matcher, box.carries, box.zone
 
 
 def say(text):
@@ -83,22 +76,6 @@ def say(text):
 # --------------------------------------------------------------------------- #
 # Lists and names
 # --------------------------------------------------------------------------- #
-def parse_list(text):
-    return [line[2:-1].lower() for line in (l.strip() for l in text.splitlines())
-            if line.startswith("||") and line.endswith("^")]
-
-
-def load_lists(folder):
-    """{app id: [domain, ...]} from lists/*.txt. The guard list is not an app: it stops DNS bypass services, and
-    guessing new ones from a name ("dns.", "doh.") flags half the internet."""
-    lists = {}
-    for name in sorted(os.listdir(folder)):
-        if name.endswith(".txt") and name != "guard.txt":
-            with open(os.path.join(folder, name), encoding="utf-8") as fh:
-                lists[name[:-4]] = parse_list(fh.read())
-    return lists
-
-
 def lists_at(ref, root=ROOT):
     """The lists as they were at git `ref`."""
     if not REF_RE.match(ref):
@@ -111,7 +88,7 @@ def lists_at(ref, root=ROOT):
         if name.endswith(".txt") and name != "guard.txt":
             text = subprocess.run(["git", "-C", root, "show", "%s:%s" % (ref, path)], check=True,
                                   capture_output=True, text=True).stdout
-            lists[name[:-4]] = parse_list(text)
+            lists[name[:-4]] = box.parse_block_list(text)
     return lists
 
 
@@ -153,160 +130,8 @@ def download(url, dest):
 
 
 # --------------------------------------------------------------------------- #
-# Reading a name
-# --------------------------------------------------------------------------- #
-def site(name):
-    """The registrable part, near enough: "a.b.example.co.uk" -> "example.co.uk"."""
-    labels = name.split(".")
-    if len(labels) >= 3 and labels[-2] in SECOND_LEVEL and len(labels[-1]) == 2:
-        return ".".join(labels[-3:])
-    return ".".join(labels[-2:])
-
-
-def strip_shared(labels, keep=0):
-    """Cuts shared platforms off the end, longest first, as long as more than `keep` labels stay."""
-    cut = True
-    while cut:
-        cut = False
-        for k in range(max(1, keep), len(labels)):
-            if ".".join(labels[k:]) in SHARED:
-                labels = labels[:k]
-                cut = True
-                break
-    return labels
-
-
-def unwrap(name):
-    """A platform's alias of a host -> the host: "x.tiktokcdn-us.com.edgesuite.net" -> "x.tiktokcdn-us.com"."""
-    return ".".join(strip_shared(name.split("."), keep=2))
-
-
-def on_platform(name):
-    return any(name.endswith("." + p) for p in SHARED)
-
-
-def app_labels(name):
-    """The labels that can say whose a name is: platforms and the public suffix cut off."""
-    if name in SHARED:
-        return []
-    labels = strip_shared(name.split("."))
-    if len(labels) > 1 and TLDISH.match(labels[-1]):
-        labels = labels[:-1]
-        if len(labels) > 1 and labels[-1] in SECOND_LEVEL:
-            labels = labels[:-1]
-    return labels
-
-
-def features(name):
-    """The pieces the model reads: the main label, every label, pairs of neighbouring labels and the 3- to 5-letter
-    pieces of each label (digits count as one "0"). A sorted tuple, so that training never depends on set order."""
-    labels = [DIGITS.sub("0", label) for label in app_labels(name)]
-    if not labels:
-        return ()
-    out = {"D:" + labels[-1]}
-    for label in labels:
-        out.add("L:" + label)
-        padded = "^" + label + "$"
-        for n in (3, 4, 5):
-            for i in range(len(padded) - n + 1):
-                out.add("G:" + padded[i:i + n])
-    for a, b in zip(labels, labels[1:]):
-        out.add("P:" + a + "." + b)
-    return tuple(sorted(out))
-
-
-class Cover:
-    """Which app's list blocks a name: a listed domain, a name under it, or a platform's alias of either."""
-
-    def __init__(self, lists):
-        self.owner = {d: sid for sid in sorted(lists) for d in lists[sid]}
-
-    def __call__(self, name):
-        return self._listed(name) or self._listed(unwrap(name))
-
-    def _listed(self, name):
-        labels = name.split(".")
-        for i in range(len(labels)):
-            hit = self.owner.get(".".join(labels[i:]))
-            if hit:
-                return hit
-        return None
-
-
-def app_words(lists):
-    """{app id: its own words}: the main label of every whole site on its list ("tiktokcdn" from tiktokcdn.com), or of
-    a host on a platform ("steamcdn-a" from steamcdn-a.akamaihd.net). A host on somebody else's site gives none:
-    teams.microsoft.com must not make "microsoft" a word of Teams."""
-    words = {}
-    for sid in sorted(lists):
-        found = set()
-        for d in lists[sid]:
-            labels = app_labels(d)
-            if not labels:
-                continue
-            if d == site(d):
-                word = d.split(".")[0]
-            elif on_platform(d):
-                word = labels[-1]
-            else:
-                continue
-            if len(word) >= MIN_WORD:
-                found.add(word)
-        words[sid] = frozenset(found)
-    return words
-
-
-def matcher(words):
-    """One regular expression that finds any of `words` (one app's, or every app's)."""
-    return re.compile("|".join(re.escape(w) for w in sorted(words)) or "(?!)")
-
-
-def carries(name, rx):
-    """Does the part of `name` that can say whose it is hold one of the words of `rx`?"""
-    return rx.search(".".join(app_labels(name))) is not None
-
-
-# --------------------------------------------------------------------------- #
 # The model
 # --------------------------------------------------------------------------- #
-def sigmoid(z):
-    if z >= 0:
-        return 1.0 / (1.0 + math.exp(-z))
-    e = math.exp(z)
-    return e / (1.0 + e)
-
-
-class Model:
-    """Two stages: "is this an app's name?" (logistic regression) and "which app?" (softmax over the apps). A score
-    is a sum of the weights of the name's pieces, so it is fast to compute and each weight can be read by a person."""
-
-    def __init__(self, apps, b1, w1, b2, w2):
-        self.apps, self.b1, self.w1, self.b2, self.w2 = apps, b1, w1, b2, w2
-
-    def score(self, name):
-        """(how sure the model is that `name` belongs to an app, 0..1; which app)."""
-        fs = features(name)
-        if not fs:
-            return 0.0, None
-        p = sigmoid(self.b1 + sum(self.w1.get(f, 0.0) for f in fs))
-        z = list(self.b2)
-        for f in fs:
-            for c, v in self.w2.get(f, ()):
-                z[c] += v
-        return p, self.apps[max(range(len(z)), key=z.__getitem__)]
-
-    def to_json(self):
-        return {"v": 1, "apps": self.apps, "b1": self.b1, "w1": self.w1, "b2": self.b2,
-                "w2": {f: [list(cv) for cv in row] for f, row in self.w2.items()}}
-
-    @classmethod
-    def from_json(cls, data):
-        if data.get("v") != 1:
-            raise ValueError("unknown model version %r" % data.get("v"))
-        return cls(list(data["apps"]), float(data["b1"]), {f: float(v) for f, v in data["w1"].items()},
-                   [float(v) for v in data["b2"]], {f: [(int(c), float(v)) for c, v in row] for f, row in data["w2"].items()})
-
-
 def train(lists, names, cover=None, words=None, skip=lambda s: False, seed=7):
     """Learns from `lists` (the examples of each app) and `names`: a name some list blocks is one more example of its
     app; a name that carries an app's word but is not listed is left out (it is probably the app's, and teaching it as
@@ -425,18 +250,6 @@ def cross_scored(lists, names, progress=say):
 # --------------------------------------------------------------------------- #
 # From scored names to a review file
 # --------------------------------------------------------------------------- #
-def zone(name, rx):
-    """The shortest end of `name` (two labels at least: never a top-level domain) that still carries one of the app's
-    words: what a list line would block. "pull-flv.tiktokcdn.com.wsdvs.com" -> "tiktokcdn.com.wsdvs.com", never
-    "wsdvs.com", which is not TikTok's."""
-    labels = name.split(".")
-    for k in range(len(labels) - 2, -1, -1):
-        end = ".".join(labels[k:])
-        if carries(end, rx):
-            return end
-    return None
-
-
 def shape(z, rx):
     """A zone with the labels that are neither the app's word nor part of its site written as "*": the 801
     instagram.<city>.fna.fbcdn.net hosts are one shape, so they are reviewed as one line."""
@@ -593,7 +406,7 @@ def main(argv=None):
     if not names:
         say("no names to read")
         return 1
-    lists = load_lists(args.lists)
+    lists = box.load_app_lists(args.lists)
 
     if args.backtest:
         rows, found = backtest(lists_at(args.backtest), lists, names)

@@ -406,7 +406,8 @@
       power: { request: null, action: null },
       telemetry: { on: null },
       community: null,
-      setup: { done: false }
+      setup: { done: false },
+      learn: { on: false }
     };
   }
 
@@ -492,6 +493,7 @@
       s.community = { online: Math.floor(d.community.online), at: d.community.at };
     }
     if (isDict(d.setup)) s.setup = { done: d.setup.done === true };
+    if (isDict(d.learn)) s.learn = { on: d.learn.on === true };
     return s;
   }
 

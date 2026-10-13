@@ -67,6 +67,13 @@ mounting the card on a computer.
       shows no restarts after an hour; Pi-hole's API seats do not fill up (the page's sign-in still works after the scheduler has
       been killed 20 times in a row with `sudo systemctl kill -s KILL sinko`; FTL has only 16 seats and a scheduler that did not
       give its session back would use them all).
+- [ ] **Learning new addresses, on the Zero 3** (`docs/maintainers/host-model.md`, step 2). `sudo sinko learn status` says
+      the model knows every app. `sudo sinko learn on`, block TikTok, and open TikTok on a child's test phone for a few
+      minutes: `sudo journalctl -u sinko` shows what was learned, `sudo sinko learn list` lists it, and every listed name is
+      TikTok's (look each one up). Note the scheduler's memory (`systemctl status sinko`, before and after the first look;
+      budget 15 MB more) and how long a look takes (budget 2 ms a name). Allow TikTok: the app works again, learned names
+      included. `sudo sinko learn forget <name>` takes one back and it is not learned again; `sudo sinko learn off` stops it.
+      Browse ordinary sites on the same phone for ten minutes with TikTok blocked: nothing else is learned.
 
 ## B. The parent page, on a real phone (iPhone Safari, Android Chrome), English and Arabic
 

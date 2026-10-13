@@ -18,7 +18,8 @@ Orange Pi Zero 3.
 | Release build | `tools/build-release.sh`, `.github/workflows/release.yml` | CI | produces the three release assets |
 | Counter service | `telemetry/` (Cloudflare Worker + D1) | Cloudflare | anonymous "boxes online" count, opt-in |
 | Project site | `site/` → GitHub Pages | browser | landing page with live counters |
-| Host suggestions | `tools/suggest-hosts.py`, `.github/workflows/host-suggestions.yml` | maintainer / CI | a small AI model trained from `lists/` suggests hosts the lists miss, for a person to check; nothing of it is on the box ([`host-model.md`](host-model.md)) |
+| Host suggestions | `tools/suggest-hosts.py`, `.github/workflows/host-suggestions.yml` | maintainer / CI | a small AI model trained from `lists/` suggests hosts the lists miss, for a person to check ([`host-model.md`](host-model.md)) |
+| Host model and learner | `model/host-model.json` → `/opt/sinko/model/`, `Learner` in `bin/sinko` | root (inside the scheduler) | off until `learn.on`: blocks a new name of a blocked app when the model and the app's own behaviour agree (see *Learning new addresses*) |
 
 Pi-hole objects created by Sinko keep the **internal prefix `pb-`** (groups `pb-kids`, `pb-svc-<id>`, …; list
 comments `pb:<id>`). The prefix is historical and is not user-facing; do not rename it (it would orphan existing
@@ -66,8 +67,8 @@ rules).
 
 Tag `vX.Y.Z` with `VERSION` = `X.Y.Z` (CI checks). `tools/build-release.sh` builds, reproducibly:
 
-* `sinko.tar.gz`: one top-level directory `sinko/` containing `bin/ lists/ web/ systemd/ tools/seal.sh tools/firstboot.sh install.sh
-  uninstall.sh VERSION LICENSE NOTICE` (no tests, docs, site, telemetry or development tools).
+* `sinko.tar.gz`: one top-level directory `sinko/` containing `bin/ lists/ model/ web/ systemd/ tools/seal.sh tools/firstboot.sh
+  install.sh uninstall.sh VERSION LICENSE NOTICE` (no tests, docs, site, telemetry or development tools).
 * `sinko.tar.gz.sha256`: one line, `<hex>  sinko.tar.gz`.
 * `install.sh`: byte-identical to the file in the tag (the one-liner).
 
@@ -153,7 +154,8 @@ Read and written by the page **and** by the scheduler. Both normalise with `pars
   "power": {"request": null, "action": null},   // page: "reboot" | "poweroff" with a request marker (a time, as above)
   "telemetry": {"on": null},                    // null = not asked, true/false = the parent's answer (authoritative)
   "community": null,                            // scheduler: {"online": n, "at": epoch} after a successful ping
-  "setup": {"done": false}                      // page: first-run checklist dismissed
+  "setup": {"done": false},                     // page: first-run checklist dismissed
+  "learn": {"on": false}                        // page or `sinko learn on|off`: learning new addresses of blocked apps
 }
 ```
 
@@ -232,6 +234,23 @@ pass), every file `index.html` loads exists and is not empty (and every file the
 folder when the source is that version: the files directly in `web/` and in `web/fonts/`, no dotfiles; the check and
 `install_files` must learn about a new web sub-folder together), and `pb/version.txt` equals `VERSION`. A check that cannot run
 (an answer cut off by an FTL restart, say) is a failed check, and with `--wait` it is tried again.
+
+## Learning new addresses
+
+`Learner` (in `bin/sinko`, run by the scheduler's `Maintenance` once a minute while `learn.on` is true and the clock is
+believed) reads the lookups since its last look from `/api/queries` and blocks a name for app *A* only when: the name was
+answered and no list covers it; the model (`model/host-model.json`, read once) gives it at least `MODEL_THRESHOLD` for *A*;
+*A*'s group is enabled; the name carries one of *A*'s own words (`zone()`); the same client address was refused a name of
+*A*'s list within `Learner.WINDOW` (120 s, either way); the zone is not in `NEVER`, no enabled allow rule of the owner's
+matches the name, and no taken-back rule covers it; *A* has learned fewer than `PER_APP_DAY` (20) today and the box holds
+fewer than `MAX_RULES` (200). Pi-hole's privacy level hides names or clients: nothing is learned.
+
+A learned rule is a deny **regex** `(^|\.)<zone with dots escaped>$` in group `pb-svc-<A>` (so it blocks exactly while *A*
+is blocked), enabled, comment `pb-learned:<A> <YYYY-MM-DD>` (box time). Taking one back (`sinko learn forget NAME`) keeps
+the rule, switched off, with comment `pb-learned-no:<A> <day>`, so it is never learned again. After a look that learned
+something the DNS cache is cleared once. `setup` and the self-heal leave both kinds alone; `remove` deletes both; backup and
+restore carry them like any rule. Nothing about it is sent anywhere. The parent page shows none of it yet (the next step);
+`sinko learn on|off|status|list|forget` is the way in.
 
 ## Power requests
 

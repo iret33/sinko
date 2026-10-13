@@ -1,3 +1,5 @@
 * text=auto eol=lf
 *.woff2 binary
 *.png binary
+# The trained model is numbers: a review reads model/README.md and the backtest, not a diff of the weights.
+model/host-model.json -diff linguist-generated=true
