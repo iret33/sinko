@@ -510,8 +510,38 @@
     return { state: st, json: JSON.stringify(st) };
   }
 
+  // ------------------------------------------------------------------ learned rules
+  // What the box learned (bin/sinko: Learner, learned_rules, regex_zone): deny regexes "(^|\.)<zone>$" whose comment is
+  // "pb-learned:<app> <day>", or "pb-learned-no:<app> <day>" once a parent allowed the name again. tests/fixtures/learned-rule-cases.json
+  // holds the cases both readers must agree on.
+  var LEARNED = 'pb-learned:', UNLEARNED = 'pb-learned-no:';
+  var ZONE_REGEX = /^\(\^\|\\\.\)((?:[a-z0-9_-]+\\\.)+[a-z0-9_-]+)\$$/;
+
+  /** The zone of a rule the box wrote, or null. */
+  function regexZone(regex) {
+    var m = typeof regex === 'string' ? ZONE_REGEX.exec(regex) : null;
+    return m ? m[1].replace(/\\\./g, '.') : null;
+  }
+  /** [{ app, day, zone, back, enabled, regex, groups }] from the rows of /api/domains. */
+  function learnedRules(domains) {
+    var out = [];
+    (Array.isArray(domains) ? domains : []).forEach(function (d) {
+      if (!isDict(d) || typeof d.domain !== 'string' || d.type !== 'deny' || d.kind !== 'regex') return;
+      var comment = typeof d.comment === 'string' ? d.comment : '';
+      [[LEARNED, false], [UNLEARNED, true]].some(function (p) {
+        var z = comment.indexOf(p[0]) === 0 ? regexZone(d.domain) : null;
+        if (z === null) return false;
+        var parts = comment.slice(p[0].length).split(/\s+/).filter(Boolean);
+        out.push({ app: parts[0] || '', day: parts[1] || '', zone: z, back: p[1], enabled: !!d.enabled, regex: d.domain,
+          groups: Array.isArray(d.groups) ? d.groups.filter(function (g) { return typeof g === 'number' && Math.floor(g) === g; }) : [] });
+        return true;
+      });
+    });
+    return out;
+  }
+
   var api = {
-    parseState: parseState, defaultState: defaultState, editState: editState,
+    parseState: parseState, defaultState: defaultState, editState: editState, learnedRules: learnedRules, regexZone: regexZone,
     classify: classify, isHiddenDomain: isHiddenDomain, isHiddenClient: isHiddenClient, baseDomain: baseDomain, appFor: appFor,
     formatCount: formatCount, percent: percent, topByApp: topByApp, hourly: hourly, deviceState: deviceState, Feed: Feed, priority: priority, Pacer: Pacer, Poller: Poller,
     lerp: lerp, easeInOut: easeInOut, clamp01: clamp01, wire: wire, elbow: elbow, trace: trace, pointAt: pointAt,
