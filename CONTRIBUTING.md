@@ -43,6 +43,11 @@ flow, release assets), is in [`docs/maintainers/architecture.md`](docs/maintaine
    `akamaihd.net`, ...): block the app's own domains, not the platform underneath it.
 3. Say in the pull request how you checked it (which domains the app really uses, and that the app stops working).
 
+To find hosts a list misses, `python3 tools/suggest-hosts.py` trains a small AI model on the lists and writes the popular
+names it believes belong to an app into `host-suggestions.md` (a workflow does the same once a month). Every line of it is
+a guess: check each one on a real device as in step 3 before it goes into a list. How to read it, and what the model gets
+wrong: [`docs/maintainers/host-model.md`](docs/maintainers/host-model.md).
+
 Everything in `lists/` (the block lists and `services.json`) is public domain (CC0); contributions to it are too.
 
 ## Pull requests

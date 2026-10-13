@@ -18,6 +18,7 @@ Orange Pi Zero 3.
 | Release build | `tools/build-release.sh`, `.github/workflows/release.yml` | CI | produces the three release assets |
 | Counter service | `telemetry/` (Cloudflare Worker + D1) | Cloudflare | anonymous "boxes online" count, opt-in |
 | Project site | `site/` → GitHub Pages | browser | landing page with live counters |
+| Host suggestions | `tools/suggest-hosts.py`, `.github/workflows/host-suggestions.yml` | maintainer / CI | a small AI model trained from `lists/` suggests hosts the lists miss, for a person to check; nothing of it is on the box ([`host-model.md`](host-model.md)) |
 
 Pi-hole objects created by Sinko keep the **internal prefix `pb-`** (groups `pb-kids`, `pb-svc-<id>`, …; list
 comments `pb:<id>`). The prefix is historical and is not user-facing; do not rename it (it would orphan existing

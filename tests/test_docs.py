@@ -15,7 +15,7 @@ DOCS = [
     "docs/maintainers/releasing.md", "SECURITY.md", "CONTRIBUTING.md", "NOTICE", "COPYING.md", "TRADEMARK.md",
     "telemetry/README.md", "site/README.md", "site/strings.js", "site/index.html", ".github/ISSUE_TEMPLATE/bug_report.yml",
     "README.md", "docs/install.md", "docs/how-it-works.md", "docs/img/README.md", "docs/maintainers/architecture.md",
-    "hardware/case/README.md",
+    "hardware/case/README.md", "docs/maintainers/host-model.md",
 ]
 
 
