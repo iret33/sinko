@@ -578,8 +578,8 @@ body.is-busy .app button{cursor:progress}
 
 .box-addr{list-style:none;margin:0;padding:0;display:grid;gap:8px}
 .box-addr-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1px 10px;align-items:center;padding:10px 12px;border-radius:var(--radius);background:var(--surface);border:1px solid var(--line)}
-.box-addr-row .box-copy{grid-column:2;grid-row:1 / span 3;min-height:44px}
-@media (max-width:420px){.box-addr-row{grid-template-columns:minmax(0,1fr)}.box-addr-row .box-copy{grid-column:1;grid-row:auto;justify-self:start;margin-top:6px}}
+.box-addr-row .box-copy,.box-addr-row .box-allow{grid-column:2;grid-row:1 / span 3;min-height:44px}
+@media (max-width:420px){.box-addr-row{grid-template-columns:minmax(0,1fr)}.box-addr-row .box-copy,.box-addr-row .box-allow{grid-column:1;grid-row:auto;justify-self:start;margin-top:6px}}
 .box-addr-value{display:block;direction:ltr;unicode-bidi:isolate;text-align:start;font-weight:700;font-size:1.05rem;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 [dir="rtl"] .box-addr-value{text-align:right}
 
@@ -589,3 +589,4 @@ body.is-busy .app button{cursor:progress}
 .box-online{padding:10px 12px;border-radius:var(--radius-sm);background:var(--lagoon-soft);color:var(--lagoon-ink);font-weight:700}
 .box-file{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .box-file-name{font-size:.9rem;color:var(--ink-2);overflow-wrap:anywhere;direction:ltr;unicode-bidi:plaintext;text-align:start}
+.learned-note{margin:16px 0 0}

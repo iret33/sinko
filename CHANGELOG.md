@@ -3,6 +3,20 @@
 All notable changes to Sinko. Versions follow [Semantic Versioning](https://semver.org); the newest release is at the top.
 Boxes learn about a release from this repository's GitHub releases, whose notes are the section of this file.
 
+## [3.1.0] - Unreleased
+
+### Added
+- **The box can learn new addresses of the apps you block** (optional, and off until you switch it on in *My box*). Apps
+  keep adding new addresses, and the block lists cannot always keep up. When this is on, a small AI model on the box
+  looks out for them: when a child's device has just been stopped from opening an app you blocked and then asks for a new
+  address that belongs to that app, the box blocks that address too, for as long as the app is blocked. At most 20 new
+  addresses of an app a day. *My box* lists what was learned, with **Allow again** for each, and a line under the apps
+  says which apps learned something. What it learns stays on the box as rules and is not sent anywhere. On your own box,
+  `sudo sinko learn` does the same from the command line.
+- For maintainers: `tools/suggest-hosts.py` trains the same model on the block lists and lists the popular names it
+  believes the lists miss, for a person to check on a device; a workflow runs it once a month. How it works and what it
+  gets wrong: `docs/maintainers/host-model.md`.
+
 ## [3.0.4] - 2026-10-08
 
 ### Fixed

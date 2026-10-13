@@ -62,6 +62,8 @@ asks a small box in your house "where is this app?" first, and the box says yes 
 - **pause** one child's device;
 - set a **Bedtime** that turns the internet off at night and back on in the morning;
 - watch **the live picture**: what the box is checking and stopping, in words a parent can follow;
+- let the box **learn new addresses** of the apps you block: a small AI model on the box spots an app you blocked trying a
+  new address, and blocks that too (optional, off until you switch it on in **My box**, where you can allow any of them again);
 - look after the box from the same page (**My box**): update it, see its health, change the password, back up, restart.
 
 Timers and bedtime run on the box itself, so they keep working after you close the page. Nothing needs a computer

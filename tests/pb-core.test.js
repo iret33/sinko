@@ -327,3 +327,12 @@ test('deviceState: protection problems outrank everything, then what the box is 
   assert.equal(st({ unknown: true, lastQuery: 0, offline: true }), 'offline');
   assert.equal(st({ unknown: true, lastQuery: 0, shadowed: true }), 'overridden', 'and a rule that overrides is still the worst news');
 });
+
+test('learned rules are read exactly as the box reads them (tests/fixtures/learned-rule-cases.json)', () => {
+  const cases = JSON.parse(require('node:fs').readFileSync(require('node:path').join(__dirname, 'fixtures', 'learned-rule-cases.json'), 'utf8')).cases;
+  assert.ok(cases.length >= 5);
+  for (const c of cases) assert.deepEqual(C.learnedRules(c.domains), c.expected, c.name);
+  assert.deepEqual(C.learnedRules(null), []);
+  assert.equal(C.regexZone('(^|\\.)tiktok-minis\\.us$'), 'tiktok-minis.us');
+  assert.equal(C.regexZone('^.*$'), null);
+});

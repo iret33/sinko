@@ -249,8 +249,12 @@ A learned rule is a deny **regex** `(^|\.)<zone with dots escaped>$` in group `p
 is blocked), enabled, comment `pb-learned:<A> <YYYY-MM-DD>` (box time). Taking one back (`sinko learn forget NAME`) keeps
 the rule, switched off, with comment `pb-learned-no:<A> <day>`, so it is never learned again. After a look that learned
 something the DNS cache is cleared once. `setup` and the self-heal leave both kinds alone; `remove` deletes both; backup and
-restore carry them like any rule. Nothing about it is sent anywhere. The parent page shows none of it yet (the next step);
-`sinko learn on|off|status|list|forget` is the way in.
+restore carry them like any rule. Nothing about it is sent anywhere.
+
+The page reads the rules with the rest of its model (`GET /api/domains`, `PBCore.learnedRules`; `tests/fixtures/learned-rule-cases.json`
+is the contract both readers run), shows them in *My box* (card `boxLearnCard`) with the switch (`learn.on`), and **Allow
+again** writes what `sinko learn forget` writes (`PUT /api/domains/deny/regex/<regex>`: the same rule, switched off,
+comment `pb-learned-no:<A> <day>`). Under the apps, one line counts what each app learned and opens that card.
 
 ## Power requests
 
@@ -294,7 +298,7 @@ the router hands out a new address (and after a ready-made unit is switched on i
   build step. Every string exists in both languages, with the same `{placeholders}`; the copy test bans technical
   words outside the "how it works" sheet.
 * New in 3.0: **My box** sheet (update, health, network addresses, change password, backup/restore, restart/shut
-  down, anonymous counter, about), **first-run claim** screen, **setup checklist** card, update banner when a newer
+  down, anonymous counter, about; since then also learning new addresses of blocked apps), **first-run claim** screen, **setup checklist** card, update banner when a newer
   version exists.
 * Pi-hole API calls used by the new features (from the FTL OpenAPI specs; copies in the maintainers' scratch notes,
   upstream: `pi-hole/FTL/src/api/docs/content/specs/*.yaml`):
@@ -303,7 +307,8 @@ the router hands out a new address (and after a ready-made unit is switched on i
   invalidated afterwards, so sign in again), `GET /api/info/system`, `/api/info/sensors`, `/api/info/host`,
   `GET /api/teleporter` (zip), `POST /api/teleporter` (multipart `file` + `import` JSON), `GET /api/dns/blocking`, and
   `GET /api/info/version` for **About** (the core's local version, read each time the sheet opens, shown as "Pi-hole v6.x"
-  only when it is a plain release number; a failure or a development build leaves the row out).
+  only when it is a plain release number; a failure or a development build leaves the row out), and `GET /api/domains` and
+  `PUT /api/domains/deny/regex/<regex>` for what the box learned (*Learning new addresses*).
 * Backup = the whole Teleporter archive (it contains the password hash: the page says to keep it private).
   Restore imports **only** the gravity tables (`group, adlist, adlist_by_group, domainlist, domainlist_by_group,
   client, client_by_group`) and not `config`, so a restore never changes the address, upstreams or password.

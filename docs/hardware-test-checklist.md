@@ -73,7 +73,9 @@ mounting the card on a computer.
       TikTok's (look each one up). Note the scheduler's memory (`systemctl status sinko`, before and after the first look;
       budget 15 MB more) and how long a look takes (budget 2 ms a name). Allow TikTok: the app works again, learned names
       included. `sudo sinko learn forget <name>` takes one back and it is not learned again; `sudo sinko learn off` stops it.
-      Browse ordinary sites on the same phone for ten minutes with TikTok blocked: nothing else is learned.
+      Browse ordinary sites on the same phone for ten minutes with TikTok blocked: nothing else is learned. On a phone, in
+      English and Arabic: the switch in *My box* does the same as `sinko learn on|off`, the line under the apps counts what
+      was learned and *See them* opens the card, and **Allow again** lets the name through at once and for good.
 
 ## B. The parent page, on a real phone (iPhone Safari, Android Chrome), English and Arabic
 

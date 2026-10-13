@@ -1,0 +1,266 @@
+{
+ "comment": "Shared by tests/test_learn.py (bin/sinko learned_rules, after the API client's own cleaning of each row) and tests/pb-core.test.js (web learnedRules): both must read every case exactly as this says.",
+ "cases": [
+  {
+   "name": "a learned rule",
+   "domains": [
+    {
+     "id": 1,
+     "domain": "(^|\\.)tiktok-minis\\.us$",
+     "type": "deny",
+     "kind": "regex",
+     "comment": "pb-learned:tiktok 2026-10-13",
+     "enabled": true,
+     "groups": [
+      7
+     ]
+    }
+   ],
+   "expected": [
+    {
+     "app": "tiktok",
+     "day": "2026-10-13",
+     "zone": "tiktok-minis.us",
+     "back": false,
+     "enabled": true,
+     "regex": "(^|\\.)tiktok-minis\\.us$",
+     "groups": [
+      7
+     ]
+    }
+   ]
+  },
+  {
+   "name": "a rule that was allowed again is switched off and says so",
+   "domains": [
+    {
+     "id": 1,
+     "domain": "(^|\\.)byteoversea\\.net$",
+     "type": "deny",
+     "kind": "regex",
+     "comment": "pb-learned-no:tiktok 2026-10-12",
+     "enabled": false,
+     "groups": [
+      7
+     ]
+    }
+   ],
+   "expected": [
+    {
+     "app": "tiktok",
+     "day": "2026-10-12",
+     "zone": "byteoversea.net",
+     "back": true,
+     "enabled": false,
+     "regex": "(^|\\.)byteoversea\\.net$",
+     "groups": [
+      7
+     ]
+    }
+   ]
+  },
+  {
+   "name": "a zone on somebody else's site keeps every label",
+   "domains": [
+    {
+     "id": 1,
+     "domain": "(^|\\.)tiktokcdn\\.com\\.wsdvs\\.com$",
+     "type": "deny",
+     "kind": "regex",
+     "comment": "pb-learned:tiktok 2026-10-13",
+     "enabled": true,
+     "groups": [
+      7
+     ]
+    }
+   ],
+   "expected": [
+    {
+     "app": "tiktok",
+     "day": "2026-10-13",
+     "zone": "tiktokcdn.com.wsdvs.com",
+     "back": false,
+     "enabled": true,
+     "regex": "(^|\\.)tiktokcdn\\.com\\.wsdvs\\.com$",
+     "groups": [
+      7
+     ]
+    }
+   ]
+  },
+  {
+   "name": "extra spaces in the comment do not matter, and a missing day is empty",
+   "domains": [
+    {
+     "id": 1,
+     "domain": "(^|\\.)youtubetv\\.com$",
+     "type": "deny",
+     "kind": "regex",
+     "comment": "pb-learned:  youtube   ",
+     "enabled": true,
+     "groups": [
+      7
+     ]
+    }
+   ],
+   "expected": [
+    {
+     "app": "youtube",
+     "day": "",
+     "zone": "youtubetv.com",
+     "back": false,
+     "enabled": true,
+     "regex": "(^|\\.)youtubetv\\.com$",
+     "groups": [
+      7
+     ]
+    }
+   ]
+  },
+  {
+   "name": "the block-all rule and the owner's own rules are not learned ones",
+   "domains": [
+    {
+     "id": 1,
+     "domain": "^.*$",
+     "type": "deny",
+     "kind": "regex",
+     "comment": "sinko: blocks everything for offline/paused kid devices",
+     "enabled": true,
+     "groups": [
+      7
+     ]
+    },
+    {
+     "id": 1,
+     "domain": "(^|\\.)example\\.com$",
+     "type": "deny",
+     "kind": "regex",
+     "comment": "my own rule",
+     "enabled": true,
+     "groups": [
+      7
+     ]
+    },
+    {
+     "id": 1,
+     "domain": "(^|\\.)example\\.org$",
+     "type": "allow",
+     "kind": "regex",
+     "comment": "pb-learned:tiktok 2026-10-13",
+     "enabled": true,
+     "groups": [
+      7
+     ]
+    },
+    {
+     "id": 1,
+     "domain": "example.net",
+     "type": "deny",
+     "kind": "exact",
+     "comment": "pb-learned:tiktok 2026-10-13",
+     "enabled": true,
+     "groups": [
+      7
+     ]
+    }
+   ],
+   "expected": []
+  },
+  {
+   "name": "a learned comment on a rule that is not of the box's shape is not one",
+   "domains": [
+    {
+     "id": 1,
+     "domain": "(^|\\.)tiktok\\.com$|.*",
+     "type": "deny",
+     "kind": "regex",
+     "comment": "pb-learned:tiktok 2026-10-13",
+     "enabled": true,
+     "groups": [
+      7
+     ]
+    },
+    {
+     "id": 1,
+     "domain": "(^|\\.)tiktok$",
+     "type": "deny",
+     "kind": "regex",
+     "comment": "pb-learned:tiktok 2026-10-13",
+     "enabled": true,
+     "groups": [
+      7
+     ]
+    },
+    {
+     "id": 1,
+     "domain": "(^|\\.)TikTok\\.com$",
+     "type": "deny",
+     "kind": "regex",
+     "comment": "pb-learned:tiktok 2026-10-13",
+     "enabled": true,
+     "groups": [
+      7
+     ]
+    }
+   ],
+   "expected": []
+  },
+  {
+   "name": "odd rows are skipped, odd fields are made safe",
+   "domains": [
+    {
+     "id": 2,
+     "type": "deny",
+     "kind": "regex",
+     "comment": "pb-learned:x 2026-01-01"
+    },
+    {
+     "id": 3,
+     "domain": 5,
+     "type": "deny",
+     "kind": "regex",
+     "comment": "pb-learned:x 2026-01-01"
+    },
+    {
+     "id": 4,
+     "domain": "(^|\\.)a-b\\.example\\.co\\.uk$",
+     "type": "deny",
+     "kind": "regex",
+     "comment": "pb-learned:roblox 2026-10-01",
+     "enabled": 1,
+     "groups": [
+      3,
+      "4",
+      true,
+      null
+     ]
+    },
+    {
+     "id": 5,
+     "domain": "(^|\\.)c\\.example\\.com$",
+     "type": "deny",
+     "kind": "regex",
+     "comment": null,
+     "enabled": true,
+     "groups": [
+      1
+     ]
+    }
+   ],
+   "expected": [
+    {
+     "app": "roblox",
+     "day": "2026-10-01",
+     "zone": "a-b.example.co.uk",
+     "back": false,
+     "enabled": true,
+     "regex": "(^|\\.)a-b\\.example\\.co\\.uk$",
+     "groups": [
+      3
+     ]
+    }
+   ]
+  }
+ ]
+}

@@ -3,6 +3,8 @@
  *   updates      the update card (current version, "Update now", "Check again", progress that survives the box restarting its own
  *                services, the automatic-at-night switch)
  *   box health   filtering, uptime, temperature, memory, last device seen, the box's clock (all from the Pi-hole API)
+ *   learning     the switch for learning new addresses of blocked apps (the small AI model on the box), what it learned, and
+ *                "Allow again" (docs/maintainers/host-model.md, step 2)
  *   addresses    the names and numbers this page can be reached at, with copy buttons
  *   password     change the parent password
  *   backup       download and restore (the Teleporter archive; a restore only touches children's devices, apps and rules)
@@ -110,6 +112,20 @@
       boxPowerOff: 'The box is shutting down. You can unplug it in about half a minute. To start it again, unplug it and plug it back in.',
       boxPowerStuck: 'The box did not react. If it is not restarting, unplug it, wait ten seconds and plug it back in.',
       boxBackNote: 'The box restarted. Sign in again.',
+      // learning new addresses of blocked apps
+      boxLearnTitle: 'New addresses of blocked apps',
+      boxLearnSwitch: 'Learn new addresses of apps I block',
+      boxLearnLead: 'Optional, and off until you switch it on. Apps keep adding new addresses, and the block lists cannot always keep up. When this is on, a small AI model on this box looks out for them: when a child\u2019s device has just been stopped from opening an app you blocked and then asks for a new address that belongs to that app, the box blocks that address too.',
+      boxLearnLimits: 'At most 20 new addresses of an app a day. A learned address is blocked only while its app is blocked. What it learns is not sent anywhere.',
+      boxLearnListTitle: 'Learned so far',
+      boxLearnNone: 'Nothing learned yet.',
+      boxLearnWrong: 'If it ever blocks something that is not part of the app, allow that address again here.',
+      boxLearnAllow: 'Allow again',
+      boxLearnAllowed: '{name} is allowed again, and will not be learned again.',
+      boxLearnOnToast: 'Learning is on.',
+      boxLearnOffToast: 'Learning is off. What was already learned stays blocked while its app is blocked.',
+      boxLearnSummary: 'The box also learned new addresses of these apps: {apps}.',
+      boxLearnSee: 'See them',
       // counter
       boxCounterTitle: 'Count this box',
       boxCounterSwitch: 'Count this box in the anonymous Sinko counter',
@@ -210,6 +226,19 @@
       boxPowerOff: 'الصندوق يُوقف التشغيل. يمكنك فصله عن الكهرباء بعد نصف دقيقة تقريبًا. لتشغيله مجددًا افصله ثم أعد توصيله.',
       boxPowerStuck: 'لم يستجب الصندوق. إذا لم يعد التشغيل، افصله عن الكهرباء وانتظر عشر ثوانٍ ثم أعد توصيله.',
       boxBackNote: 'أعاد الصندوق التشغيل. سجّل الدخول مجددًا.',
+      boxLearnTitle: 'عناوين جديدة للتطبيقات المحظورة',
+      boxLearnSwitch: 'تعلّم العناوين الجديدة للتطبيقات التي أحظرها',
+      boxLearnLead: 'اختياري، ويبقى متوقفًا حتى تشغّله. تضيف التطبيقات عناوين جديدة باستمرار، ولا تستطيع قوائم الحظر دائمًا أن تواكبها. وعند تشغيله يترقّب نموذج صغير من الذكاء الاصطناعي على هذا الصندوق هذه العناوين: إذا مُنع جهاز طفل للتو من فتح تطبيق حظرته، ثم طلب عنوانًا جديدًا يعود إلى ذلك التطبيق، حظر الصندوق هذا العنوان أيضًا.',
+      boxLearnLimits: 'ما لا يزيد على 20 عنوانًا جديدًا لكل تطبيق في اليوم. ولا يُحظر العنوان الذي تعلّمه إلا ما دام تطبيقه محظورًا. وما يتعلّمه لا يُرسَل إلى أي مكان.',
+      boxLearnListTitle: 'ما تعلّمه حتى الآن',
+      boxLearnNone: 'لم يتعلّم شيئًا بعد.',
+      boxLearnWrong: 'إذا حظر يومًا شيئًا ليس من التطبيق، فاسمح بذلك العنوان من جديد من هنا.',
+      boxLearnAllow: 'اسمح به من جديد',
+      boxLearnAllowed: 'أصبح {name} مسموحًا من جديد، ولن يتعلّمه الصندوق مرة أخرى.',
+      boxLearnOnToast: 'تم تشغيل التعلّم.',
+      boxLearnOffToast: 'تم إيقاف التعلّم. وما تعلّمه من قبل يبقى محظورًا ما دام تطبيقه محظورًا.',
+      boxLearnSummary: 'تعلّم الصندوق أيضًا عناوين جديدة لهذه التطبيقات: {apps}.',
+      boxLearnSee: 'اعرضها',
       boxCounterTitle: 'احتساب هذا الصندوق',
       boxCounterSwitch: 'احتساب هذا الصندوق في عدّاد سينكو دون ذكر هويتك',
       boxCounterLead: 'اختياري. يساعد المشروع على إظهار عدد صناديق سينكو قيد الاستخدام. ويبقى متوقفًا حتى تشغّله.',
@@ -640,7 +669,7 @@
     pendingPower = null; healthStale = false; down.since = 0;
   }
 
-  function open() {
+  function open(at) {
     if (!env) return;
     if (!ui) build();
     clearSecrets();
@@ -649,7 +678,10 @@
     st = env.model() ? env.state() : null;
     renderAll();
     env.openDialog('boxDialog');
-    var h = document.getElementById('boxTitle'); if (h) h.focus();
+    var target = at ? document.getElementById(at) : null;
+    var h = target ? target.querySelector('h3') : document.getElementById('boxTitle');
+    if (target && h) h.setAttribute('tabindex', '-1');           // a card's heading takes the focus (and so scrolls into view) only when asked for
+    if (h) h.focus();
     loadLinks();
     loadHosts();
     loadPihole();
@@ -738,6 +770,15 @@
     ui.hRows = el('div', { class: 'box-rows' }, [ui.hFilter.node, ui.hUptime.node, ui.hTemp.node, ui.hMem.node, ui.hSeen.node, ui.hClock.node]);
     ui.healthCard = card('boxHealth', 'boxHealthTitle', [ui.hRows, ui.hZone, ui.hStale, ui.hNone]);
 
+    // learning new addresses of blocked apps
+    ui.learn = switchRow('boxLearn', 'boxLearnSwitch');
+    ui.learn.input.addEventListener('change', onLearn);
+    ui.learnNone = el('p', { class: 'box-note', id: 'boxLearnNone', text: t('boxLearnNone') });
+    ui.learnList = el('ul', { class: 'box-addr', id: 'boxLearnList' });
+    ui.learnCard = card('boxLearnCard', 'boxLearnTitle', [el('p', { class: 'box-note', text: t('boxLearnLead') }), ui.learn.node,
+      el('p', { class: 'box-note', text: t('boxLearnLimits') }), el('h4', { text: t('boxLearnListTitle') }), ui.learnNone, ui.learnList,
+      el('p', { class: 'box-note', text: t('boxLearnWrong') })]);
+
     // addresses
     ui.netList = el('ul', { class: 'box-addr' });
     ui.netCard = card('boxNet', 'boxNetTitle', [el('p', { class: 'box-note', text: t('boxNetHint') }), ui.netList]);
@@ -798,13 +839,13 @@
     ui.aboutCard = card('boxAbout', 'boxAboutTitle', [ui.aboutVersion, ui.aboutPihole, el('p', { class: 'box-note', text: t('boxAboutLicence') }), ui.aboutLinks,
       el('p', { class: 'box-note', text: t('boxAboutTrademark') })]);
 
-    [ui.updCard, ui.healthCard, ui.netCard, ui.pwCard, ui.backupCard, ui.powerCard, ui.counterCard, ui.aboutCard].forEach(function (c) { body.appendChild(c); });
+    [ui.updCard, ui.healthCard, ui.learnCard, ui.netCard, ui.pwCard, ui.backupCard, ui.powerCard, ui.counterCard, ui.aboutCard].forEach(function (c) { body.appendChild(c); });
   }
 
   // ---------------------------------------------------------------- rendering
   function renderAll() {
     if (!ui) return;
-    renderUpdate(); renderHealth(); renderNetwork(); renderCounter(); renderAbout(); renderPower(); renderAuto();
+    renderUpdate(); renderHealth(); renderLearn(); renderNetwork(); renderCounter(); renderAbout(); renderPower(); renderAuto();
   }
 
   function agoText(sec) {
@@ -1024,6 +1065,27 @@
     var show = !!key && st.telemetry.on !== false;
     ui.counterOnline.hidden = !show;
     if (show) ui.counterOnline.textContent = t(key, { n: env.formatCount(st.community.online) });
+  }
+
+  /** The switch (learn.on in the shared state) and what the box learned (the page reads the rules with the rest of Pi-hole's lists). */
+  function renderLearn() {
+    if (!ui) return;
+    var m = env.model();
+    ui.learnCard.hidden = !m;
+    if (!m) return;
+    if (document.activeElement !== ui.learn.input) ui.learn.input.checked = !!(st && st.learn && st.learn.on === true);
+    var names = {};
+    (m.services || []).forEach(function (s) { names[s.meta.id] = env.lang() === 'ar' ? s.meta.ar : s.meta.name; });
+    var rules = (m.learned || []).filter(function (r) { return !r.back; }).sort(function (a, b) {
+      return (names[a.app] || a.app).localeCompare(names[b.app] || b.app) || (a.zone < b.zone ? -1 : a.zone > b.zone ? 1 : 0);
+    });
+    ui.learnNone.hidden = rules.length > 0;
+    ui.learnList.textContent = '';
+    rules.forEach(function (r) {
+      var btn = button('btn-small box-allow', 'boxLearnAllow', function () { onAllowAgain(r, btn); }, { 'aria-label': t('boxLearnAllow') + ': ' + r.zone });
+      ui.learnList.appendChild(el('li', { class: 'box-addr-row' }, [el('span', { class: 'box-label', text: names[r.app] || r.app }),
+        el('span', { class: 'box-addr-value', text: r.zone }), btn]));
+    });
   }
 
   function renderAbout() {
@@ -1319,6 +1381,29 @@
       st = env.state(); env.toast(t(want ? 'boxAutoOn' : 'boxAutoOff'));
     }, function (e) {
       ui.auto.input.checked = !want;
+      env.toast(t('failed', { e: e && e.message ? e.message : String(e) }), true);
+    });
+  }
+  function onLearn() {
+    var want = ui.learn.input.checked;
+    env.writeState(function (s) { s.learn = { on: want }; }).then(function () {
+      st = env.state(); renderLearn(); env.toast(t(want ? 'boxLearnOnToast' : 'boxLearnOffToast'));
+    }, function (e) {
+      ui.learn.input.checked = !want;
+      env.toast(t('failed', { e: e && e.message ? e.message : String(e) }), true);
+    });
+  }
+  /** "Allow again", as `sinko learn forget` does it: the rule stays, switched off, with a comment that keeps the box from learning the
+   *  name again (bin/sinko take_back_rule). Pi-hole applies the change at once. */
+  function onAllowAgain(r, btn) {
+    btn.disabled = true;
+    env.call('PUT', '/api/domains/deny/regex/' + encodeURIComponent(r.regex), {
+      type: 'deny', kind: 'regex', comment: ('pb-learned-no:' + r.app + ' ' + r.day).trim(), groups: r.groups.length ? r.groups : [0], enabled: false
+    }).then(function () {
+      env.toast(t('boxLearnAllowed', { name: iso(r.zone) }));
+      return env.reload();
+    }).then(function () { renderLearn(); }, function (e) {
+      btn.disabled = false;
       env.toast(t('failed', { e: e && e.message ? e.message : String(e) }), true);
     });
   }

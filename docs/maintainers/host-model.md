@@ -6,8 +6,8 @@ trains a small AI model on the lists, reads a million popular host names, and wr
 app into a review list. A person checks each line on a device before it goes into a list.
 
 That review list is **step 1**: it decides nothing on a box. **Step 2**, the model on the box itself, is
-[at the end of this page](#step-2-the-model-on-the-box): its engine and the `sinko learn` command are in, off until
-switched on; the parent page's part comes next.
+[at the end of this page](#step-2-the-model-on-the-box): the engine, the `sinko learn` command and the parent page's switch
+and list are in, off until a parent switches learning on.
 
 ## What it is, and what to call it
 
@@ -15,8 +15,8 @@ A machine-learning model in the ordinary sense: logistic regression over pieces 
 It is about 480 KB as JSON (140 KB compressed), uses Python's standard library only and needs no network to score a name.
 It is not a chatbot: it reads names, never pages, pictures or messages, and it decides nothing on its own.
 
-So it is honest to say Sinko uses AI, as long as the sentence says what the AI does. A box runs the model only where
-learning was switched on, and until the parent page has the switch, only an owner who can log in to the box can do that.
+So it is honest to say Sinko uses AI, as long as the sentence says what the AI does. A box runs the model only where a
+parent switched learning on (*My box*, or `sinko learn on` on an own install).
 
 | | Say | Do not say |
 |---|---|---|
@@ -128,8 +128,8 @@ minutes, without waiting for a release. It must never block something that is no
 being stopped tries its other names straight away (TikTok looked up `api-h2.tiktokv.com.ttdns2.com`, which #25 added
 after seeing the app use it). The behaviour is evidence the name alone does not have.
 
-**What is in.** The engine and a command; the exact contract is in [`architecture.md`](architecture.md), *Learning new
-addresses*.
+**What is in.** The engine, a command and the parent page's part; the exact contract is in
+[`architecture.md`](architecture.md), *Learning new addresses*.
 
 1. **One copy of the code.** Reading a name and scoring it (`app_labels`, `features`, `Cover`, `zone`, `Model.score`) live
    in `bin/sinko`, and `tools/suggest-hosts.py` imports them from there, so training and the box can never read a name
@@ -163,19 +163,24 @@ addresses*.
 6. **Privacy.** The learner sends nothing anywhere, and what the box sends (`docs/privacy.md`) does not change. It reads
    the history Pi-hole already keeps on the box and stores only its rules, in Pi-hole. `docs/privacy.md` says so in both
    languages. The site's text and the counter's page stay true as they are; the site changes with the parent page's part.
-7. **Proof.** `tests/test_learn.py`: every condition of point 3 (each one alone keeps a name from being learned), the
+7. **The parent page.** *My box* has a card, *New addresses of blocked apps*: what it does, the switch (off until the
+   parent switches it on), the limits, and what was learned, each name with **Allow again** (what `forget` does). Under
+   the apps, one line names the apps that learned something and how much, with *See them*, which opens that card. The
+   page reads the rules from `/api/domains` with `PBCore.learnedRules`, which reads every case of
+   `tests/fixtures/learned-rule-cases.json` as the box does. The strings are in English and Arabic with no technical
+   words (`tests/test_copy.py`).
+8. **Proof.** `tests/test_learn.py`: every condition of point 3 (each one alone keeps a name from being learned), the
    limits, the rules and their removal, the scheduler's switch and its minute, the command, and the shipped model (it
-   knows every app of the catalogue, and what it says about a few real names).
+   knows every app of the catalogue, and what it says about a few real names). `tests/box_smoke.py`, part *learn*: the
+   card, the switch, *See them*, the list and **Allow again** in a real browser, in English and Arabic.
 
 **Still to do.**
 
-- **The parent page.** Under a blocked app: "Sinko's AI also stopped 3 new addresses of this app", with the list and
-  **Allow this one again** (what `forget` does). In *My box*, the switch "Learn new addresses of blocked apps". Every
-  string in English and Arabic with no technical words (`tests/test_copy.py`), page tests, and the site's text.
 - **The board.** `docs/hardware-test-checklist.md`: memory and time on a Zero 3, and a pass with a real TikTok on a test
   phone.
 - **Rollout.** One release where the switch exists and is off, described as *Try it*, then on by default in a later
-  release if no false block was reported. Only then do the README and the site use the step 2 sentence above.
+  release if no false block was reported. Only then does the site use the step 2 sentence above (the README already lists
+  the switch as an option).
 
 **Known risk.** A namesake looked up on the same device within two minutes of the app being stopped can be learned: the
 model gives `telegraph.co.uk` 0.995 for Telegram, because `telegra.ph` is on Telegram's list. The two-minute rule makes it

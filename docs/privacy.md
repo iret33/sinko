@@ -47,11 +47,11 @@ Every time a phone asks for a site or an app, it first asks the box "where is th
   already installed keeps its own setting (Pi-hole's default is 91 days); you can change it in Pi-hole's admin page
   (*Settings*, *All settings*, *Database*, `maxDBdays`), or on your own box with
   `sudo pihole-FTL --config database.maxDBdays 30`.
-* **Learning new addresses of blocked apps** is off until it is switched on (on your own box: `sudo sinko learn on`).
-  When it is on, a small AI model on the box reads that history once a minute. When a device was just stopped from opening
-  an app you blocked and then looked up a new name that the model is sure belongs to that app, the box blocks that name
-  for that app too. It reads nothing else and sends nothing anywhere. What it learned is kept on the box as Pi-hole rules
-  (`sudo sinko learn list`), and `sudo sinko learn forget <name>` allows a name again.
+* **Learning new addresses of blocked apps** is off until you switch it on in *My box* (on your own box, also with
+  `sudo sinko learn on`). When it is on, a small AI model on the box reads that history once a minute. When a device was
+  just stopped from opening an app you blocked and then looked up a new name that the model is sure belongs to that app,
+  the box blocks that name for that app too. It reads nothing else and sends nothing anywhere. What it learned is kept on
+  the box as Pi-hole rules: *My box* lists them, and **Allow again** lets a name through again for good.
 
 ### What Sinko never sends to the project
 
@@ -241,11 +241,11 @@ something new, this statement changes first, with the release that does it.
   ومنه الصندوق الجاهز، يُحفظ السجل 30 يومًا. أما Pi-hole المثبَّت مسبقًا فيُبقي إعداده هو (والافتراضي عند Pi-hole هو 91
   يومًا)، وتستطيع تغييره من صفحة إدارة Pi-hole (*Settings* ثم *All settings* ثم *Database* ثم `maxDBdays`)، أو على صندوقك
   الذي بنيته بنفسك بالأمر `sudo pihole-FTL --config database.maxDBdays 30`.
-* **تعلّم عناوين جديدة للتطبيقات المحظورة** متوقف حتى يُشغَّل (على صندوقك الذي بنيته بنفسك: `sudo sinko learn on`). وعند
-  تشغيله يقرأ نموذج صغير من الذكاء الاصطناعي على الصندوق هذا السجل مرة كل دقيقة: إذا مُنع جهاز للتو من فتح تطبيق حظرته، ثم
-  بحث عن اسم جديد يجزم النموذج بأنه لذلك التطبيق، حظر الصندوق هذا الاسم لذلك التطبيق أيضًا. ولا يقرأ شيئًا غير ذلك ولا يرسل
-  شيئًا إلى أي مكان. ويُحفظ ما تعلّمه على الصندوق قواعدَ في Pi-hole (`sudo sinko learn list`)، والأمر
-  `sudo sinko learn forget <الاسم>` يسمح بالاسم من جديد.
+* **تعلّم عناوين جديدة للتطبيقات المحظورة** متوقف حتى تشغّله من «صندوقي» (وعلى صندوقك الذي بنيته بنفسك أيضًا بالأمر
+  `sudo sinko learn on`). وعند تشغيله يقرأ نموذج صغير من الذكاء الاصطناعي على الصندوق هذا السجل مرة كل دقيقة: إذا مُنع جهاز
+  للتو من فتح تطبيق حظرته، ثم بحث عن اسم جديد يجزم النموذج بأنه لذلك التطبيق، حظر الصندوق هذا الاسم لذلك التطبيق أيضًا. ولا
+  يقرأ شيئًا غير ذلك ولا يرسل شيئًا إلى أي مكان. ويُحفظ ما تعلّمه على الصندوق قواعدَ في Pi-hole: تعرضها «صندوقي»، وزر
+  «اسمح به من جديد» يسمح بالاسم نهائيًا.
 
 ### ما لا يرسله سينكو إلى المشروع أبدًا
 

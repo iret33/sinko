@@ -8,6 +8,7 @@ import datetime as dt
 import importlib.machinery
 import importlib.util
 import io
+import json
 import os
 import tempfile
 import time
@@ -240,6 +241,18 @@ class WhatIsNotLearned(Fixture):
         learner = pb.Learner(model_file=os.path.join(HERE, "no-such-model.json"), lists_dir=LISTS)
         with self.assertRaises(pb.LearnError):
             learner.run(self.api, self.api.group_map(), self.now)
+
+
+class TheRulesAsThePageReadsThem(unittest.TestCase):
+    """tests/fixtures/learned-rule-cases.json: the page's learnedRules (tests/pb-core.test.js) reads every case the same way."""
+
+    def test_every_shared_case(self):
+        with open(os.path.join(HERE, "fixtures", "learned-rule-cases.json"), encoding="utf-8") as fh:
+            cases = json.load(fh)["cases"]
+        self.assertGreaterEqual(len(cases), 5)
+        for case in cases:
+            rows = pb._rows({"domains": case["domains"]}, "domains", pb._clean_domain)
+            self.assertEqual(pb.learned_rules(rows), case["expected"], case["name"])
 
 
 class TheRules(Fixture):

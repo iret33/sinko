@@ -714,7 +714,9 @@
       // A missing file (an older install) is cached as "no names"; a failed fetch is retried on the next load.
       domainMap ? Promise.resolve(domainMap) : fetch('/pb/domains.json', { cache: 'no-store' }).then(function (r) { return r.status === 404 ? { domains: {} } : r.ok ? r.json() : null; })
         .then(function (j) { return j && j.domains && typeof j.domains === 'object' ? j.domains : null; }).catch(function () { return null; }),
-      loadBoxInfo()
+      loadBoxInfo(),
+      // The rules the box learned (My box shows them; the services list says how many). Not there on an older box: none.
+      call('GET', '/api/domains').catch(function () { return { domains: [] }; })
     ]).then(function (r) {
       catalog = r[4]; domainMap = r[5] || domainMap;
       var byName = {};
@@ -742,7 +744,8 @@
       M = {
         groups: byName, services: services, kids: kids, clients: r[1].clients || [],
         devices: r[2].devices || [], myIp: r[3].remote_addr || '', byIp: devicesByIp,
-        offline: !!byName[G.offline].enabled, state: parseState(byName[G.state].comment)
+        offline: !!byName[G.offline].enabled, state: parseState(byName[G.state].comment),
+        learned: PBCore.learnedRules(r[7].domains)
       };
       render();
     });
@@ -1200,6 +1203,18 @@
       });
       root.appendChild(el('div', { class: 'cat' }, [el('h3', { text: cat[lang] || cat.en }), grid]));
     });
+    // What the box learned for these apps (My box, "New addresses of blocked apps"): one line, only when there is something.
+    var counts = {};
+    M.learned.forEach(function (r) { if (!r.back) counts[r.app] = (counts[r.app] || 0) + 1; });
+    var apps = M.services.filter(function (s) { return counts[s.meta.id]; })
+      .map(function (s) { return svcName(s.meta) + ' (' + PBCore.formatCount(counts[s.meta.id], locale()) + ')'; });
+    if (apps.length) {
+      root.appendChild(el('p', { class: 'muted small learned-note', id: 'learnedNote' }, [el('span', { text: t('boxLearnSummary', { apps: listText(apps) }) }), ' ',
+        el('button', { type: 'button', class: 'link', 'data-act': 'learned', text: t('boxLearnSee') })]));
+    }
+  }
+  function listText(items) {
+    try { return new Intl.ListFormat(locale(), { style: 'long', type: 'conjunction' }).format(items); } catch (e) { return items.join(', '); }
   }
   function monogram(name) {
     var words = name.replace(/[^A-Za-z0-9 ]/g, ' ').trim().split(/\s+/);
@@ -1302,6 +1317,7 @@
       case 'remove': removeKid(n.getAttribute('data-client')); break;
       case 'saveBed': saveBedtime(); break;
       case 'box': PBBox.open(); break;
+      case 'learned': PBBox.open('boxLearnCard'); break;
       case 'boxClose': closeDialog('boxDialog'); break;
       case 'setupHelp': showSetupHelp(); break;
       case 'counterYes': answerCounter(true); break;

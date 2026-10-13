@@ -3,8 +3,8 @@ branding, on the real parent page against the mock Pi-hole (tests/mock_pihole.py
 
     python3 tests/box_smoke.py [--shots DIR] [--only PART]        (needs: pip install playwright && playwright install chromium)
 
-Parts: structure, update, stale, health, network, help, heartbeat, password, backup, power, counter, about, firstrun, banner, branding, contrast, narrow,
-motion, screenshots. The scheduler on the box is played by mock_pihole.SchedulerSim, which handles the request markers the page writes the way the architecture
+Parts: structure, update, stale, health, network, help, heartbeat, password, backup, power, learn, counter, about, firstrun, banner, branding, contrast,
+narrow, motion, screenshots. The scheduler on the box is played by mock_pihole.SchedulerSim, which handles the request markers the page writes the way the architecture
 says (and drops a power request that arrives while an update runs, as bin/sinko does); /pb/box.json is served by the mock (`store.box_info`).
 """
 import argparse
@@ -223,8 +223,8 @@ def part_structure(browser):
                "[%s] closing returns focus to the link that opened it" % lang)
         open_box(page)
         ids = page.evaluate("() => [...document.querySelectorAll('#boxBody > section')].map(s => s.id)")
-        expect(ids == ["boxUpdates", "boxHealth", "boxNet", "boxPw", "boxBackup", "boxPower", "boxCounterCard", "boxAbout"],
-               "[%s] the sheet has its eight cards in order: %s" % (lang, ids))
+        expect(ids == ["boxUpdates", "boxHealth", "boxLearnCard", "boxNet", "boxPw", "boxBackup", "boxPower", "boxCounterCard", "boxAbout"],
+               "[%s] the sheet has its nine cards in order: %s" % (lang, ids))
         titles = page.evaluate("() => [...document.querySelectorAll('#boxBody > section > h3')].map(h => h.textContent)")
         expect(all(titles), "[%s] every card has a heading" % lang)
         expect(page.is_visible("#boxCounterCard"), "[%s] the counter card is there on a box whose box.json says it has a counter" % lang)
@@ -1307,6 +1307,66 @@ def part_power(browser):
         ctx.close()
 
 
+def learned_rule(url, app, zone, comment="pb-learned:%s 2026-10-13"):
+    """A rule as the box's learner writes it (bin/sinko add_learned_rule), in the app's own group."""
+    api = pb.Api(url.rstrip("/"), password=mock_pihole.PASSWORD)
+    api.login()
+    gid = api.group_map()[pb.svc_group(app)]["id"]
+    api.request("POST", "/api/domains/deny/regex", {"domain": pb.zone_regex(zone), "comment": comment % app, "groups": [gid], "enabled": True})
+    api.logout()
+
+
+def part_learn(browser):
+    names = {s["id"]: s for s in CATALOG["services"]}
+    for lang in ("en", "ar"):
+        tiktok = names["tiktok"]["name" if lang == "en" else "ar"]
+        # nothing learned: no line under the apps, and the card says so
+        url, store = make_site()
+        ctx, page = open_page(browser, url, lang)
+        expect(page.locator("#learnedNote").count() == 0, "[%s] nothing learned: no line under the apps" % lang)
+        open_box(page)
+        text = box_text(page)
+        for key in ("boxLearnTitle", "boxLearnLead", "boxLearnLimits", "boxLearnNone", "boxLearnWrong"):
+            expect(T(lang, key) in text, "[%s] the card says %s" % (lang, key))
+        expect(not page.is_checked("#boxLearn"), "[%s] learning is off until the parent switches it on" % lang)
+        page.click("#boxLearnCard label.box-switch-row")
+        expect(eventually(lambda: store.state().get("learn") == {"on": True}), "[%s] switching it on records learn.on" % lang)
+        expect(T(lang, "boxLearnOnToast") in page.inner_text("#boxToast"), "[%s] and says so" % lang)
+        page.click("#boxLearnCard label.box-switch-row")
+        expect(eventually(lambda: store.state().get("learn") == {"on": False}), "[%s] switching it off records it" % lang)
+        expect(T(lang, "boxLearnOffToast") in page.inner_text("#boxToast"), "[%s] and says what was learned stays: %r" % (lang, page.inner_text("#boxToast")))
+        ctx.close()
+
+        # two names learned for TikTok, one taken back before, one rule of the owner's that is not a learned one
+        url, store = make_site()
+        for zone in ("tiktok-minis.us", "byteoversea.net"):
+            learned_rule(url, "tiktok", zone)
+        learned_rule(url, "tiktok", "tiktoklb.us", comment="pb-learned-no:%s 2026-10-01")
+        store.edit_state(lambda st: st.update({"learn": {"on": True}}))
+        ctx, page = open_page(browser, url, lang)
+        note = eventually(lambda: page.is_visible("#learnedNote") and clean(page.inner_text("#learnedNote")))
+        expect(bool(note) and tiktok + " (2)" in note and T(lang, "boxLearnSee") in note, "[%s] the line under the apps names the app and how many: %r" % (lang, note))
+        shot(page, "learn-note-%s.png" % lang)
+        page.click("#learnedNote [data-act=learned]")
+        page.wait_for_selector("#boxDialog[open]")
+        expect(eventually(lambda: page.evaluate("() => document.activeElement && document.activeElement.id") == "boxLearnCardTitle"),
+               "[%s] 'See them' opens My box at the learning card (its heading has the focus)" % lang)
+        expect(page.is_checked("#boxLearn"), "[%s] the switch shows learning is on" % lang)
+        rows = lambda: page.evaluate("() => [...document.querySelectorAll('#boxLearnList .box-addr-row')].map(r => [r.querySelector('.box-label').textContent, r.querySelector('.box-addr-value').textContent])")
+        expect(rows() == [[tiktok, "byteoversea.net"], [tiktok, "tiktok-minis.us"]], "[%s] the learned names, not the one taken back: %s" % (lang, rows()))
+        expect(page.is_hidden("#boxLearnNone"), "[%s] and no 'nothing learned yet'" % lang)
+        shot(page, "box-learn-%s.png" % lang)
+        page.click("#boxLearnList .box-addr-row >> nth=1 >> .box-allow")
+        rule = lambda: next((d for d in store.domains if d["domain"] == pb.zone_regex("tiktok-minis.us")), None)
+        expect(eventually(lambda: rule()["enabled"] is False and rule()["comment"] == "pb-learned-no:tiktok 2026-10-13"),
+               "[%s] 'Allow again' switches the rule off and marks it so the box does not learn it again: %s" % (lang, rule()))
+        expect(eventually(lambda: rows() == [[tiktok, "byteoversea.net"]]), "[%s] and it leaves the list: %s" % (lang, rows()))
+        expect(T(lang, "boxLearnAllowed", name="tiktok-minis.us") in clean(page.inner_text("#boxToast")), "[%s] and says so: %r" % (lang, page.inner_text("#boxToast")))
+        page.keyboard.press("Escape")
+        expect(eventually(lambda: tiktok + " (1)" in clean(page.inner_text("#learnedNote"))), "[%s] the line under the apps counts one now" % lang)
+        ctx.close()
+
+
 def part_counter(browser):
     for lang in ("en", "ar"):
         url, store = make_site()
@@ -1871,7 +1931,7 @@ def part_screenshots(browser):
 
 PARTS = [("structure", part_structure), ("update", part_update), ("stale", part_stale), ("health", part_health), ("network", part_network), ("help", part_help),
          ("heartbeat", part_heartbeat), ("password", part_password),
-         ("backup", part_backup), ("power", part_power), ("counter", part_counter), ("about", part_about), ("firstrun", part_firstrun),
+         ("backup", part_backup), ("power", part_power), ("learn", part_learn), ("counter", part_counter), ("about", part_about), ("firstrun", part_firstrun),
          ("banner", part_banner), ("branding", part_branding), ("contrast", part_contrast), ("narrow", part_narrow), ("motion", part_motion),
          ("screenshots", part_screenshots)]
 
