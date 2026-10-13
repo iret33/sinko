@@ -84,8 +84,8 @@ class HealthChecksTests(Env):
             self.assertIn("  info  running version %s" % pb.VERSION, lines)
 
     def test_a_pending_update_is_info_not_a_warning(self):
-        rep, lines = self.report(default_state(latest="3.1.0"))
-        self.assertIn("  info  update available: 3.1.0 (install it with: sudo sinko update)", lines)
+        rep, lines = self.report(default_state(latest="3.2.0"))
+        self.assertIn("  info  update available: 3.2.0 (install it with: sudo sinko update)", lines)
         self.assertEqual(rep.warnings, [])
 
     def test_an_update_that_is_installed_or_older_is_not_pending(self):
@@ -244,14 +244,14 @@ class Pihole(Env):
 
 class StatusTests(Pihole):
     def test_status_has_the_version_the_update_block_and_the_counter_answer(self):
-        self.set_state(lambda s: s["update"].update(latest="3.1.0", notes="https://github.com/iret33/sinko/releases/tag/v3.1.0",
+        self.set_state(lambda s: s["update"].update(latest="3.2.0", notes="https://github.com/iret33/sinko/releases/tag/v3.2.0",
                                                     checked=1700000000.0, status="failed", error="x", at=1700000100.0,
                                                     auto=True, request=123, checkRequest=456))
         self.set_state(lambda s: s["telemetry"].update(on=True))
         status = pb.build_status(self.api, self.catalog)
         self.assertEqual(status["version"], pb.VERSION)
-        self.assertEqual(status["update"], {"auto": True, "latest": "3.1.0",
-                                            "notes": "https://github.com/iret33/sinko/releases/tag/v3.1.0",
+        self.assertEqual(status["update"], {"auto": True, "latest": "3.2.0",
+                                            "notes": "https://github.com/iret33/sinko/releases/tag/v3.2.0",
                                             "checked": 1700000000.0, "status": "failed", "from": None, "to": None,
                                             "at": 1700000100.0, "error": "x", "rolledBack": None})
         self.assertEqual(status["telemetry"], {"on": True})
@@ -311,14 +311,14 @@ class DoctorTests(Pihole):
         return code, out.getvalue()
 
     def test_the_new_checks_are_part_of_the_doctors_output(self):
-        self.set_state(lambda s: s["update"].update(latest="3.1.0"))
+        self.set_state(lambda s: s["update"].update(latest="3.2.0"))
         self.set_state(lambda s: s["telemetry"].update(on=False))
         code, out = self.run_doctor(FakeProbe(free=100 * MB, temp=85.0, synced=False))
         lines = out.splitlines()
         self.assertEqual(code, 0, "warnings do not fail the doctor")
         self.assertIn("  ok    api checks ran", lines)
         for expected in ("  info  running version %s" % pb.VERSION,
-                         "  info  update available: 3.1.0 (install it with: sudo sinko update)",
+                         "  info  update available: 3.2.0 (install it with: sudo sinko update)",
                          "  info  anonymous counter: off"):
             self.assertIn(expected, lines)
         self.assertEqual(len([l for l in lines if l.startswith("  WARN  ")]), 3)

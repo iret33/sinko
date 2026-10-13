@@ -58,8 +58,8 @@ loader.exec_module(pb)
 
 CATALOG = pb.load_catalog(LISTS)
 VERSION = pb.VERSION
-NEW = "3.1.0"
-NOTES = "https://github.com/iret33/sinko/releases/tag/v3.1.0"
+NEW = "3.2.0"
+NOTES = "https://github.com/iret33/sinko/releases/tag/v3.2.0"
 BOX_IP = "192.168.1.50"
 ISOLATES = re.compile("[\u2066-\u2069]")             # the invisible marks that keep a version or a number whole inside Arabic text
 STRINGS = {}
@@ -390,7 +390,7 @@ class PageAndSchedulerTests(unittest.TestCase):
         box.tick(2, advance=30)
         self.assertEqual(len(box.runner_calls), 1, "and it starts the runner once, not on every pass")
         if watch:
-            self.assertTrue(self.wait(lambda: T(lang, "boxRunning", v=NEW) in self.live(page)), "the page says it is updating to 3.1.0: %r" % self.live(page))
+            self.assertTrue(self.wait(lambda: T(lang, "boxRunning", v=NEW) in self.live(page)), "the page says it is updating to 3.2.0: %r" % self.live(page))
             self.assertEqual(page.locator("#boxUpdates .box-bar[role=progressbar]").count(), 1, "with a calm progress bar")
         return marker
 
@@ -833,7 +833,7 @@ class PageAndSchedulerTests(unittest.TestCase):
         now = dt.datetime.now()
         bed = ((now - dt.timedelta(hours=2)).strftime("%H:%M"), (now + dt.timedelta(hours=2)).strftime("%H:%M"))     # bedtime is on right now
         model = {"auto": False, "setup": False, "bed": False, "telemetry": None, "latest": None}
-        answers = itertools.cycle([NEW, "3.2.0", VERSION, NEW])          # what GitHub says at each round: the scheduler's own writes keep changing
+        answers = itertools.cycle([NEW, "3.3.0", VERSION, NEW])          # what GitHub says at each round: the scheduler's own writes keep changing
 
         def dialog_open():
             return page.evaluate("() => document.getElementById('boxDialog').open")
