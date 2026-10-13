@@ -5,8 +5,9 @@ added 24 hosts by hand after each service was tested on a real device. `tools/su
 trains a small AI model on the lists, reads a million popular host names, and writes the ones it believes belong to an
 app into a review list. A person checks each line on a device before it goes into a list.
 
-This is **step 1**. Nothing of it runs on the box: the box blocks exactly as before, from the lists. **Step 2**, a model on
-the box itself, is planned [at the end of this page](#step-2-the-model-on-the-box).
+That review list is **step 1**: it decides nothing on a box. **Step 2**, the model on the box itself, is
+[at the end of this page](#step-2-the-model-on-the-box): its engine and the `sinko learn` command are in, off until
+switched on; the parent page's part comes next.
 
 ## What it is, and what to call it
 
@@ -14,8 +15,8 @@ A machine-learning model in the ordinary sense: logistic regression over pieces 
 It is about 480 KB as JSON (140 KB compressed), uses Python's standard library only and needs no network to score a name.
 It is not a chatbot: it reads names, never pages, pictures or messages, and it decides nothing on its own.
 
-So it is honest to say Sinko uses AI, as long as the sentence says what the AI does. Until step 2 ships, the box
-itself runs no model.
+So it is honest to say Sinko uses AI, as long as the sentence says what the AI does. A box runs the model only where
+learning was switched on, and until the parent page has the switch, only an owner who can log in to the box can do that.
 
 | | Say | Do not say |
 |---|---|---|
@@ -34,7 +35,7 @@ before it is printed anywhere.
 python3 tools/suggest-hosts.py                          # about 4 minutes; writes host-suggestions.md
 python3 tools/suggest-hosts.py --names top-1m.csv.zip   # a names file you already have ("rank,name" or one name a line)
 python3 tools/suggest-hosts.py --backtest 1ffee15       # would it have found what was added since that commit?
-python3 tools/suggest-hosts.py --save-model model.json  # also keep the model (step 2 ships one)
+python3 tools/suggest-hosts.py --save-model model/host-model.json  # also write the model the release ships
 ```
 
 Without `--names` it downloads [Cisco Umbrella's popularity list](https://s3-us-west-1.amazonaws.com/umbrella-static/index.html)
@@ -120,8 +121,6 @@ Measured on 13 October 2026 with Umbrella's list of that day.
 
 ## Step 2: the model on the box
 
-The plan, for a later release. Nothing here exists yet.
-
 **Goal.** When a blocked app reaches a new name that no list has yet, the box blocks that name for that app within
 minutes, without waiting for a release. It must never block something that is not the app's.
 
@@ -129,52 +128,67 @@ minutes, without waiting for a release. It must never block something that is no
 being stopped tries its other names straight away (TikTok looked up `api-h2.tiktokv.com.ttdns2.com`, which #25 added
 after seeing the app use it). The behaviour is evidence the name alone does not have.
 
-1. **One copy of the code.** The reading of a name and the scoring (`app_labels`, `features`, `Cover`, `Model.score`) move
-   into `bin/sinko`, and `tools/suggest-hosts.py` imports them from there, so training and the box can never read a name
-   differently. The model ships in the release as a JSON file next to the lists (budget: 600 KB on disk).
-2. **What it reads.** Every 10 minutes, a `BackgroundJob` of the scheduler's `Maintenance` asks for the children's devices'
-   lookups since the last pass from `/api/queries`, the same endpoint the live picture reads. It looks only at apps
-   that are blocked now. Names already seen in the last day are not scored again. With Pi-hole's privacy level hiding
-   domains, it sees nothing and does nothing.
+**What is in.** The engine and a command; the exact contract is in [`architecture.md`](architecture.md), *Learning new
+addresses*.
+
+1. **One copy of the code.** Reading a name and scoring it (`app_labels`, `features`, `Cover`, `zone`, `Model.score`) live
+   in `bin/sinko`, and `tools/suggest-hosts.py` imports them from there, so training and the box can never read a name
+   differently (the move changed no byte of the model). The release ships the model as `model/host-model.json`, 481 KB;
+   [`model/README.md`](../../model/README.md) says how it was made.
+2. **What it reads.** Once a minute, the scheduler's `Maintenance` asks `/api/queries` (the endpoint the live picture
+   reads) for the lookups since its last look, at most 1,000. It looks a minute at a time, not every 10 minutes as first
+   planned, because a refusal and a new name must be at most two minutes apart. It scores only names that were answered and
+   that no list covers. On a development machine the model loads in 0.14 s, holds 3.6 MB and scores a name in about 50 µs;
+   the Zero 3's own numbers are for the hardware checklist. With Pi-hole's privacy level hiding names or devices, it learns
+   nothing.
 3. **When it blocks.** All of these must hold:
-   - The model gives the name at least 0.98 for an app that is blocked for that device.
-   - The name carries the app's own word.
-   - The same device was refused a name of that app in the 2 minutes before, so the app is open and being stopped.
-   - The name is not on a never-block list, and no allow rule of the owner's covers it.
+   - The model gives the name at least 0.98 for an app, and that app is blocked right now.
+   - The name carries the app's own word, and what gets blocked is the shortest end of the name that still does
+     (`tiktokcdn.com.wsdvs.com`, never `wsdvs.com`).
+   - The same device was refused a name of that app's list within 2 minutes, before or after: the app is open and being
+     stopped.
+   - That end is not one of `NEVER`, no allow rule of the owner's covers the name, and it was not taken back before.
    - Fewer than 20 names were learned for that app today, and the box holds fewer than 200 learned names in all.
 
    This is stricter than step 1 on purpose: no person reads the line first.
-4. **How it blocks.** `Controller` stays the only code that changes rules: the job hands it the decision. It adds a Pi-hole
-   deny rule, exact for a host or a regular expression `(^|\.)zone$`, in the app's own group `pb-svc-<id>`, with the comment
-   `pb-learned:<id>`. The rule follows the app's block and allow by itself (the group is switched, as today), needs no
-   gravity run, and takes effect at once, like the block-all rule Sinko already manages. `setup` and the self-heal leave
-   learned rules alone, `sinko remove` deletes them, and a backup and restore carry them like any other rule. The same kind
-   of rule can hold the patterns of step 1 (the Instagram one) as part of a release.
-5. **What a parent sees.** Under a blocked app: "Sinko's AI also stopped 3 new addresses of this app", with the list and
-   **Allow this one again**. That deletes the rule and keeps a switched-off `pb-learned-no:<id>` entry, so the name is not
-   learned again. In *My box*, a switch "Learn new addresses of blocked apps", off in the first release that has it. Every
-   string is in English and Arabic with no technical words (`tests/test_copy.py`).
-6. **The shared state.** The switch is a new key, `"learn": {"on": false}`. Both parsers, `tests/fixtures/state-cases.json`
-   and [`architecture.md`](architecture.md) learn it in the same release, as for every key.
-7. **Privacy.** The learner sends nothing anywhere, and what the box already sends (`docs/privacy.md`) does not change.
-   The lookups it reads are the history Pi-hole already keeps on the box. What it stores are the learned rules, in
-   Pi-hole's own database. That changes what the box stores, so `docs/privacy.md` (both
-   languages), `site/strings.js` and the counter's root page change in the same pull request (CONTRIBUTING.md). A learned
-   name is never sent to the project. Sharing one back would be a separate, opt-in feature, if ever.
-8. **Proof.** Unit tests for every condition of point 3, the caps, the never-block list and **Allow this one again**. The
-   mock Pi-hole serves the query log and the domain rules for it, the page tests cover the card and the switch, and the copy
-   tests cover the strings. `docs/hardware-test-checklist.md` gains the board's numbers: memory of the scheduler with the
-   model loaded (budget 15 MB), time per name (budget 2 ms) and a pass with a real TikTok on a test phone.
-9. **Rollout.** One release with the switch off and the feature described as *Try it*, then on by default in a later
-   release if no false block was reported. Only then do the README and the site use the step 2 sentence above.
+4. **How it blocks.** A Pi-hole deny rule, the regular expression `(^|\.)zone$`, in the app's own group `pb-svc-<id>`, with
+   the comment `pb-learned:<id> <day>`. It follows the app's block and allow by itself, needs no gravity run and takes
+   effect at once; after a look that learned something the box's DNS cache is cleared once. `Controller` still makes
+   every rule of the parent's: the learner adds only its own. `setup` and the self-heal leave learned rules alone, `sinko
+   remove` deletes them, and a backup and restore carry them like any other rule.
+5. **Switching it on and taking a name back.** `sudo sinko learn on|off|status|list|forget NAME`. The switch is the new
+   shared-state key `"learn": {"on": false}` (both parsers and `tests/fixtures/state-cases.json` know it, so the page keeps
+   it when it saves). `forget` keeps the rule, switched off, with the comment `pb-learned-no:<id>`, so the name is not
+   learned again.
+6. **Privacy.** The learner sends nothing anywhere, and what the box sends (`docs/privacy.md`) does not change. It reads
+   the history Pi-hole already keeps on the box and stores only its rules, in Pi-hole. `docs/privacy.md` says so in both
+   languages. The site's text and the counter's page stay true as they are; the site changes with the parent page's part.
+7. **Proof.** `tests/test_learn.py`: every condition of point 3 (each one alone keeps a name from being learned), the
+   limits, the rules and their removal, the scheduler's switch and its minute, the command, and the shipped model (it
+   knows every app of the catalogue, and what it says about a few real names).
+
+**Still to do.**
+
+- **The parent page.** Under a blocked app: "Sinko's AI also stopped 3 new addresses of this app", with the list and
+  **Allow this one again** (what `forget` does). In *My box*, the switch "Learn new addresses of blocked apps". Every
+  string in English and Arabic with no technical words (`tests/test_copy.py`), page tests, and the site's text.
+- **The board.** `docs/hardware-test-checklist.md`: memory and time on a Zero 3, and a pass with a real TikTok on a test
+  phone.
+- **Rollout.** One release where the switch exists and is off, described as *Try it*, then on by default in a later
+  release if no false block was reported. Only then do the README and the site use the step 2 sentence above.
+
+**Known risk.** A namesake looked up on the same device within two minutes of the app being stopped can be learned: the
+model gives `telegraph.co.uk` 0.995 for Telegram, because `telegra.ph` is on Telegram's list. The two-minute rule makes it
+rare and the daily limit caps it; `forget` (and later **Allow this one again**) undoes it for good.
+
+**Decided** (13 October 2026).
+
+- **The model file** is trained on Cisco's list, as in step 1. It lives in `model/`, under the GPL like the code, and
+  `NOTICE` credits Cisco.
+- **Which apps learn.** Every app, Teams included, under the same conditions.
 
 **Open questions.**
 
-- **Licence of the model file.** The weights are learned partly from Cisco's list. Can a file derived from it ship under
-  `lists/`, which is CC0? If not, train the shipped model on the lists and a set of ordinary names that may be
-  redistributed.
 - **Updates.** Should the model be refreshed with the nightly lists (it would need a checksum, as releases have) or only
   with a release?
 - **Expiry.** Should a learned rule that has not been hit for 90 days expire?
-- **Which apps learn.** Teams is the app whose names sit closest to Microsoft's own (Office, sign-in). Keep it out of
-  learning at first?

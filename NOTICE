@@ -21,6 +21,13 @@ Block lists and the app catalogue (lists/)
     Everything in lists/ (the *.txt block lists and services.json, the catalogue of apps) is dedicated to the public
     domain under CC0 1.0, see lists/LICENSE.
 
+The host model (model/host-model.json)
+    A small model, trained by tools/suggest-hosts.py from the block lists in lists/ and from the Cisco Umbrella
+    Popularity List (the million most looked-up domain names, https://s3-us-west-1.amazonaws.com/umbrella-static/index.html),
+    which served as examples of ordinary names. The file holds pieces of the apps' own names and numbers, not that list.
+    GPL-3.0-or-later, like the code. Cisco and Cisco Umbrella are trademarks of Cisco Systems, Inc.; Sinko is not
+    affiliated with, endorsed by, or supported by Cisco.
+
 Not covered by the GPL: the Sinko name and marks
     The name "Sinko", the Arabic spelling سينكو as a product mark, and the Sinko logo and wordmarks are the project's
     marks, not GPL-licensed software: web/icon.svg, web/icon-192.png, web/icon-512.png, web/icon-maskable-512.png,

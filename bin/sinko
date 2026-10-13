@@ -21,6 +21,9 @@ Commands
                while and finishing its passes), every file of the page.
   telemetry    The optional anonymous counter: on, off (and the counter forgets this box), status, payload (what
                would be sent), reset-id (the counter forgets the old id, a new one is made).
+  learn        Learning new addresses of blocked apps with the small AI model on the box (off until switched on): on,
+               off, status, list (what was learned), forget NAME (allow a learned address again; it is not learned
+               again). Nothing is sent anywhere.
   box-info     Print what the page may know about this box (/pb/box.json); --write puts it in the page folder.
                The scheduler refreshes that file every five minutes: the page reads it as the scheduler's heartbeat.
   use-mac      Re-register children that were added by IP address under their MAC address.
@@ -122,6 +125,7 @@ DEFAULT_STATE = {
     "telemetry": {"on": None},                       # None: not asked yet; True/False: the parent's answer
     "community": None,                               # {"online": n, "at": epoch}, set by the scheduler after a ping
     "setup": {"done": False},                        # the first-run checklist was dismissed
+    "learn": {"on": False},                          # learning new addresses of blocked apps (Learner); off until switched on
 }
 
 SEMVER_RE = re.compile(r"\d{1,4}\.\d{1,4}\.\d{1,4}", re.ASCII)      # always used with fullmatch: "$" lets a newline through
@@ -193,6 +197,237 @@ def kid_groups(group_ids: dict, catalog: dict) -> list:
     """Every group a kid device must belong to (except pb-paused)."""
     names = [G_KIDS, G_GUARD, G_OFFLINE] + [svc_group(s["id"]) for s in catalog["services"]]
     return [DEFAULT_GROUP] + [group_ids[n] for n in names if n in group_ids]
+
+
+# --------------------------------------------------------------------------- #
+# Reading a host name: the small AI model (docs/maintainers/host-model.md)
+# --------------------------------------------------------------------------- #
+# tools/suggest-hosts.py trains the model and reads names with the code below, imported from this file, so that the
+# box and the training can never read a name differently.
+MODEL_FILE = os.environ.get("SINKO_MODEL_FILE", os.path.join(APP_DIR, "model", "host-model.json"))
+MODEL_MAX_BYTES = 4 * 1024 * 1024        # the model is about half a megabyte; anything much bigger is not ours
+MODEL_THRESHOLD = 0.98                   # how sure the model must be that a name is an app's before anything is done with it
+MIN_WORD = 5                             # an app's word ("tiktok", "twimg") is at least this long: "fb" or "x" would match everything
+
+# Platforms that carry many companies' names. Their own labels say nothing about the app ("akamaized" is not Steam),
+# so they are cut off before a name is read, and nothing ever blocks one of them as a whole.
+SHARED = {
+    "akamaihd.net", "akamaized.net", "akamai.net", "akamaiedge.net", "edgesuite.net", "edgekey.net", "akadns.net",
+    "akamaitechnologies.com", "fastly.net", "map.fastly.net", "fastlylb.net", "cloudflare.net", "cdn.cloudflare.net",
+    "cloudflare.com", "cloudfront.net", "amazonaws.com", "awsglobalaccelerator.com", "elb.amazonaws.com",
+    "azureedge.net", "azurefd.net", "trafficmanager.net", "cloudapp.net", "cloudapp.azure.com", "windows.net",
+    "footprint.net", "llnwd.net", "edgecastcdn.net", "cdn77.org", "b-cdn.net", "omtrdc.net", "2o7.net",
+    "l.google.com", "googleapis.com", "googleusercontent.com", "gstatic.com", "ggpht.com", "googlevideo.com",
+    "appspot.com", "1e100.net", "fbcdn.net", "github.io", "githubusercontent.com", "herokuapp.com", "vercel.app",
+    "netlify.app", "pages.dev", "workers.dev", "firebaseapp.com", "web.app", "wpengine.com", "shopify.com",
+    "myshopify.com", "wixsite.com", "blogspot.com", "fandom.com", "wordpress.com", "tumblr.com",
+}
+# Never blocked as a whole, whatever the model says: tests/test_core.py refuses a list that blocks any of them.
+NEVER = SHARED | {
+    "google.com", "apple.com", "icloud.com", "microsoft.com", "microsoftonline.com", "live.com", "windows.com",
+    "office.com", "office.net", "msftncsi.com", "msftconnecttest.com", "github.com", "raw.githubusercontent.com",
+}
+SECOND_LEVEL = {"co", "com", "net", "org", "gov", "edu", "ac", "or", "ne", "go", "gob", "nic", "ltd", "plc"}
+TLDISH = re.compile(r"(?:[a-z]{2}|com|net|org|info|biz|io|tv|me|app|dev|gg|xyz|online|site|tech|cloud|live|media|"
+                    r"games|game|group|link|top|club|vip|pro|world|global|asia|mobi|name|cc|ws|us|eu)\Z")
+HOST_RE = re.compile(r"[a-z0-9_](?:[a-z0-9_-]{0,62}\.)+[a-z0-9-]{1,63}\Z")
+DIGITS = re.compile(r"[0-9]+")
+
+
+def parse_block_list(text: str) -> list:
+    """The domains of an Adblock-style list (one `||domain^` a line)."""
+    return [line[2:-1].lower() for line in (l.strip() for l in text.splitlines())
+            if line.startswith("||") and line.endswith("^")]
+
+
+def load_app_lists(lists_dir: str = LISTS_DIR, guard: bool = False) -> dict:
+    """{app id: [domain, ...]} from the *.txt lists. The guard list is not an app (it stops DNS bypass services, and
+    guessing new ones from a name, "dns." or "doh.", would flag half the internet): it is left out unless asked for."""
+    lists = {}
+    for name in sorted(os.listdir(lists_dir)):
+        if name.endswith(".txt") and (guard or name != "guard.txt"):
+            with open(os.path.join(lists_dir, name), encoding="utf-8") as fh:
+                lists[name[:-4]] = parse_block_list(fh.read())
+    return lists
+
+
+def site(name: str) -> str:
+    """The registrable part, near enough: "a.b.example.co.uk" -> "example.co.uk"."""
+    labels = name.split(".")
+    if len(labels) >= 3 and labels[-2] in SECOND_LEVEL and len(labels[-1]) == 2:
+        return ".".join(labels[-3:])
+    return ".".join(labels[-2:])
+
+
+def strip_shared(labels: list, keep: int = 0) -> list:
+    """Cuts shared platforms off the end, longest first, as long as more than `keep` labels stay."""
+    cut = True
+    while cut:
+        cut = False
+        for k in range(max(1, keep), len(labels)):
+            if ".".join(labels[k:]) in SHARED:
+                labels = labels[:k]
+                cut = True
+                break
+    return labels
+
+
+def unwrap(name: str) -> str:
+    """A platform's alias of a host -> the host: "x.tiktokcdn-us.com.edgesuite.net" -> "x.tiktokcdn-us.com"."""
+    return ".".join(strip_shared(name.split("."), keep=2))
+
+
+def on_platform(name: str) -> bool:
+    return any(name.endswith("." + p) for p in SHARED)
+
+
+def app_labels(name: str) -> list:
+    """The labels that can say whose a name is: platforms and the public suffix cut off."""
+    if name in SHARED:
+        return []
+    labels = strip_shared(name.split("."))
+    if len(labels) > 1 and TLDISH.match(labels[-1]):
+        labels = labels[:-1]
+        if len(labels) > 1 and labels[-1] in SECOND_LEVEL:
+            labels = labels[:-1]
+    return labels
+
+
+def features(name: str) -> tuple:
+    """The pieces the model reads: the main label, every label, pairs of neighbouring labels and the 3- to 5-letter
+    pieces of each label (digits count as one "0"). A sorted tuple, so that training never depends on set order."""
+    labels = [DIGITS.sub("0", label) for label in app_labels(name)]
+    if not labels:
+        return ()
+    out = {"D:" + labels[-1]}
+    for label in labels:
+        out.add("L:" + label)
+        padded = "^" + label + "$"
+        for n in (3, 4, 5):
+            for i in range(len(padded) - n + 1):
+                out.add("G:" + padded[i:i + n])
+    for a, b in zip(labels, labels[1:]):
+        out.add("P:" + a + "." + b)
+    return tuple(sorted(out))
+
+
+class Cover:
+    """Which app's list blocks a name: a listed domain, a name under it, or a platform's alias of either."""
+
+    def __init__(self, lists: dict):
+        self.owner = {d: sid for sid in sorted(lists) for d in lists[sid]}
+
+    def __call__(self, name: str):
+        return self._listed(name) or self._listed(unwrap(name))
+
+    def _listed(self, name: str):
+        labels = name.split(".")
+        for i in range(len(labels)):
+            hit = self.owner.get(".".join(labels[i:]))
+            if hit:
+                return hit
+        return None
+
+
+def app_words(lists: dict) -> dict:
+    """{app id: its own words}: the main label of every whole site on its list ("tiktokcdn" from tiktokcdn.com), or of
+    a host on a platform ("steamcdn-a" from steamcdn-a.akamaihd.net). A host on somebody else's site gives none:
+    teams.microsoft.com must not make "microsoft" a word of Teams."""
+    words = {}
+    for sid in sorted(lists):
+        found = set()
+        for d in lists[sid]:
+            labels = app_labels(d)
+            if not labels:
+                continue
+            if d == site(d):
+                word = d.split(".")[0]
+            elif on_platform(d):
+                word = labels[-1]
+            else:
+                continue
+            if len(word) >= MIN_WORD:
+                found.add(word)
+        words[sid] = frozenset(found)
+    return words
+
+
+def matcher(words):
+    """One regular expression that finds any of `words` (one app's, or every app's)."""
+    return re.compile("|".join(re.escape(w) for w in sorted(words)) or "(?!)")
+
+
+def carries(name: str, rx) -> bool:
+    """Does the part of `name` that can say whose it is hold one of the words of `rx`?"""
+    return rx.search(".".join(app_labels(name))) is not None
+
+
+def zone(name: str, rx):
+    """The shortest end of `name` (two labels at least: never a top-level domain) that still carries one of the app's
+    words: what a block would cover. "pull-flv.tiktokcdn.com.wsdvs.com" -> "tiktokcdn.com.wsdvs.com", never
+    "wsdvs.com", which is not TikTok's."""
+    labels = name.split(".")
+    for k in range(len(labels) - 2, -1, -1):
+        end = ".".join(labels[k:])
+        if carries(end, rx):
+            return end
+    return None
+
+
+def sigmoid(z: float) -> float:
+    if z >= 0:
+        return 1.0 / (1.0 + math.exp(-z))
+    e = math.exp(z)
+    return e / (1.0 + e)
+
+
+class Model:
+    """Two stages: "is this an app's name?" (logistic regression) and "which app?" (softmax over the apps). A score
+    is a sum of the weights of the name's pieces, so it is fast to compute and each weight can be read by a person."""
+
+    def __init__(self, apps, b1, w1, b2, w2):
+        self.apps, self.b1, self.w1, self.b2, self.w2 = apps, b1, w1, b2, w2
+
+    def score(self, name: str):
+        """(how sure the model is that `name` belongs to an app, 0..1; which app)."""
+        fs = features(name)
+        if not fs:
+            return 0.0, None
+        p = sigmoid(self.b1 + sum(self.w1.get(f, 0.0) for f in fs))
+        z = list(self.b2)
+        for f in fs:
+            for c, v in self.w2.get(f, ()):
+                z[c] += v
+        return p, self.apps[max(range(len(z)), key=z.__getitem__)]
+
+    def to_json(self) -> dict:
+        return {"v": 1, "apps": self.apps, "b1": self.b1, "w1": self.w1, "b2": self.b2,
+                "w2": {f: [list(cv) for cv in row] for f, row in self.w2.items()}}
+
+    @classmethod
+    def from_json(cls, data) -> "Model":
+        """A model from its JSON form; ValueError for anything that is not one (the file is read by root)."""
+        try:
+            if data.get("v") != 1:
+                raise ValueError("unknown model version %r" % data.get("v"))
+            apps = [str(a) for a in data["apps"]]
+            b2 = [float(v) for v in data["b2"]]
+            w2 = {str(f): [(int(c), float(v)) for c, v in row] for f, row in data["w2"].items()}
+            if not apps or len(b2) != len(apps) or any(not 0 <= c < len(apps) for row in w2.values() for c, _ in row):
+                raise ValueError("the apps and the weights of the model do not match")
+            return cls(apps, float(data["b1"]), {str(f): float(v) for f, v in data["w1"].items()}, b2, w2)
+        except (AttributeError, KeyError, TypeError) as err:
+            raise ValueError("not a model: %s" % err) from None
+
+
+def load_model(path: str | None = None) -> Model:
+    """The model the release ships (MODEL_FILE). OSError when it is missing, ValueError when it is not a model."""
+    path = path or MODEL_FILE
+    with open(path, "rb") as fh:
+        raw = fh.read(MODEL_MAX_BYTES + 1)
+    if len(raw) > MODEL_MAX_BYTES:
+        raise ValueError("%s is bigger than %d MB" % (path, MODEL_MAX_BYTES >> 20))
+    return Model.from_json(json.loads(raw, parse_constant=_no_constants))
 
 
 # --------------------------------------------------------------------------- #
@@ -940,6 +1175,9 @@ def _parse_state(raw) -> dict:
     setup = data.get("setup")
     if isinstance(setup, dict):
         state["setup"] = {"done": setup.get("done") is True}
+    learn = data.get("learn")
+    if isinstance(learn, dict):
+        state["learn"] = {"on": learn.get("on") is True}
     return state
 
 
@@ -2401,6 +2639,8 @@ class Controller:
                     and block_all_is_ours(d)):
                 self.api.request("DELETE", "/api/domains/deny/regex/" + Api.q(BLOCK_ALL_REGEX))
             # The owner's own rule of that name stays; deleting Sinko's groups below takes them off it.
+        for rule in learned_rules(self.api.domains()):
+            self.api.request("DELETE", "/api/domains/deny/regex/" + Api.q(rule["regex"]))
         for name in groups:
             if name.startswith("pb-"):
                 self.api.delete_group(name)
@@ -2966,11 +3206,222 @@ class BackgroundJob:
         return outcome
 
 
-class Maintenance:
-    """The scheduler's side jobs: update check and install, power requests, address watch, anonymous counter.
+# --------------------------------------------------------------------------- #
+# Learning new addresses of blocked apps (docs/maintainers/host-model.md, step 2)
+# --------------------------------------------------------------------------- #
+LEARNED_PREFIX = "pb-learned:"           # a rule the box learned: comment "pb-learned:<app id> <YYYY-MM-DD>"
+UNLEARNED_PREFIX = "pb-learned-no:"      # a learned rule that was taken back: kept, switched off, so it is not learned again
+ZONE_REGEX_RE = re.compile(r"\(\^\|\\\.\)((?:[a-z0-9_-]+\\\.)+[a-z0-9_-]+)\$\Z")
+# FTL's query status strings (get_query_status_str in FTL's datastructure.c), as web/pb-core.js reads them.
+REFUSED_STATUSES = {"GRAVITY", "GRAVITY_CNAME", "REGEX", "REGEX_CNAME", "DENYLIST", "DENYLIST_CNAME"}
+ANSWERED_STATUSES = {"FORWARDED", "RETRIED", "RETRIED_DNSSEC", "CACHE", "CACHE_STALE"}
 
-    `Controller.tick` stays the only code that changes rules. These jobs only touch the keys of the shared state that
-    belong to the scheduler (update.*, community, and clearing request markers), and every one of them is wrapped:
+
+def zone_regex(z: str) -> str:
+    """The Pi-hole rule for a zone: the name and every name under it. A zone holds only letters, digits, "_", "-" and
+    dots (HOST_RE), and only the dots are special."""
+    return r"(^|\.)" + z.replace(".", r"\.") + "$"
+
+
+def regex_zone(regex):
+    """The zone of a rule that zone_regex wrote, or None."""
+    m = ZONE_REGEX_RE.match(regex or "")
+    return m.group(1).replace("\\.", ".") if m else None
+
+
+def learned_rules(domains: list) -> list:
+    """The rules the box learned, and the ones that were taken back, from /api/domains:
+    [{"app", "zone", "day", "back", "enabled", "regex", "groups"}]."""
+    out = []
+    for d in domains:
+        comment = d.get("comment") or ""
+        if d.get("type") != "deny" or d.get("kind") != "regex":
+            continue
+        for prefix, back in ((LEARNED_PREFIX, False), (UNLEARNED_PREFIX, True)):
+            z = regex_zone(d.get("domain")) if comment.startswith(prefix) else None
+            if z is not None:
+                parts = comment[len(prefix):].split()
+                out.append({"app": parts[0] if parts else "", "day": parts[1] if len(parts) > 1 else "", "zone": z,
+                            "back": back, "enabled": bool(d.get("enabled")), "regex": d["domain"],
+                            "groups": d.get("groups", [])})
+                break
+    return out
+
+
+def under(name: str, z: str) -> bool:
+    return name == z or name.endswith("." + z)
+
+
+def allowed_by_owner(name: str, domains: list) -> bool:
+    """An allow rule of the owner's covers the name. Pi-hole lets an allow rule win over any block anyway; a learned rule
+    under it would only clutter the list."""
+    for d in domains:
+        if d.get("type") != "allow" or not d.get("enabled"):
+            continue
+        if d.get("kind") == "exact" and d.get("domain") == name:
+            return True
+        if d.get("kind") == "regex":
+            try:
+                if re.search(d.get("domain") or "(?!)", name):
+                    return True
+            except re.error:
+                continue                       # FTL's own syntax (";querytype=…"): FTL itself decides those
+    return False
+
+
+def add_learned_rule(api: Api, sid: str, z: str, gid: int, day: str) -> None:
+    """The rule is in the app's own group, so it blocks while the app is blocked and stops when the app is allowed,
+    like the app's list; a write through the API applies at once (FTL reloads), no gravity run."""
+    api.request("POST", "/api/domains/deny/regex", {"domain": zone_regex(z), "comment": "%s%s %s" % (LEARNED_PREFIX, sid, day),
+                                                    "groups": [gid], "enabled": True})
+
+
+def take_back_rule(api: Api, rule: dict) -> None:
+    """Allow a learned name again: the rule stays, switched off, with a comment that keeps it from being learned again."""
+    api.request("PUT", "/api/domains/deny/regex/" + Api.q(rule["regex"]),
+                {"type": "deny", "kind": "regex", "comment": "%s%s %s" % (UNLEARNED_PREFIX, rule["app"], rule["day"]),
+                 "groups": rule["groups"] or [DEFAULT_GROUP], "enabled": False})
+
+
+class LearnError(Exception):
+    """The model or the lists it needs cannot be read: nothing is learned."""
+
+
+class Learner:
+    """Learns new addresses of blocked apps, when the parent switched it on (`learn.on` in the shared state).
+
+    Once a minute it reads the lookups Pi-hole made since the last look (/api/queries, the history Pi-hole keeps on the
+    box anyway) and blocks a name for an app only when all of these hold:
+      * the name is answered (not blocked) and no list blocks it;
+      * the model is at least MODEL_THRESHOLD sure it is that app's, and the app is blocked right now;
+      * the name carries one of the app's own words (zone());
+      * the same device was refused a name of that app's list within WINDOW seconds: the app is open and being stopped;
+      * the zone is not one that must never be blocked whole (NEVER), no allow rule of the owner's covers the name, and it
+        was not taken back before;
+      * the app has learned fewer than PER_APP_DAY names today and the box holds fewer than MAX_RULES.
+    The rule (add_learned_rule) covers the zone and lives in the app's group. Nothing is sent anywhere.
+    """
+    EVERY = 60                 # seconds between two looks
+    WINDOW = 120               # seconds between a refusal of the app and the new name, either way
+    PER_APP_DAY = 20
+    MAX_RULES = 200
+    ROWS = 1000                # lookups read at most in one look (a home makes far fewer in a minute)
+
+    def __init__(self, model_file: str | None = None, lists_dir: str | None = None):
+        self.model_file = model_file or MODEL_FILE
+        self.lists_dir = lists_dir or LISTS_DIR
+        self._loaded = None
+        self._capped = set()
+        self.reset()
+
+    def reset(self) -> None:
+        """Learning is off: forget what was seen, so that switching it on again looks back WINDOW seconds only."""
+        self._since = None
+        self._ids = set()
+        self._refused = {}
+
+    def _load(self):
+        if self._loaded is None:
+            try:
+                every = load_app_lists(self.lists_dir, guard=True)
+                apps = {sid: doms for sid, doms in every.items() if sid != "guard"}
+                model = load_model(self.model_file)
+                words = {sid: matcher(w) for sid, w in app_words(apps).items()}
+                self._loaded = (model, Cover(apps), Cover(every), words)
+            except (OSError, ValueError) as err:
+                self._loaded = LearnError("cannot read the model or the lists: %s" % short_text(err, 120))
+        if isinstance(self._loaded, LearnError):
+            raise self._loaded
+        return self._loaded
+
+    def run(self, api: Api, groups: dict, epoch: float) -> list:
+        """One look. Returns what was learned, as text."""
+        model, app_cover, any_cover, words = self._load()
+        since = self._since if self._since is not None else epoch - self.WINDOW
+        rows = [r for r in _rows(api.request("GET", "/api/queries?from=%d&length=%d" % (int(since), self.ROWS)),
+                                 "queries", lambda r: r) if r.get("id") not in self._ids]
+        seen = sorted(filter(None, (self._read_row(r) for r in rows)), key=lambda row: row[0])     # by time only
+        times = [float(r["time"]) for r in rows if _is_number(r.get("time"))]
+        if times:
+            # The next look starts at the second of the newest lookup read (Pi-hole's `from` takes whole seconds); the
+            # lookups of that second that were read now are not read twice.
+            self._since = max(times)
+            self._ids = {r.get("id") for r in rows if _is_number(r.get("time")) and float(r["time"]) >= int(self._since)}
+        for t, ip, name, status, cname in seen:
+            if status in REFUSED_STATUSES:
+                sid = app_cover(name) or (app_cover(cname) if cname else None)
+                if sid:
+                    self._refused.setdefault((ip, sid), []).append(t)
+        horizon = (self._since or epoch) - 2 * self.WINDOW
+        self._refused = {k: [t for t in v if t >= horizon] for k, v in self._refused.items() if max(v) >= horizon}
+
+        found = {}
+        for t, ip, name, status, cname in seen:
+            if status not in ANSWERED_STATUSES or name in found or any_cover(name):
+                continue
+            p, sid = model.score(name)
+            group = groups.get(svc_group(sid)) if sid else None
+            if p < MODEL_THRESHOLD or not group or not group.get("enabled") or sid not in words:
+                continue
+            z = zone(name, words[sid])
+            if z is None or z in NEVER or not HOST_RE.match(z):
+                continue
+            if any(abs(t - r) <= self.WINDOW for r in self._refused.get((ip, sid), ())):
+                found[name] = (sid, z, ip, group["id"])
+        return self._learn(api, found, epoch) if found else []
+
+    @staticmethod
+    def _read_row(r: dict):
+        client = r.get("client")
+        ip = client.get("ip") if isinstance(client, dict) else None
+        name, t = r.get("domain"), r.get("time")
+        if not isinstance(name, str) or not _is_number(t) or not isinstance(ip, str) or ip in ("", "0.0.0.0", "::"):
+            return None                        # Pi-hole's privacy level hides names or devices: nothing to learn from
+        name = name.lower().rstrip(".")
+        if len(name) > 253 or not HOST_RE.match(name):
+            return None
+        cname = r.get("cname")
+        cname = cname.lower().rstrip(".") if isinstance(cname, str) and HOST_RE.match(cname.lower().rstrip(".")) else None
+        return float(t), ip, name, str(r.get("status") or "").upper(), cname
+
+    def _learn(self, api: Api, found: dict, epoch: float) -> list:
+        domains = api.domains()
+        rules = learned_rules(domains)
+        known = {r["zone"] for r in rules}
+        back = [r["zone"] for r in rules if r["back"]]
+        day = time.strftime("%Y-%m-%d", time.localtime(epoch))
+        total = sum(1 for r in rules if not r["back"])
+        today = {}
+        for r in rules:
+            if not r["back"] and r["day"] == day:
+                today[r["app"]] = today.get(r["app"], 0) + 1
+        actions = []
+        for name, (sid, z, ip, gid) in found.items():
+            if z in known or any(under(name, b) for b in back) or allowed_by_owner(name, domains):
+                continue
+            if total >= self.MAX_RULES or today.get(sid, 0) >= self.PER_APP_DAY:
+                if (sid, day) not in self._capped:
+                    self._capped.add((sid, day))
+                    actions.append("not learning more addresses of %s today: %d a day and %d in all at most"
+                                   % (sid, self.PER_APP_DAY, self.MAX_RULES))
+                continue
+            add_learned_rule(api, sid, z, gid, day)
+            known.add(z)
+            total += 1
+            today[sid] = today.get(sid, 0) + 1
+            actions.append("learned a new address of %s: %s (the app was being stopped on %s)" % (sid, z, ip))
+        if any(a.startswith("learned") for a in actions):
+            api.flush_dns()                    # an answer the box already holds for the name must not outlive the rule
+        return actions
+
+
+class Maintenance:
+    """The scheduler's side jobs: update check and install, power requests, address watch, anonymous counter, learning
+    new addresses of blocked apps.
+
+    `Controller.tick` stays the only code that changes the parent's rules; the learner adds only its own (pb-learned:,
+    see Learner). These jobs only touch the keys of the shared state that belong to the scheduler (update.*, community,
+    and clearing request markers), and every one of them is wrapped:
     a failing job is logged (not every 15 seconds) and never stops the tick or the other jobs. Anything slow (network,
     systemd, pihole-FTL) runs in a BackgroundJob; the tick thread only reads files and talks to Pi-hole's API.
     """
@@ -3003,7 +3454,7 @@ class Maintenance:
     def __init__(self, api=None, config_path=None, monotonic=time.monotonic, job_factory=BackgroundJob, clock_ok=None,
                  check=None, start_runner=None, power=None, default_ip=None, apply_address=None, ping=None, body=None,
                  jitter=None, box_info=None, forget=None, heal=None, recover=None, catalog=None, page_version=None,
-                 start_repair=None):
+                 start_repair=None, learner=None):
         self.api = api
         self.config_path = config_path or CONFIG_FILE
         self.mono = monotonic
@@ -3026,6 +3477,7 @@ class Maintenance:
         # and a test that does not mean to start an installer cannot do it by accident.
         self.page_version = page_version
         self.start_repair = start_repair
+        self.learner = learner or Learner()
         started = monotonic()
         self._next_check = started + self.CHECK_FIRST
         self._next_address = started + self.ADDRESS_FIRST
@@ -3035,6 +3487,7 @@ class Maintenance:
         self._next_heal_check = started
         self._next_heal = started
         self._next_page_look = started
+        self._next_learn = started
         self._mismatch_since = None       # when the page and the program were first seen to be of different versions
         self._heal_streak = 0
         self._lists_missing = []
@@ -3065,7 +3518,7 @@ class Maintenance:
         steps = (("jobs", self._collect), ("reconcile", self._reconcile), ("check", self._check),
                  ("update", self._update), ("power", self._power), ("address", self._address),
                  ("box.json", self._boxinfo), ("telemetry", self._telemetry), ("self-repair", self._heal),
-                 ("page", self._page))
+                 ("page", self._page), ("learning", self._learn))
         try:
             self._cur()
         except LookupError:
@@ -3557,6 +4010,18 @@ class Maintenance:
             if self._gate_allows("heal-start"):
                 log.warning("Pi-hole lacks %s: setting Sinko up again (at most once an hour)", what)
 
+    # ----- learning new addresses of blocked apps -----
+    def _learn(self, now, epoch) -> None:
+        """Once a minute while the parent has it switched on (`learn.on`), and only while the clock is believed (a
+        learned rule carries its day, and the daily limit counts by it). See Learner."""
+        if not self._cur()["learn"]["on"]:
+            self.learner.reset()
+            return
+        if self.mono() < self._next_learn or not self.clock_ok():
+            return
+        self._next_learn = self.mono() + Learner.EVERY
+        self._actions.extend(self.learner.run(self.api, self._groups, epoch))
+
     # ----- the page and the program are of one version -----
     def _page(self, now, epoch) -> None:
         """An update that is cut off (the power goes) between the replacing of the program and the replacing of the page
@@ -3749,6 +4214,68 @@ def cmd_telemetry(args) -> int:
         print(forget_report(what, detail))
     if state["community"] and on is not False:
         print("Boxes online at the last answer: %d" % state["community"]["online"])
+    return 0
+
+
+def cmd_learn(args) -> int:
+    """`sinko learn on|off|status|list|forget NAME`. The switch lives in the shared state (`learn.on`), where the page
+    will show it too; what was learned lives in Pi-hole, as rules of the apps' own groups (see Learner)."""
+    name = (args.name or "").strip().lower().rstrip(".")
+    if args.action == "forget" and not (name and len(name) <= 253 and HOST_RE.match(name)):
+        print("sinko: say which learned address to allow again, e.g.: sudo sinko learn forget example.com", file=sys.stderr)
+        return 1
+    try:
+        api = Api()
+        api.login()
+    except TRANSPORT_ERRORS as err:
+        print("sinko: Pi-hole could not be reached (%s)" % short_text(err, 80), file=sys.stderr)
+        return 2
+    taken = []
+    try:
+        groups = api.group_map()
+        if G_STATE not in groups:
+            print("sinko: Sinko is not set up in Pi-hole yet. Run: sudo sinko setup", file=sys.stderr)
+            return 1
+        if args.action in ("on", "off"):
+            want = args.action == "on"
+            patch_state(api, lambda state: state.update(learn={"on": want}))
+        if args.action == "forget":
+            for rule in learned_rules(api.domains()):
+                if not rule["back"] and under(name, rule["zone"]):
+                    take_back_rule(api, rule)
+                    taken.append(rule)
+        state = parse_state(api.group_map()[G_STATE].get("comment"))
+        rules = learned_rules(api.domains())
+    except TRANSPORT_ERRORS as err:
+        print("sinko: Pi-hole could not be read or written (%s)" % short_text(err, 80), file=sys.stderr)
+        return 2
+    finally:
+        drop_session(api)
+    if args.action == "forget":
+        if not taken:
+            print("sinko: no learned address covers %s (see: sudo sinko learn list)" % name, file=sys.stderr)
+            return 1
+        for rule in taken:
+            print("Allowed again: %s (%s). It will not be learned again." % (rule["zone"], rule["app"]))
+        return 0
+    if args.action == "list":
+        if not rules:
+            print("Nothing was learned yet.")
+        for rule in sorted(rules, key=lambda r: (r["app"], r["day"], r["zone"])):
+            print("%-16s %-10s %s%s" % (rule["app"], rule["day"], rule["zone"], "   (allowed again)" if rule["back"] else ""))
+        return 0
+    on = state["learn"]["on"]
+    print("Learning new addresses of blocked apps: %s" % ("on" if on else "off"))
+    try:
+        print("The model on this box knows %d apps (%s)." % (len(load_model().apps), MODEL_FILE))
+    except (OSError, ValueError) as err:
+        print("The model cannot be read, so nothing is learned: %s" % short_text(err, 120))
+    learned = [r for r in rules if not r["back"]]
+    today = time.strftime("%Y-%m-%d")
+    print("Learned: %d address%s (%d today), %d allowed again. At most %d a day for each app and %d in all."
+          % (len(learned), "" if len(learned) == 1 else "es", sum(1 for r in learned if r["day"] == today),
+             len(rules) - len(learned), Learner.PER_APP_DAY, Learner.MAX_RULES))
+    print("See them: sudo sinko learn list. " + ("Switch off: sudo sinko learn off" if on else "Switch on: sudo sinko learn on"))
     return 0
 
 
@@ -5377,6 +5904,11 @@ def main(argv=None) -> int:
                        "forget this box), status, payload, reset-id (forget the old id, make a new one)")
     p.add_argument("action", choices=["on", "off", "status", "payload", "reset-id"])
     p.set_defaults(fn=cmd_telemetry)
+    p = sub.add_parser("learn", help="learning new addresses of blocked apps with the small AI model on the box: on, off, "
+                       "status, list, forget NAME (allow a learned address again)")
+    p.add_argument("action", choices=["on", "off", "status", "list", "forget"])
+    p.add_argument("name", nargs="?", default=None, help="with forget: the learned address to allow again")
+    p.set_defaults(fn=cmd_learn)
     p = sub.add_parser("box-info", help="print what the page may know about this box (/pb/box.json), or write it")
     p.add_argument("--write", action="store_true", help="write it into the page folder instead of printing it")
     p.set_defaults(fn=cmd_box_info)

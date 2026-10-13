@@ -921,7 +921,7 @@ clean_interrupted_leftovers() {
 
 install_files() {
   step "Installing the parent page"
-  install -d -m 755 "$APP_DIR" "$APP_DIR/bin" "$APP_DIR/lists" "$APP_DIR/tools" "$CONF_DIR" "$(dirname "$BIN_LINK")"
+  install -d -m 755 "$APP_DIR" "$APP_DIR/bin" "$APP_DIR/lists" "$APP_DIR/model" "$APP_DIR/tools" "$CONF_DIR" "$(dirname "$BIN_LINK")"
   clean_interrupted_leftovers
   put 755 "$SRC/bin/sinko" "$APP_DIR/bin/sinko"
   # The lists: the new files go in first, and only the ones this release no longer has are deleted (the program reads
@@ -938,6 +938,9 @@ install_files() {
     if [[ -f "$SRC/$name" ]]; then put 644 "$SRC/$name" "$APP_DIR/$name"; fi
   done
   if [[ -f "$SRC/lists/LICENSE" ]]; then put 644 "$SRC/lists/LICENSE" "$APP_DIR/lists/LICENSE"; fi
+  # The small AI model that learns new addresses of blocked apps (off until the parent switches it on). A source tree from
+  # before it has none: the learner then says it cannot read the model and learns nothing.
+  if [[ -f "$SRC/model/host-model.json" ]]; then put 644 "$SRC/model/host-model.json" "$APP_DIR/model/host-model.json"; fi
   # The ready-made image tools. A git checkout holds other scripts too (release build, …): only these two belong on a box.
   for name in seal.sh firstboot.sh; do
     if [[ -f "$SRC/tools/$name" ]]; then put 755 "$SRC/tools/$name" "$APP_DIR/tools/$name"; fi
