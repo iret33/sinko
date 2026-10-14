@@ -3,7 +3,7 @@
 All notable changes to Sinko. Versions follow [Semantic Versioning](https://semver.org); the newest release is at the top.
 Boxes learn about a release from this repository's GitHub releases, whose notes are the section of this file.
 
-## [3.1.0] - 2026-10-13
+## [3.1.0] - 2026-10-14
 
 ### Added
 - **The box can learn new addresses of the apps you block** (optional, and off until you switch it on in *My box*). Apps
