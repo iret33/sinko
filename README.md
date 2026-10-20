@@ -78,6 +78,12 @@ after the first set-up.
 Every app first asks the box "where is this?". If your rules allow it, the box asks the internet and passes the answer back. If
 not, the box says no and the app simply does not open. The **live picture** in the page shows these answers as they happen.
 
+<p align="center">
+  <a href="https://iret33.github.io/sinko/how-it-blocks.html"><img src="docs/img/how-it-blocks.png" alt="How Sinko blocks an app, drawn as a bench in thin lines: question tokens from the children's devices slide along a track under the Sinko box, which checks each one against a row of switches, one for each app, and a mode knob; a yes rides on to the router, a no drops through a trap into a black hole" width="560"></a><br>
+  <sub><b><a href="https://iret33.github.io/sinko/how-it-blocks.html">How Sinko blocks an app</a></b>: flip the switches and turn the mode knob yourself, on the project website (<a href="site/how-it-blocks.html">source</a>)<br>
+  <span dir="rtl" lang="ar">كيف يحظر سينكو تطبيقًا: جرّب المفاتيح ومقبض الأوضاع بنفسك على موقع المشروع</span></sub>
+</p>
+
 ## Two ways to get Sinko
 
 **Ready-made.** An Orange Pi Zero 3 with Sinko already on its card: plug in the cable and the power, open
