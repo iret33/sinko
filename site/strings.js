@@ -38,6 +38,7 @@ window.SINKO_STRINGS = {
     how2Text: 'One setting in the router, and every phone and tablet at home asks the box first.',
     how3Title: 'Open the page on your phone',
     how3Text: 'Block apps, set homework time and bedtime, and watch what is happening, from any phone on your home Wi‑Fi.',
+    howBench: 'See how the box blocks an app, in a picture you can play with',
 
     setupTitle: 'Set up your box, step by step',
     setupLead: 'Never set up a gadget before? This guide is for you. It takes about 15 minutes, and you do it only once. You need the Sinko box, its network cable and USB cable, your home router and your phone.',
@@ -180,6 +181,7 @@ window.SINKO_STRINGS = {
     how2Text: 'إعداد واحد في الراوتر، فيسأل كل هاتف وجهاز لوحي في البيت الصندوق أولًا.',
     how3Title: 'افتح الصفحة من هاتفك',
     how3Text: 'احظر التطبيقات، وحدّد وقت الدراسة ووقت النوم، وتابع ما يجري، من أي هاتف على شبكة Wi‑Fi بيتك.',
+    howBench: 'شاهد كيف يحظر الصندوق تطبيقًا، في صورة يمكنك أن تجرّبها بنفسك',
 
     setupTitle: 'شغّل صندوقك خطوة بخطوة',
     setupLead: 'أول مرة تشغّل جهازًا كهذا؟ هذا الدليل لك. يستغرق نحو 15 دقيقة، ولا تفعله إلا مرة واحدة. تحتاج إلى صندوق سينكو، وكابل الشبكة وكابل USB المرفقين به، والراوتر في بيتك، وهاتفك.',

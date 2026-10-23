@@ -31,6 +31,7 @@ fake_system_init() {
   export SINKO_API_URL="http://127.0.0.1:$PORT" SINKO_CLI_PW_FILE="$WORK/cli_pw"
   export SINKO_APP_DIR="$ROOT/opt/sinko" SINKO_CONFIG_FILE="$ROOT/etc/sinko/config" SINKO_STATE_DIR="$ROOT/var/lib/sinko"
   export SINKO_RUN_DIR="$WORK/run"          # where the scheduler's heartbeat would be (the stub of systemctl writes it)
+  export SINKO_ETC_HOSTNAME="$ROOT/etc/hostname"   # the host name box.json reports is the fake root's
   touch "$ROOT/etc/pihole/pihole.toml"
   command -v pihole-FTL >/dev/null || fail "stub missing"
 }

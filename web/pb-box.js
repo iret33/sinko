@@ -467,10 +467,12 @@
   }
 
   /**
-   * /pb/box.json, as the box program writes it: { "v":1, "version", "ip", "tz", "utcOffset", "counter", "mdns", "at" } (architecture.md,
-   * "Amendments"). Anything that is not exactly that shape is treated as a missing file (null), and every field is checked on its own:
-   * a wrong one costs only what it was for. `ip` is an IPv4 or '', `tz` a zone name or '', `utcOffset` "+03:00" or '', `counter` and `mdns`
-   * are true only when the file says true, `at` is whole seconds on the box's clock or 0.
+   * /pb/box.json, as the box program writes it: { "v":1, "api", "version", "boxId", "hostname", "ip", "tz", "utcOffset", "counter", "mdns",
+   * "at" } (architecture.md, "Amendments"; api, boxId and hostname since 3.2, so an older box has none of them). Anything that is not that
+   * shape is treated as a missing file (null), and every field is checked on its own: a wrong or missing one costs only what it was for.
+   * `api` is a whole number from 1 or 0, `boxId` 32 small hex digits or '', `hostname` one name label in small letters (the box answers to
+   * <hostname>.local) or '', `ip` an IPv4 or '', `tz` a zone name or '', `utcOffset` "+03:00" or '', `counter` and `mdns` are true only
+   * when the file says true, `at` is whole seconds on the box's clock or 0.
    */
   function parseBoxInfo(raw) {
     if (!raw || typeof raw !== 'object' || raw instanceof Array || raw.v !== 1) return null;
@@ -478,7 +480,11 @@
     var off = typeof raw.utcOffset === 'string' && UTC_OFFSET.test(raw.utcOffset) ? raw.utcOffset : '';
     var at = typeof raw.at === 'number' && isFinite(raw.at) && Math.floor(raw.at) === raw.at && raw.at > 0 ? raw.at : 0;
     var ver = typeof raw.version === 'string' && /^\d{1,4}\.\d{1,4}\.\d{1,4}$/.test(raw.version) ? raw.version : '';
-    return { version: ver, ip: usableIpv4(raw.ip), tz: tz, utcOffset: off, counter: raw.counter === true, mdns: raw.mdns === true, at: at };
+    var api = typeof raw.api === 'number' && Math.floor(raw.api) === raw.api && raw.api >= 1 && raw.api <= 9999 ? raw.api : 0;
+    var id = typeof raw.boxId === 'string' && /^[0-9a-f]{32}$/.test(raw.boxId) ? raw.boxId : '';
+    var host = typeof raw.hostname === 'string' && LABEL.test(raw.hostname) && raw.hostname === raw.hostname.toLowerCase() ? raw.hostname : '';
+    return { api: api, version: ver, boxId: id, hostname: host, ip: usableIpv4(raw.ip), tz: tz, utcOffset: off, counter: raw.counter === true,
+      mdns: raw.mdns === true, at: at };
   }
 
   /** True when the box's own pulse (box.json's `at`) is more than 20 minutes behind the box's clock `nowSec`: the scheduler is not running. */
@@ -1467,11 +1473,15 @@
       env.endSession(t('loginPwChanged'));
     }, function (e) {
       done();
-      var j = e && e.body && e.body.session;
+      var j = e && e.body && e.body.session, err = e && e.body && e.body.error;
+      // A code that is wrong or was used already: Pi-hole's FTL answers 401 with only an error ("Invalid 2FA token", "Reused 2FA
+      // token"), no session (src/api/auth.c). A wrong password is the 401 that has a session.
+      var badCode = !!(e && e.status === 401 && !j && err && /totp|2fa/i.test(err.message || ''));
       // Two-factor sign-in: Pi-hole says a code is needed (400) or wrong (401). Ask for it, once.
-      if (e && ((e.status === 400 && /totp|2fa/i.test(e.message || '')) || (e.status === 401 && j && j.totp)) && ui.pwCodeField.hidden) {
+      if (e && ((e.status === 400 && /totp|2fa/i.test(e.message || '')) || (e.status === 401 && j && j.totp) || badCode) && ui.pwCodeField.hidden) {
         ui.pwCodeField.hidden = false; ui.pwErr.textContent = t('boxPwNeedCode'); ui.pwCode.focus(); return;
       }
+      if (badCode) { ui.pwErr.textContent = t('wrongTotp'); ui.pwCode.select(); ui.pwCode.focus(); return; }
       if (e && e.status === 401 && j) {
         ui.pwErr.textContent = t(j.totp ? 'wrongTotp' : 'boxPwWrong'); (j.totp ? ui.pwCode : ui.pwCur).focus(); return;
       }

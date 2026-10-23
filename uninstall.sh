@@ -2,9 +2,10 @@
 # Remove Sinko. Pi-hole itself stays installed.
 #   sudo /opt/sinko/uninstall.sh            (--force: remove the files even when Sinko's objects could not be taken out of Pi-hole)
 #
-# Left alone on purpose, because the rest of the box may use them: Pi-hole, avahi-daemon (the <name>.local name),
-# unattended-upgrades and the settings the installer gave it (security updates keep coming), and what tools/seal.sh
-# did to the ready-made image (the hardware watchdog, locked SSH password logins).
+# Left alone on purpose, because the rest of the box may use them: Pi-hole, avahi-daemon (the <name>.local name; only
+# Sinko's announcement for the app, /etc/avahi/services/sinko.service, goes), unattended-upgrades and the settings the
+# installer gave it (security updates keep coming), and what tools/seal.sh did to the ready-made image (the hardware
+# watchdog, locked SSH password logins).
 #
 # The order matters: Sinko's groups, rules and devices are taken out of Pi-hole FIRST. If that does not work (Pi-hole is
 # stopped, its API does not answer), nothing else is removed, and the scheduler is started again: the program that could
@@ -91,6 +92,13 @@ fi
 [[ -f "$WEBROOT/index.html.pb-backup" ]] && mv "$WEBROOT/index.html.pb-backup" "$WEBROOT/index.html"
 rm -rf "$WEBROOT/pb" "$WEBROOT/pb.new" "$WEBROOT/pb.old"
 rm -f "$WEBROOT/index.html.sinko-new"
+
+# The announcement for the Sinko app (avahi itself stays, see the top): only the file the installer wrote.
+avahi_service="$R/etc/avahi/services/sinko.service"
+if grep -qs "Written by Sinko's installer" "$avahi_service"; then
+  rm -f "$avahi_service" "$avahi_service.sinko-new"
+  systemctl --no-block try-reload-or-restart avahi-daemon.service 2>/dev/null || true
+fi
 
 # The old command name is a shortcut the installer left behind when it moved a pihole-bahrain box to Sinko.
 # Only that shortcut goes; a file or link somebody else put there stays.
