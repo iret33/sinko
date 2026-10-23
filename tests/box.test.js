@@ -167,12 +167,18 @@ test('a number for a router: four numbers, and not one that cannot be the box on
 });
 
 test('box.json: only the documented shape is believed, field by field', () => {
-  const good = { v: 1, version: '3.0.0', ip: '192.168.1.50', tz: 'Asia/Bahrain', utcOffset: '+03:00', counter: true, mdns: true, at: 1790000000 };
-  assert.deepEqual(B.parseBoxInfo(good), { version: '3.0.0', ip: '192.168.1.50', tz: 'Asia/Bahrain', utcOffset: '+03:00', counter: true, mdns: true, at: 1790000000 });
+  // api, boxId and hostname are additions of 3.2 (the box's contract with the app, its own number, its name): "v" stays 1.
+  const good = { v: 1, api: 1, version: '3.2.0', boxId: '0123456789abcdef0123456789abcdef', hostname: 'sinko', ip: '192.168.1.50', tz: 'Asia/Bahrain',
+    utcOffset: '+03:00', counter: true, mdns: true, at: 1790000000 };
+  assert.deepEqual(B.parseBoxInfo(good), { api: 1, version: '3.2.0', boxId: '0123456789abcdef0123456789abcdef', hostname: 'sinko', ip: '192.168.1.50',
+    tz: 'Asia/Bahrain', utcOffset: '+03:00', counter: true, mdns: true, at: 1790000000 });
   for (const none of [null, undefined, 'x', 7, [], {}, { v: 2, ip: '192.168.1.50', at: 1790000000 }, { v: '1' }]) assert.equal(B.parseBoxInfo(none), null, JSON.stringify(none));
   // null fields are legal (the box can have no route, no zone name): they cost only what they were for
-  assert.deepEqual(B.parseBoxInfo({ v: 1, version: '3.0.0', ip: null, tz: null, utcOffset: '+00:00', counter: false, mdns: false, at: 5 }),
-    { version: '3.0.0', ip: '', tz: '', utcOffset: '+00:00', counter: false, mdns: false, at: 5 });
+  assert.deepEqual(B.parseBoxInfo({ v: 1, api: 1, version: '3.2.0', boxId: null, hostname: null, ip: null, tz: null, utcOffset: '+00:00', counter: false,
+    mdns: false, at: 5 }), { api: 1, version: '3.2.0', boxId: '', hostname: '', ip: '', tz: '', utcOffset: '+00:00', counter: false, mdns: false, at: 5 });
+  // a box older than 3.2 writes none of the new fields: they are absent, everything else is as before
+  assert.deepEqual(B.parseBoxInfo({ v: 1, version: '3.1.0', ip: '192.168.1.50', tz: 'Asia/Bahrain', utcOffset: '+03:00', counter: true, mdns: true, at: 5 }),
+    { api: 0, version: '3.1.0', boxId: '', hostname: '', ip: '192.168.1.50', tz: 'Asia/Bahrain', utcOffset: '+03:00', counter: true, mdns: true, at: 5 });
   assert.equal(B.parseBoxInfo(Object.assign({}, good, { ip: 'sinko.local' })).ip, '', 'a name is never the number for the router');
   assert.equal(B.parseBoxInfo(Object.assign({}, good, { ip: '0.0.0.0' })).ip, '');
   assert.equal(B.parseBoxInfo(Object.assign({}, good, { tz: '../../etc/passwd' })).tz, '');
@@ -184,6 +190,18 @@ test('box.json: only the documented shape is believed, field by field', () => {
   assert.equal(B.parseBoxInfo(Object.assign({}, good, { mdns: 'yes' })).mdns, false);
   for (const at of [-1, 0, 1.5, NaN, Infinity, '1790000000', null]) assert.equal(B.parseBoxInfo(Object.assign({}, good, { at })).at, 0, String(at));
   assert.equal(B.parseBoxInfo(Object.assign({}, good, { version: 'v3' })).version, '');
+  for (const api of [2, 17, 9999]) assert.equal(B.parseBoxInfo(Object.assign({}, good, { api })).api, api, 'a higher contract is reported as it is: the app decides');
+  for (const api of [0, -1, 1.5, '1', true, null, NaN, Infinity, 10000, [1], {}]) {
+    assert.equal(B.parseBoxInfo(Object.assign({}, good, { api })).api, 0, JSON.stringify(api) + ' is no contract number');
+  }
+  for (const boxId of ['', '0123456789ABCDEF0123456789ABCDEF', '0123456789abcdef0123456789abcde', '0123456789abcdef0123456789abcdef0',
+    ' 0123456789abcdef0123456789abcdef', '0123456789abcdef0123456789abcdeg', 12345, null, ['0123456789abcdef0123456789abcdef']]) {
+    assert.equal(B.parseBoxInfo(Object.assign({}, good, { boxId })).boxId, '', JSON.stringify(boxId));
+  }
+  for (const hostname of ['', 'Sinko', 'sinko.local', '-sinko', 'sinko-', 'a'.repeat(64), 'has space', 'bad_name', 'sinko\n', '<b>x</b>', 7, null]) {
+    assert.equal(B.parseBoxInfo(Object.assign({}, good, { hostname })).hostname, '', JSON.stringify(hostname));
+  }
+  for (const hostname of ['kids-box', 'a'.repeat(63), 'x', '1box']) assert.equal(B.parseBoxInfo(Object.assign({}, good, { hostname })).hostname, hostname);
 });
 
 test('the box\'s pulse: late when box.json is more than 20 minutes behind the box\'s own clock, never for a missing or future one', () => {

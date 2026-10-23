@@ -4,7 +4,8 @@
 #
 #   1. new SSH host keys            (the golden unit's keys are on every card that was flashed from its image)
 #   2. the host name, and with it the <name>.local that avahi announces
-#   3. no stale install-id          (the anonymous counter's random number must not be shared between boxes)
+#   3. new ids                      (no stale install-id: the anonymous counter's random number must not be shared between
+#                                    boxes; and a box id of its own, which box.json shows the app, written at once)
 #   4. Pi-hole's own HTTPS key      (the seal removed the golden unit's; Pi-hole's FTL makes a new one when it starts
 #                                    without: this waits until the file is there, and restarts FTL once if it is not)
 #   5. the box's address for THIS network: "sinko configure --ip <address> --hostname <name>" and SINKO_IP
@@ -115,11 +116,15 @@ if [[ -f "$avahi_conf" ]] && grep -qE '^[[:space:]]*host-name=' "$avahi_conf"; t
 fi
 systemctl --no-block try-restart avahi-daemon.service >/dev/null 2>&1 || true   # announce the new name now
 
-# ------------------------------------------------------------------ 3. the counter's id
+# ------------------------------------------------------------------ 3. the counter's id and the box id
 # Once only: a retry (the network was not there at the first start) must not delete the id the scheduler has made since,
-# or the box would be counted twice.
+# or the box would be counted twice, nor the box id the app already knows.
+# The box id (box.json's boxId) is how the app tells one box from another. The seal removed the golden unit's; one that is
+# still here (a seal that was cut short) goes too. `box-info --write` makes this box's own and writes box.json with it and
+# with the new host name at once (the address follows in step 5); when that fails, the scheduler makes both soon after it starts.
 if [[ "$ids_done" != "done" ]]; then
-  rm -f "$STATE_DIR/install-id" || fail "cannot remove the stale install-id"
+  rm -f "$STATE_DIR/install-id" "$STATE_DIR/box-id" || fail "cannot remove the stale install-id or box id"
+  "$BIN" box-info --write >/dev/null 2>&1 || log "could not write box.json now (the scheduler writes it when it starts)"
   ids_done="done"
   write_flag
 fi

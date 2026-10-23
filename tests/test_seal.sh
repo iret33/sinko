@@ -129,10 +129,13 @@ done
 [[ -e "$ROOT/etc/ssh/ssh_host_ed25519_key" ]] || fail "a refused run removed keys"
 
 echo "--- a dry run shows everything and changes nothing"
+[[ -s "$ROOT/var/lib/sinko/box-id" ]] || fail "test setup: the golden unit's installer made no box id"
+grep -q "\"boxId\":\"$(cat "$ROOT/var/lib/sinko/box-id")\"" "$ROOT/var/www/html/pb/box.json" || fail "test setup: box.json does not show the box id"
 world_before="$(world_digest)"; api_before="$(api_digest)"
 bash "$SEAL" --dry-run >"$WORK/dry.out" 2>&1 || { cat "$WORK/dry.out"; fail "dry run failed"; }
 for shown in "Sara, Omar" "pihole-FTL.db" "ssh_host_ed25519_key" "$ROOT/root/.bash_history" "$ROOT/home/pi/.bash_history" \
              "$ROOT/root/.ssh/authorized_keys" "$ROOT/root/.not_logged_in_yet" "/etc/machine-id" "install-id" "initial-password" \
+             "$ROOT/var/lib/sinko/box-id" "$ROOT/var/www/html/pb/box.json" \
              "Set the host name to sinko" "hardware watchdog" "anonymous-counter" "welcome screen" "random-seed" \
              "tls.pem" "tls_ca.crt" "config_backups" "migration_backup_v6" "gravity_old.db" "gravity_backups" "pihole-tmp.db" "two-factor secret" "application password" \
              "getty@.service.d/override.conf" "serial-getty@.service.d/override.conf" "30-wifis-dhcp.yaml" "HomeNet.nmconnection" \
@@ -228,6 +231,7 @@ grep -q 'systemd-shutdown does' "$REPO/tools/seal.sh" && fail "tools/seal.sh aga
 [[ -e "$WORK/units/sinko-firstboot.service.enabled" ]] || fail "the first-start service is not enabled"
 echo "    what is unique or private is gone; what is needed stays"
 for gone in "$ROOT/var/lib/sinko/install-id" "$ROOT/var/lib/sinko/handled.json" "$ROOT/var/lib/sinko/update-result.json" "$ROOT/etc/sinko/initial-password" \
+            "$ROOT/var/lib/sinko/box-id" "$ROOT/var/www/html/pb/box.json" \
             "$ROOT/root/.bash_history" "$ROOT/root/.python_history" "$ROOT/home/pi/.bash_history" "$ROOT/root/.not_logged_in_yet" \
             "$ROOT/var/lib/systemd/random-seed" "$ROOT/var/lib/dhcp/dhclient.leases"; do
   [[ ! -e "$gone" ]] || fail "$gone is still there"

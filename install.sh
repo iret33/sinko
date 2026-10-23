@@ -43,7 +43,8 @@
 #   SINKO_TELEMETRY       1 = count this box in the anonymous number of Sinko boxes online, 0 = do not.
 #                      Interactive installs ask (default no). Not asked and not set: nothing is saved
 #                      and the parent page asks later. What is sent: docs/privacy.md
-#   SINKO_MDNS            0 = do not install avahi-daemon (the box answers to <hostname>.local when it is there)
+#   SINKO_MDNS            0 = do not install avahi-daemon (the box answers to <hostname>.local when it is there), and do
+#                      not announce the box to the Sinko app (Bonjour, _sinko._tcp)
 #   SINKO_OS_UPDATES      0 = do not set up automatic Debian security updates (never a restart; left alone when
 #                      unattended-upgrades is already installed)
 #   SINKO_NONINTERACTIVE  1 = never prompt
@@ -148,6 +149,7 @@ main() {
   ok "Pi-hole is set up"
   install_services
   install_local_name
+  advertise_box             # after the scheduler proved itself: a failed update does not announce its version
   install_os_updates
   install_time_sync
   write_box_info "the settings and the local name are final now"
@@ -1277,6 +1279,54 @@ install_local_name() {
   else
     warn "Could not install avahi-daemon (no internet?). The page is still reachable by its address; run the installer again later."
   fi
+}
+
+# The Sinko app finds the box on the home network by Bonjour: avahi announces the service _sinko._tcp under the box's own name
+# (%h, so a new host name needs nothing more: tools/firstboot.sh restarts avahi), with the version and where box.json is in its
+# text records. Written by every run, so the version follows each update. avahi notices a new, changed or removed file in its
+# services folder by itself (it watches the folder and reloads a file whose time of change differs); it is also asked to reload,
+# for an avahi that runs without that watch. Not announced as _http._tcp as well: docs/maintainers/architecture.md, "Finding
+# the box". SINKO_MDNS=0 removes it; avahi itself is left as it is either way.
+AVAHI_SERVICE_MARK="Written by Sinko's installer"
+advertise_box() {
+  local file="$R/etc/avahi/services/sinko.service"
+  if [[ "$SINKO_MDNS" != 1 ]]; then
+    if remove_advertisement; then ok "The announcement for the Sinko app was removed (SINKO_MDNS=0)"; fi
+    return 0
+  fi
+  pkg_installed avahi-daemon || return 0          # nothing would announce it (install_local_name said so)
+  [[ -d "$(dirname "$file")" ]] || install -d -m 755 "$(dirname "$file")"     # avahi's own folder is left as it is
+  cat >"$file.sinko-new" <<EOF
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<!-- $AVAHI_SERVICE_MARK: the Sinko app finds this box on the home network by it. Every run of the installer writes
+     it again; SINKO_MDNS=0 and the uninstaller remove it. -->
+<service-group>
+  <name replace-wildcards="yes">%h</name>
+  <service>
+    <type>_sinko._tcp</type>
+    <port>80</port>
+    <txt-record>v=1</txt-record>
+    <txt-record>version=$VERSION</txt-record>
+    <txt-record>path=/</txt-record>
+    <txt-record>info=/pb/box.json</txt-record>
+  </service>
+</service-group>
+EOF
+  chmod 644 "$file.sinko-new"
+  if cmp -s "$file.sinko-new" "$file"; then
+    rm -f "$file.sinko-new"
+  else
+    mv -f "$file.sinko-new" "$file"             # avahi reads only *.service: it never sees the half-written file
+    systemctl --no-block try-reload-or-restart avahi-daemon.service >/dev/null 2>&1 || true
+  fi
+  ok "The Sinko app can find this box on the home network (Bonjour, _sinko._tcp)"
+}
+remove_advertisement() {  # 0 when the installer's file was there and is gone
+  local file="$R/etc/avahi/services/sinko.service"
+  grep -qs "$AVAHI_SERVICE_MARK" "$file" || return 1
+  rm -f "$file"
+  systemctl --no-block try-reload-or-restart avahi-daemon.service >/dev/null 2>&1 || true
 }
 
 # Debian's security updates, nothing else, and never an automatic restart: a restart at a random hour would cut the

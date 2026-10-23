@@ -976,6 +976,17 @@ def part_password(browser):
         expect(eventually(lambda: page.is_visible("#boxPwCode")), "[%s] with two-factor sign-in on, the code is asked for" % lang)
         page.click("#boxPwBtn")
         expect(err() == T(lang, "boxPwNeedCode"), "[%s] and it is required: %r" % (lang, err()))
+        # Pi-hole answers a wrong code, and one that was used already, with 401 and only {"error": ...}: no session object
+        page.fill("#boxPwCode", "111111")
+        page.click("#boxPwBtn")
+        expect(eventually(lambda: err() == T(lang, "wrongTotp")), "[%s] a wrong code is said plainly, not swallowed: %r" % (lang, err()))
+        store.totp_used = "123456"                                       # the code signed somebody in a moment ago
+        page.fill("#boxPwCode", "123456")
+        page.click("#boxPwBtn")
+        expect(eventually(lambda: err() == T(lang, "wrongTotp")), "[%s] so does a code Pi-hole saw already: %r" % (lang, err()))
+        expect(store.password_changes == 0 and page.evaluate("() => document.activeElement && document.activeElement.id") == "boxPwCode",
+               "[%s] nothing changed, and the code field is ready for the next code" % lang)
+        store.totp_used = None                                           # the next code: a new one
         page.fill("#boxPwCode", "123456")
         mine = list(store.sessions)
         page.click("#boxPwBtn")
