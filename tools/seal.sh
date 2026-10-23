@@ -5,13 +5,13 @@
 #   sudo /opt/sinko/tools/seal.sh               shows it, then asks you to type SEAL
 #
 # Sealing removes what must be unique to each box or private to the seller (SSH host keys, machine id, the counter's
-# install id, query history, the parent password, two-factor secret and application password so the page shows its
-# welcome screen, Pi-hole's own HTTPS key, Pi-hole's saved older settings and databases, the children's devices and timers,
-# saved Wi-Fi networks, shell history, logs), turns off Armbian's automatic root login on the console, arms
-# sinko-firstboot.service, which gives every box its own keys, name and address when it first starts, and, as the very
-# last step, locks the root password and the password logins over SSH. Then it writes zeros over the free space, because
-# deleting a file only frees its blocks. Power the unit off right after sealing and do not start it again before you copy
-# the card: starting it uses up the seal.
+# install id, the box's own id that box.json shows the app, query history, the parent password, two-factor secret and
+# application password so the page shows its welcome screen, Pi-hole's own HTTPS key, Pi-hole's saved older settings and
+# databases, the children's devices and timers, saved Wi-Fi networks, shell history, logs), turns off Armbian's automatic
+# root login on the console, arms sinko-firstboot.service, which gives every box its own keys, name and address when it
+# first starts, and, as the very last step, locks the root password and the password logins over SSH. Then it writes zeros
+# over the free space, because deleting a file only frees its blocks. Power the unit off right after sealing and do not
+# start it again before you copy the card: starting it uses up the seal.
 #
 # It first checks that the unit has what the customer's first minutes and years depend on (avahi-daemon so that sinko.local
 # works, an address from the router, the services enabled, Debian's automatic security updates, a time service, and no
@@ -42,6 +42,7 @@ TTY_DEV="${SINKO_TTY:-/dev/tty}"                     # the terminal; SINKO_TTY i
 
 YES=0 DRY=0 KEEP_SSH=0 ZEROFILL=1 SKIP_CHECKS=0 NAME=sinko
 TLS_CERT=""
+BOX_JSON=""                                          # the page's box.json: it shows the box id to the home network
 ZEROFILE="$R/.sinko-zerofill"                        # the file the zero-fill writes: it fills the whole card while it exists
 
 die() { printf 'seal: %s\n' "$*" >&2; exit 1; }
@@ -370,8 +371,12 @@ build_plan() {
     mapfile -t keys < <(existing "$R/root/.ssh/authorized_keys" "$R/root/.ssh/known_hosts" "$R"/home/*/.ssh/authorized_keys "$R"/home/*/.ssh/known_hosts)
     (( ${#keys[@]} == 0 )) || add_action "Remove SSH keys and host lists of people who logged in here: $(join_list "${keys[@]}")" act_remove_paths "${keys[@]}"
   fi
-  mapfile -t gone < <(existing "$STATE_DIR/install-id" "$STATE_DIR/handled.json" "$STATE_DIR/update-result.json" "$R/etc/sinko/initial-password")
-  (( ${#gone[@]} == 0 )) || add_action "Remove the counter's install id and what the scheduler remembered: $(join_list "${gone[@]}")" act_remove_paths "${gone[@]}"
+  # The box id is how the app tells one box from another, so every box must make its own (tools/firstboot.sh does, at the first
+  # start). box.json shows it to the home network until it is written again: it goes too, and the first start writes it anew.
+  BOX_JSON="$(ftl_path webserver.paths.webroot /var/www/html)/pb/box.json"
+  mapfile -t gone < <(existing "$STATE_DIR/install-id" "$STATE_DIR/box-id" "$BOX_JSON" "$STATE_DIR/handled.json" "$STATE_DIR/update-result.json" \
+                               "$R/etc/sinko/initial-password")
+  (( ${#gone[@]} == 0 )) || add_action "Remove the counter's install id, the box's own id (and the page's box.json, which shows it) and what the scheduler remembered: $(join_list "${gone[@]}")" act_remove_paths "${gone[@]}"
   local -a files=()
   local h f
   while IFS= read -r h; do
@@ -685,6 +690,7 @@ verify_core() {
   fi
   systemctl is-enabled --quiet sinko-firstboot.service 2>/dev/null || problem "the first-start service is not enabled"
   compgen -G "$R/etc/ssh/ssh_host_*" >/dev/null && problem "SSH host keys are still there"
+  [[ ! -e "$STATE_DIR/box-id" && ! -e "$BOX_JSON" ]] || problem "the box id (or the page's box.json, which shows it) is still there: every box would share it"
   [[ ! -s "$R/etc/machine-id" ]] || problem "the machine id is not empty"
   [[ -z "$(existing "$TLS_CERT" "${TLS_CERT%.pem}.crt" "${TLS_CERT%.pem}_ca.crt")" ]] || problem "Pi-hole's HTTPS private key or certificate is still there"
   local backups

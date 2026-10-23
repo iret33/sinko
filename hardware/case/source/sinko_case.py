@@ -1,5 +1,5 @@
 """
-Sinko box: a two-piece, fan-cooled enclosure for the Orange Pi Zero 3 (CadQuery).
+Sinko box: a two-piece, fan-cooled enclosure for the Orange Pi Zero 3 (CadQuery). Version 1.1.
 
 Rebuild the print files:  pip install cadquery shapely svgelements && python3 sinko_case.py
 The files land in ./build next to this script, already turned the right way up for printing.
@@ -16,7 +16,7 @@ Top:    30 x 30 x 7 mm fan pocket (snap-in) above a 14 x 14 x <=6 mm SoC heatsin
 Parts
   LID  — upper shell (top + 4 walls), printed upside-down.
   BASE — thin plinth plate with tongue + standoffs, printed flat.
-Fastening: 4x M2.5 x 10 screws from underneath: base standoff -> PCB hole -> lid post.
+Fastening: 4x M2.5 x 12 screws (8 to 16 mm fit) from underneath: base standoff -> PCB hole -> lid post.
 The posts clamp the board; the lid hovers 0.3 mm over the base as a shadow line.
 """
 import math
@@ -46,8 +46,9 @@ TONGUE_T, TONGUE_CLR, Z_TONGUE_TOP = 1.2, 0.2, -2.0
 
 # fasteners
 POST_R = 2.75
-POST_BORE_D = 2.2                    # M2.5 thread-forming into plastic
-POST_BORE_TOP = 10.5
+POST_BORE_D = 2.4                    # M2.5 goes in without force and still cuts its thread (2.2 in v1)
+POST_BORE_TOP = 13.5                 # deep enough for a 16 mm screw
+POST_LEAD_IN = 0.5                   # height of the cone at the mouth of the bore
 STANDOFF_R_TOP, STANDOFF_R_LOW, Z_STANDOFF_STEP = 3.0, 3.5, -3.1
 SCREW_CLEAR_D = 2.9
 CB_D, CB_DEPTH = 5.0, 2.7            # counterbore for M2.5 socket/button head
@@ -65,8 +66,11 @@ Z_FAN_BOT = Z_FAN_TOP - FAN_T - 0.1  # 9.1 (0.1 slack)
 # ports (measured from the STEP at the board edge)
 RJ45 = dict(y0=5.67, y1=21.67, z0=0.51, z1=13.81)
 USBC = dict(yc=-7.72, zc=5.11)
-RJ45_CLR = 0.3
-USBC_W, USBC_H = 7.0, 12.6           # admits standard USB-C over-molds (<= 12.35 x 6.5)
+# RJ45 window: 15.2 x 12.5 mm, 0.8 mm smaller than the jack face each way, so its edge always lands on the metal
+RJ45_WIN = dict(y0=6.07, y1=21.27, z0=0.81, z1=13.31)
+USBC_W, USBC_H = 4.2, 10.0           # stadium that hugs the socket
+# the hole sits in a shallow rounded dish in the outside of the wall, so a cable's plug body goes in far enough to seat
+USBC_DISH_W, USBC_DISH_H, USBC_DISH_R, USBC_DISH_DEPTH = 7.0, 12.8, 1.6, 1.2
 
 # Sinko lockup engraved in the top. Reads from the front (-X, the perforated face);
 # cables leave from the back (+X). Centred on Y between the grille and the top edge.
@@ -143,7 +147,7 @@ def make_lid(logo=True):
         lid = lid.cut(cyl(hx, hy, POST_BORE_D / 2, PCB_TOP - 0.1, POST_BORE_TOP))
         # small lead-in chamfer so the screw finds the bore
         lid = lid.cut(cq.Workplane("XY").workplane(offset=PCB_TOP - 0.01).center(hx, hy)
-                      .circle(POST_BORE_D / 2 + 0.4).workplane(offset=0.4)
+                      .circle(POST_BORE_D / 2 + 0.4).workplane(offset=POST_LEAD_IN)
                       .circle(POST_BORE_D / 2).loft())
 
     # --- fan pocket: corner pads, 4 snap clips (±Y), 2 locating ribs (±X)
@@ -198,19 +202,22 @@ def make_lid(logo=True):
              .pushPoints(vpts).circle(GRILLE_HOLE / 2).extrude(WALL + 2))
     lid = lid.cut(vents)
 
-    # --- RJ45 window (hugs the jack face)
-    c = RJ45_CLR
+    # --- RJ45 window (just inside the jack face)
+    w = RJ45_WIN
     rj = (cq.Workplane("YZ").workplane(offset=X1 - WALL - 1)
-          .center((RJ45["y0"] + RJ45["y1"]) / 2, (RJ45["z0"] + RJ45["z1"]) / 2)
-          .rect(RJ45["y1"] - RJ45["y0"] + 2 * c, RJ45["z1"] - RJ45["z0"] + 2 * c)
+          .center((w["y0"] + w["y1"]) / 2, (w["z0"] + w["z1"]) / 2)
+          .rect(w["y1"] - w["y0"], w["z1"] - w["z0"])
           .extrude(WALL + 2).edges("|X").fillet(0.6))
     lid = lid.cut(rj)
 
-    # --- USB-C: vertical stadium sized for cable over-molds
+    # --- USB-C: vertical stadium around the socket, in a rounded dish on the outside
     usbc = (cq.Workplane("YZ").workplane(offset=X1 - WALL - 1)
             .center(USBC["yc"], USBC["zc"]).slot2D(USBC_H, USBC_W, angle=90)
             .extrude(WALL + 2))
-    lid = lid.cut(usbc)
+    dish = (cq.Workplane("YZ").workplane(offset=X1 - USBC_DISH_DEPTH)
+            .center(USBC["yc"], USBC["zc"]).rect(USBC_DISH_W, USBC_DISH_H)
+            .extrude(USBC_DISH_DEPTH + 1).edges("|X").fillet(USBC_DISH_R))
+    lid = lid.cut(usbc).cut(dish)
 
     # --- 0.4 mm relief pockets behind the sealed ports (HDMI, USB-A) so a slightly
     #     over-extruded wall can never press on the connector faces

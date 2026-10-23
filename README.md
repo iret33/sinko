@@ -28,7 +28,7 @@ Parental controls that live on a small box in your home, in Arabic and English.<
 
 <p align="center">
   <a href="hardware/case/README.md"><img src="hardware/case/img/hero.jpg" alt="The Sinko box case: a white lid with a round fan grille and the Sinko logo engraved on top, on a thin teal base, with small vent holes in the front" width="480"></a><br>
-  <sub><b>The Sinko box case</b>, free to print: closed on every side except power and Ethernet, with a small silent fan.<br>
+  <sub><b>The Sinko box case</b> (version 1.1), free to print: closed on every side except power and Ethernet, with a small silent fan.<br>
   <a href="hardware/case/README.md">Files, parts list and how to put it together</a> · <a href="https://www.pcbway.com/project/shareproject/Sinko_box_a_minimal_fan_cooled_case_for_the_Orange_Pi_Zero_3_508ebe8e.html#cnclink">Get it printed on PCBWay</a><br>
   <span dir="rtl" lang="ar">علبة صندوق سينكو، مجانية للطباعة، مع قائمة القطع وطريقة التجميع</span></sub>
 </p>
@@ -77,6 +77,12 @@ after the first set-up.
 
 Every app first asks the box "where is this?". If your rules allow it, the box asks the internet and passes the answer back. If
 not, the box says no and the app simply does not open. The **live picture** in the page shows these answers as they happen.
+
+<p align="center">
+  <a href="https://iret33.github.io/sinko/how-it-blocks.html"><img src="docs/img/how-it-blocks.png" alt="How Sinko blocks an app, drawn as a bench in thin lines: question tokens from the children's devices slide along a track under the Sinko box, which checks each one against a row of switches, one for each app, and a mode knob; a yes rides on to the router, a no drops through a trap into a black hole" width="560"></a><br>
+  <sub><b><a href="https://iret33.github.io/sinko/how-it-blocks.html">How Sinko blocks an app</a></b>: flip the switches and turn the mode knob yourself, on the project website (<a href="site/how-it-blocks.html">source</a>)<br>
+  <span dir="rtl" lang="ar">كيف يحظر سينكو تطبيقًا: جرّب المفاتيح ومقبض الأوضاع بنفسك على موقع المشروع</span></sub>
+</p>
 
 ## Two ways to get Sinko
 
@@ -153,7 +159,7 @@ Use it together with Screen Time (iPhone) or Family Link (Android). More in the 
 | [`docs/how-it-works.md`](docs/how-it-works.md) | Pi-hole groups, the live picture, the block lists, files on the box |
 | [`docs/product-image.md`](docs/product-image.md), [`docs/selling.md`](docs/selling.md) | Making and selling ready-made boxes |
 | [`docs/hardware-test-checklist.md`](docs/hardware-test-checklist.md) | What to test on a real box before a release or a sale |
-| [`hardware/case/`](hardware/case/README.md) | A case to print for the Orange Pi Zero 3, with the parts list (English and Arabic) |
+| [`hardware/case/`](hardware/case/README.md) | A case to print for the Orange Pi Zero 3 (version 1.1), with the parts list (English and Arabic) |
 | [`docs/maintainers/`](docs/maintainers) | Architecture and contracts; releasing |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md), [`SECURITY.md`](SECURITY.md), [`CHANGELOG.md`](CHANGELOG.md) | Helping, reporting a vulnerability, what changed |
 

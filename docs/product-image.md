@@ -58,6 +58,7 @@ Sealing removes: the parent password, any application password and two-factor se
 and the parent is not locked out by yours), children's devices, timers and bedtime, Pi-hole's query history, logs
 (including Armbian's on-disk copy in `/var/log.hdd`), shell history, SSH host keys (each box makes its own on first
 start), Pi-hole's HTTPS key (each box makes its own), Wi-Fi profiles, the machine id, the counter's install id and answer,
+the box id that the Sinko app knows a box by (each box makes its own on first start),
 and Armbian's first-login wizard file. It sets the host name
 (`--hostname`, default `sinko`, so `http://sinko.local` works), installs the hardware watchdog (15 seconds, the most the
 Orange Pi's driver accepts) so a hung box reboots by itself, arms the first-start service, and **locks the root password and turns off SSH password logins last** (so a seal that
