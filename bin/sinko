@@ -558,6 +558,28 @@ def reset_install_id() -> str:
     return value
 
 
+def box_id():
+    """box.json's `boxId`: a random number of this box, so that the app knows it again after the router gave it another
+    address. Made once (the installer's first box.json, or the first start of a ready-made box, after the seal removed the
+    golden unit's) and never sent anywhere. Not the counter's install-id: that one is forgotten when the counter is
+    switched off, and it must not be readable on the home network. None when it can be neither read nor made (the program
+    run by an account other than root): box.json then says null, and a later write by root fills it in."""
+    try:
+        with open(state_path("box-id"), encoding="ascii") as fh:
+            value = fh.read().strip()
+        if INSTALL_ID_RE.match(value):
+            return value
+    except (OSError, ValueError):
+        pass
+    try:
+        ensure_state_dir()
+        value = secrets.token_hex(16)
+        atomic_write(state_path("box-id"), value + "\n")
+        return value
+    except OSError:
+        return None
+
+
 def write_update_result(status: str, from_version, to_version, error, at: float, rolled_back=None,
                         transient: bool = False) -> dict:
     """What the update runner leaves for the scheduler (see architecture.md, "Update flow").
@@ -2815,6 +2837,11 @@ def apply_new_address(ip: str, conf: dict, config_path=None) -> None:
 BOX_INFO_FILE = "box.json"
 BOX_INFO_MAX_AGE = 600                 # a file this old is rewritten even when nothing changed: it is the heartbeat
 TZ_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_+./-]{0,63}\Z")
+LABEL_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
+# The contract between the box and the app (box.json's `api`). Raise it whenever pb-state gains or changes a key, or anything
+# else the app relies on behaves differently: the app does not write pb-state to a box whose number is higher than the one it
+# knows, because every parser drops the keys it does not know (architecture.md, "Shared state").
+BOX_API = 1
 
 
 def timezone_name():
@@ -2847,12 +2874,35 @@ def utc_offset_text(when=None) -> str:
     return "%s%02d:%02d" % (sign, abs(minutes) // 60, abs(minutes) % 60)
 
 
+def system_hostname():
+    """The host name of the system as avahi announces it (<name>.local): the part before the first dot, in small letters,
+    or None when it is not a plain name. Read from /etc/hostname first, like the installer: the scheduler runs in a name
+    space of its own (ProtectHostname=), where a name given after its start never arrives."""
+    name = ""
+    try:
+        with open(os.environ.get("SINKO_ETC_HOSTNAME") or "/etc/hostname", encoding="utf-8", errors="replace") as fh:
+            name = fh.readline().strip()
+    except OSError:
+        pass
+    if not name:
+        try:
+            name = socket.gethostname()
+        except OSError:
+            return None
+    name = name.split(".", 1)[0].lower()
+    return name if LABEL_RE.match(name) else None
+
+
 def box_info(conf=None, ip="default", when=None, mdns=None) -> dict:
-    """The content of /pb/box.json: {"v":1,"version","ip","tz","utcOffset","counter","mdns","at"}.
-    `ip` is the default-route IPv4 address (what the router's DNS setting needs; the page never puts a name there),
-    null when the box has no route. `counter` is "a counter address is configured", `mdns` "avahi answers for this
-    host", `at` the box's clock. Nothing that identifies the family is in it: the file is readable by everybody on
-    the network."""
+    """The content of /pb/box.json: {"v":1,"api","version","boxId","hostname","ip","tz","utcOffset","counter","mdns","at"}.
+    `api` is BOX_API. `boxId` is this box's own random number (box_id), so that the app knows the box again at another
+    address, and `hostname` the name it answers to as <hostname>.local (null when either is not known). `ip` is the
+    default-route IPv4 address (what the router's DNS setting needs; the page never puts a name there), null when the
+    box has no route. `counter` is "a counter address is configured", `mdns` "avahi answers for this host", `at` the box's
+    clock. The file is readable by everybody on the home network: the box id and the host name tell one box from another
+    (avahi announces the name anyway), and the name is the owner's choice on an own install, which can say something about
+    the family. Nothing else about the family is in it: not the local name of the page, the children, the rules or the
+    counter's id or address."""
     conf = read_config() if conf is None else conf
     if ip == "default":
         try:
@@ -2862,8 +2912,9 @@ def box_info(conf=None, ip="default", when=None, mdns=None) -> dict:
     if mdns is None:
         mdns = unit_active("avahi-daemon")
     now = time.time() if when is None else when
-    return {"v": 1, "version": VERSION, "ip": ip if valid_lan_ip(ip) else None, "tz": timezone_name(),
-            "utcOffset": utc_offset_text(), "counter": bool(telemetry_url(conf)), "mdns": bool(mdns), "at": int(now)}
+    return {"v": 1, "api": BOX_API, "version": VERSION, "boxId": box_id(), "hostname": system_hostname(),
+            "ip": ip if valid_lan_ip(ip) else None, "tz": timezone_name(), "utcOffset": utc_offset_text(),
+            "counter": bool(telemetry_url(conf)), "mdns": bool(mdns), "at": int(now)}
 
 
 def box_info_path(root=None):

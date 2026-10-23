@@ -119,9 +119,13 @@ class Box:
         with open(self.config_path, "w") as fh:
             fh.write("SINKO_HOSTNAME=family.lan\nSINKO_IP=%s\n" % BOX_IP)
             fh.write("".join("%s=%s\n" % item for item in self.github.conf().items()))
+        hostname_file = os.path.join(self.tmp, "hostname")
+        with open(hostname_file, "w") as fh:
+            fh.write("sinko\n")
         env = {"SINKO_API_URL": self.url.rstrip("/"), "SINKO_STATE_DIR": os.path.join(self.tmp, "state"),
                "SINKO_RUN_DIR": os.path.join(self.tmp, "run"), "SINKO_WEBROOT": self.webroot,
-               "SINKO_LOCALTIME": os.path.join(self.tmp, "no-such-link"), "SINKO_TIMEZONE_FILE": zone_file}
+               "SINKO_LOCALTIME": os.path.join(self.tmp, "no-such-link"), "SINKO_TIMEZONE_FILE": zone_file,
+               "SINKO_ETC_HOSTNAME": hostname_file}
         if counter:
             env["SINKO_TELEMETRY_URL"] = self.counter.url
         self.stack.enter_context(mock.patch.dict(os.environ, env))
@@ -702,15 +706,18 @@ class PageAndSchedulerTests(unittest.TestCase):
         box = Box(self, counter=True)
         path = os.path.join(box.webroot, "pb", "box.json")
         info = box.box_json()
-        self.assertEqual(sorted(info), ["at", "counter", "ip", "mdns", "tz", "utcOffset", "v", "version"])
+        self.assertEqual(sorted(info), ["api", "at", "boxId", "counter", "hostname", "ip", "mdns", "tz", "utcOffset", "v", "version"])
         self.assertEqual(stat.S_IMODE(os.stat(path).st_mode), 0o644, "readable by the web server and everybody on the network")
-        self.assertEqual((info["v"], info["version"], info["ip"], info["tz"], info["counter"], info["mdns"]),
-                         (1, VERSION, BOX_IP, "Asia/Bahrain", True, True))
+        self.assertEqual((info["v"], info["api"], info["version"], info["hostname"], info["ip"], info["tz"], info["counter"], info["mdns"]),
+                         (1, 1, VERSION, "sinko", BOX_IP, "Asia/Bahrain", True, True))
+        with open(os.path.join(box.tmp, "state", "box-id")) as fh:
+            self.assertEqual(info["boxId"], fh.read().strip(), "the box's own id, kept in the state folder")
         self.assertRegex(info["utcOffset"], r"^[+-]\d\d:\d\d$")
         self.assertLess(abs(info["at"] - time.time()), 60)
         page = self.open(box, host="sinko.local")        # opened by the name the quick-start card gives, which a router cannot use
         self.assertEqual(page.evaluate("raw => PBBox.pure.parseBoxInfo(raw)", info),
-                         {"version": VERSION, "ip": BOX_IP, "tz": "Asia/Bahrain", "utcOffset": info["utcOffset"], "counter": True, "mdns": True, "at": info["at"]},
+                         {"api": 1, "version": VERSION, "boxId": info["boxId"], "hostname": "sinko", "ip": BOX_IP, "tz": "Asia/Bahrain",
+                          "utcOffset": info["utcOffset"], "counter": True, "mdns": True, "at": info["at"]},
                          "the page keeps every field of what the writer wrote")
         help_text = clean(page.evaluate("() => document.getElementById('helpBody').textContent"))
         self.assertEqual(help_text, T("en", "helpBody", ip=BOX_IP), "the router help gives the number from box.json")
