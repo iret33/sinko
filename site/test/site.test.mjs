@@ -187,6 +187,29 @@ test('the screenshots the page asks for are the ones the plan names', () => {
   assert.deepEqual([...new Set(images)].sort(), ['img/box-en.png', 'img/live-en.png', 'img/panel-ar.png', 'img/panel-en.png']);
 });
 
+test('"How Sinko blocks an app" stands on its own: linked from How it works, relative addresses, nothing from the network', () => {
+  const page = read('how-it-blocks.html');
+  assert.match(html, /<section class="section" id="how"[\s\S]*?<a class="more" href="how-it-blocks\.html" data-i18n="howBench">[\s\S]*?<\/section>/);
+  assert.match(page, /^<!doctype html>\n<html lang="en" dir="ltr">/);
+  assert.match(page, /<meta name="viewport" content="width=device-width, initial-scale=1/);
+  assert.equal((page.match(/<h1\b/g) || []).length, 1);
+  assert.match(page, /<link rel="icon" href="icon\.svg"/);
+  assert.match(page, /<a href="\.\/">/, 'a way back to the site');
+  // Everything it needs is inside it, or copied in at deploy time: no script, style or font from elsewhere, no requests.
+  for (const m of page.matchAll(/\b(?:src|href)="([^"#][^"]*)"/g)) {
+    if (m[1] === 'http://www.w3.org/2000/svg') continue;
+    assert.doesNotMatch(m[1], /^(\/|[a-z]+:)/, `${m[1]} is not a relative address`);
+    assert.ok(fs.existsSync(path.join(SITE, m[1])) || m[1] === 'icon.svg', `${m[1]} does not exist`);
+  }
+  for (const m of page.matchAll(/\burl\(([^)#][^)]*)\)/g)) assert.match(m[1], /^fonts\/plex-arabic-[\w-]+\.woff2$/, m[1]);
+  assert.doesNotMatch(page, /<script[^>]+src=|\bfetch\(|XMLHttpRequest|localStorage|sessionStorage/);
+  // The diagram's text is English; its caption is there in Arabic too, with the parent page's words for the modes.
+  const ar = /<span class="sk-ar" lang="ar" dir="rtl">([^<]+)<\/span>/.exec(page);
+  assert.ok(ar, 'the Arabic caption');
+  for (const term of ['صندوق العائلة', 'وقت الدراسة', 'الوقت الحر', 'الاستراحة من الإنترنت', 'الثقب الأسود']) assert.ok(ar[1].includes(term), term);
+  assert.doesNotMatch(ar[1], /سنكو|[٠-٩]/);
+});
+
 // ---------------------------------------------------------------- style
 function luminance(hex) {
   const channel = (i) => {
@@ -292,7 +315,7 @@ test('assemble.sh builds the published folder, and refuses an address it cannot 
   assert.match(built, /<link rel="canonical" href="https:\/\/iret33\.github\.io\/sinko\/">/);
   assert.match(built, /property="og:image" content="https:\/\/iret33\.github\.io\/sinko\/img\/social-preview\.png"/);
   assert.doesNotMatch(built, /__SITE_URL__/);
-  for (const file of ['index.html', 'style.css', 'app.js', 'lib.js', 'strings.js', 'config.js', 'icon.svg', 'fonts/OFL.txt', 'fonts/plex-arabic-arabic-400.woff2', '.nojekyll']) {
+  for (const file of ['index.html', 'how-it-blocks.html', 'style.css', 'app.js', 'lib.js', 'strings.js', 'config.js', 'icon.svg', 'fonts/OFL.txt', 'fonts/plex-arabic-arabic-400.woff2', '.nojekyll']) {
     assert.ok(fs.existsSync(path.join(out, file)), file);
   }
   for (const file of ['test', 'assemble.sh', 'README.md']) assert.equal(fs.existsSync(path.join(out, file)), false, `${file} must not be published`);

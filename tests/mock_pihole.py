@@ -57,8 +57,10 @@ DOMAIN_TYPES = {("allow", "exact"): 0, ("deny", "exact"): 1, ("allow", "regex"):
 
 
 def default_box_info():
-    """A box as 3.0 describes itself: its address, time zone, and what it can do. `at` is added when the file is served."""
-    return {"v": 1, "version": VERSION, "ip": "192.168.1.50", "tz": "Asia/Bahrain", "utcOffset": "+03:00", "counter": True, "mdns": True}
+    """A box as 3.2 describes itself: its contract with the app, its own number and name, its address, time zone, and what it
+    can do. `at` is added when the file is served."""
+    return {"v": 1, "api": 1, "version": VERSION, "boxId": "0123456789abcdef0123456789abcdef", "hostname": "sinko",
+            "ip": "192.168.1.50", "tz": "Asia/Bahrain", "utcOffset": "+03:00", "counter": True, "mdns": True}
 
 
 def mock_hash(password: str) -> str:
@@ -102,6 +104,7 @@ class Store:
         # -- the password: only a hash is kept, "" means none is set (open mode, like a fresh Pi-hole) --
         self.pwhash = mock_hash(PASSWORD)
         self.totp_code = None             # a string: two-factor login is on and this is the current code
+        self.totp_used = None             # the last code that was accepted: FTL refuses it again ("Reused 2FA token")
         self.max_sessions = None          # a number: POST /api/auth answers 429 once that many sessions are open
         self.password_changes = 0
         self.deleted_sessions = []        # the session ids DELETE /api/auth was called for, in order
@@ -325,7 +328,7 @@ class SchedulerSim:
         self.offline = offline            # a check cannot reach GitHub: nothing changes
         self.rolled_back = rolled_back    # what a failed run reports: True (the old version is back), False, or None (not known)
         self.handled = {"update": None, "check": None, "power": None}
-        self.log = []                     # ("update", "3.2.0"), ("check", None), ("power", "reboot"), ("power-dropped", "reboot") in order
+        self.log = []                     # ("update", "3.3.0"), ("check", None), ("power", "reboot"), ("power-dropped", "reboot") in order
         store.scheduler = self
 
     def _later(self, seconds, fn, *args):
@@ -442,8 +445,8 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def err(self, code, key, msg):
-        self.send(code, {"error": {"key": key, "message": msg, "hint": None}})
+    def err(self, code, key, msg, hint=None):
+        self.send(code, {"error": {"key": key, "message": msg, "hint": hint}})
 
     def raw_body(self):
         if not hasattr(self, "_raw"):
@@ -535,8 +538,16 @@ class Handler(BaseHTTPRequestHandler):
                         return self.send(200, self.session_json(True, message="no auth for local user"))
                     if not s.check_password(b.get("password")):
                         return self.send(401, self.session_json(False, message="password incorrect", totp=bool(s.totp_code)))
-                    if s.totp_code and str(b.get("totp")) != s.totp_code:
-                        return self.send(401, self.session_json(False, message="2FA token missing or invalid", totp=True))
+                    if s.totp_code:
+                        # FTL's answers (src/api/auth.c): the password is checked first, then the code, and a code problem is
+                        # an error object without a session. A code that was accepted once is refused after that.
+                        if "totp" not in b:
+                            return self.err(400, "bad_request", "No 2FA token found in JSON payload")
+                        if str(b.get("totp")) == s.totp_used:
+                            return self.err(401, "unauthorized", "Reused 2FA token", "wait for new token")
+                        if str(b.get("totp")) != s.totp_code:
+                            return self.err(401, "unauthorized", "Invalid 2FA token")
+                        s.totp_used = s.totp_code
                     if s.max_sessions is not None and len(s.sessions) >= s.max_sessions:
                         return self.err(429, "api_seats_exceeded", "API seats exceeded")
                     sid = "sid%d" % next(s.ids)
@@ -1139,7 +1150,7 @@ if __name__ == "__main__":
     ap.add_argument("--open", action="store_true", help="start with no password set, like a fresh Pi-hole (the page offers to choose one)")
     ap.add_argument("--old-box", action="store_true", help="serve no /pb/box.json, like a box from before 3.0")
     ap.add_argument("--update", metavar="VERSION", default=None,
-                    help="play the scheduler: a newer version (e.g. 3.2.0) is available and 'Update now' really runs")
+                    help="play the scheduler: a newer version (e.g. 3.3.0) is available and 'Update now' really runs")
     a = ap.parse_args()
     httpd, store = serve(a.port, a.web)
     if a.setup:

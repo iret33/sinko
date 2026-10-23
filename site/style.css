@@ -126,6 +126,7 @@ h3{font-size:1.2rem;line-height:1.35;font-weight:700}
 .card h3+p{margin-block-start:6px}
 
 .steps3,.grid{display:grid;gap:16px}
+.how-more{margin-block-start:20px}
 @media (min-width:640px){.grid{grid-template-columns:repeat(2,1fr)}}
 @media (min-width:760px){.steps3{grid-template-columns:repeat(3,1fr)}}
 @media (min-width:960px){.grid{grid-template-columns:repeat(3,1fr)}}

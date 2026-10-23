@@ -6,6 +6,7 @@ framework, nothing to install. It is published by `.github/workflows/pages.yml`.
 | File | What it is |
 |---|---|
 | `index.html` | the page. The English text is written here, so it reads without JavaScript |
+| `how-it-blocks.html` | "How Sinko blocks an app": an interactive drawing with its own styles and script, linked from How it works. The drawing is in English and its caption in both languages |
 | `strings.js` | every text in both languages (the Arabic is shown by `app.js`) |
 | `config.js` | the four settings: `repo`, `statsUrl`, `buyUrl`, `supportUrl`, each explained inside |
 | `lib.js` | logic without the page: settings checks, the numbers strip, the install command |

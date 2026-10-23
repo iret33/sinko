@@ -58,8 +58,8 @@ loader.exec_module(pb)
 
 CATALOG = pb.load_catalog(LISTS)
 VERSION = pb.VERSION
-NEW = "3.2.0"
-NOTES = "https://github.com/iret33/sinko/releases/tag/v3.2.0"
+NEW = "3.3.0"
+NOTES = "https://github.com/iret33/sinko/releases/tag/v3.3.0"
 BOX_IP = "192.168.1.50"
 ISOLATES = re.compile("[\u2066-\u2069]")             # the invisible marks that keep a version or a number whole inside Arabic text
 STRINGS = {}
@@ -119,9 +119,13 @@ class Box:
         with open(self.config_path, "w") as fh:
             fh.write("SINKO_HOSTNAME=family.lan\nSINKO_IP=%s\n" % BOX_IP)
             fh.write("".join("%s=%s\n" % item for item in self.github.conf().items()))
+        hostname_file = os.path.join(self.tmp, "hostname")
+        with open(hostname_file, "w") as fh:
+            fh.write("sinko\n")
         env = {"SINKO_API_URL": self.url.rstrip("/"), "SINKO_STATE_DIR": os.path.join(self.tmp, "state"),
                "SINKO_RUN_DIR": os.path.join(self.tmp, "run"), "SINKO_WEBROOT": self.webroot,
-               "SINKO_LOCALTIME": os.path.join(self.tmp, "no-such-link"), "SINKO_TIMEZONE_FILE": zone_file}
+               "SINKO_LOCALTIME": os.path.join(self.tmp, "no-such-link"), "SINKO_TIMEZONE_FILE": zone_file,
+               "SINKO_ETC_HOSTNAME": hostname_file}
         if counter:
             env["SINKO_TELEMETRY_URL"] = self.counter.url
         self.stack.enter_context(mock.patch.dict(os.environ, env))
@@ -390,7 +394,7 @@ class PageAndSchedulerTests(unittest.TestCase):
         box.tick(2, advance=30)
         self.assertEqual(len(box.runner_calls), 1, "and it starts the runner once, not on every pass")
         if watch:
-            self.assertTrue(self.wait(lambda: T(lang, "boxRunning", v=NEW) in self.live(page)), "the page says it is updating to 3.2.0: %r" % self.live(page))
+            self.assertTrue(self.wait(lambda: T(lang, "boxRunning", v=NEW) in self.live(page)), "the page says it is updating to 3.3.0: %r" % self.live(page))
             self.assertEqual(page.locator("#boxUpdates .box-bar[role=progressbar]").count(), 1, "with a calm progress bar")
         return marker
 
@@ -702,15 +706,18 @@ class PageAndSchedulerTests(unittest.TestCase):
         box = Box(self, counter=True)
         path = os.path.join(box.webroot, "pb", "box.json")
         info = box.box_json()
-        self.assertEqual(sorted(info), ["at", "counter", "ip", "mdns", "tz", "utcOffset", "v", "version"])
+        self.assertEqual(sorted(info), ["api", "at", "boxId", "counter", "hostname", "ip", "mdns", "tz", "utcOffset", "v", "version"])
         self.assertEqual(stat.S_IMODE(os.stat(path).st_mode), 0o644, "readable by the web server and everybody on the network")
-        self.assertEqual((info["v"], info["version"], info["ip"], info["tz"], info["counter"], info["mdns"]),
-                         (1, VERSION, BOX_IP, "Asia/Bahrain", True, True))
+        self.assertEqual((info["v"], info["api"], info["version"], info["hostname"], info["ip"], info["tz"], info["counter"], info["mdns"]),
+                         (1, 1, VERSION, "sinko", BOX_IP, "Asia/Bahrain", True, True))
+        with open(os.path.join(box.tmp, "state", "box-id")) as fh:
+            self.assertEqual(info["boxId"], fh.read().strip(), "the box's own id, kept in the state folder")
         self.assertRegex(info["utcOffset"], r"^[+-]\d\d:\d\d$")
         self.assertLess(abs(info["at"] - time.time()), 60)
         page = self.open(box, host="sinko.local")        # opened by the name the quick-start card gives, which a router cannot use
         self.assertEqual(page.evaluate("raw => PBBox.pure.parseBoxInfo(raw)", info),
-                         {"version": VERSION, "ip": BOX_IP, "tz": "Asia/Bahrain", "utcOffset": info["utcOffset"], "counter": True, "mdns": True, "at": info["at"]},
+                         {"api": 1, "version": VERSION, "boxId": info["boxId"], "hostname": "sinko", "ip": BOX_IP, "tz": "Asia/Bahrain",
+                          "utcOffset": info["utcOffset"], "counter": True, "mdns": True, "at": info["at"]},
                          "the page keeps every field of what the writer wrote")
         help_text = clean(page.evaluate("() => document.getElementById('helpBody').textContent"))
         self.assertEqual(help_text, T("en", "helpBody", ip=BOX_IP), "the router help gives the number from box.json")
@@ -833,7 +840,7 @@ class PageAndSchedulerTests(unittest.TestCase):
         now = dt.datetime.now()
         bed = ((now - dt.timedelta(hours=2)).strftime("%H:%M"), (now + dt.timedelta(hours=2)).strftime("%H:%M"))     # bedtime is on right now
         model = {"auto": False, "setup": False, "bed": False, "telemetry": None, "latest": None}
-        answers = itertools.cycle([NEW, "3.3.0", VERSION, NEW])          # what GitHub says at each round: the scheduler's own writes keep changing
+        answers = itertools.cycle([NEW, "3.4.0", VERSION, NEW])          # what GitHub says at each round: the scheduler's own writes keep changing
 
         def dialog_open():
             return page.evaluate("() => document.getElementById('boxDialog').open")
