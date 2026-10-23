@@ -31,6 +31,9 @@ make_box() {
     echo "golden private key $t" >"$ROOT/etc/ssh/ssh_host_${t}_key"; echo "golden public key $t" >"$ROOT/etc/ssh/ssh_host_${t}_key.pub"
   done
   printf '%s\n' 0123456789abcdef0123456789abcdef >"$ROOT/var/lib/sinko/install-id"
+  # The golden unit's box id, as a seal that was cut short would leave it (a complete seal removes it and box.json).
+  GOLDEN_BOX_ID="$(cat "$ROOT/var/lib/sinko/box-id")"
+  [[ "$GOLDEN_BOX_ID" =~ ^[0-9a-f]{32}$ ]] || fail "test setup: the installer made no box id"
   ( umask 077; printf 'hostname=sinko\n' >"$ROOT/var/lib/sinko/firstboot" )
   touch "$WORK/units/sinko-firstboot.service.enabled" "$WORK/units/ssh.service.enabled"
   # The seal removed the golden unit's HTTPS key; Pi-hole's FTL made a new one when it started (before this unit runs).
@@ -68,6 +71,14 @@ grep -q '^127.0.1.1 sinko$' "$ROOT/etc/hosts" || fail "/etc/hosts has no entry f
 grep -q golden-opi "$ROOT/etc/hosts" && fail "/etc/hosts still names the golden unit"
 grep -q "systemctl --no-block try-restart avahi-daemon.service" "$WORK/calls.log" || fail "avahi was not asked to announce the new name"
 [[ ! -e "$ROOT/var/lib/sinko/install-id" ]] || fail "a stale install-id is left"
+box_id="$(cat "$ROOT/var/lib/sinko/box-id")"
+[[ "$box_id" =~ ^[0-9a-f]{32}$ && "$box_id" != "$GOLDEN_BOX_ID" && "$(stat -c %a "$ROOT/var/lib/sinko/box-id")" == 600 ]] \
+  || fail "the box has no box id of its own: the app would take every box from the image for the same one"
+python3 - "$ROOT/var/www/html/pb/box.json" "$box_id" <<'PYEOF' || fail "box.json does not show this box's own id, name and address"
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert d["boxId"] == sys.argv[2] and d["hostname"] == "sinko" and d["ip"] == "10.0.0.77" and d["api"] == 1, d
+PYEOF
 grep -q '10.0.0.77 family.lan' "$WORK/ftl.json" || { cat "$WORK/ftl.json"; fail "the local name does not point at this network's address"; }
 grep -q '192.168.1.50' "$WORK/ftl.json" && fail "the golden address is still in Pi-hole's local names"
 grep -q '192.168.1.9 nas.lan' "$WORK/ftl.json" || fail "a local name that is not ours was removed"
@@ -112,16 +123,21 @@ grep -q '^SINKO_IP=192.168.1.50$' "$ROOT/etc/sinko/config" || fail "SINKO_IP cha
 first_keys="$(keys_digest)"
 grep -q '^ids=done$' "$ROOT/var/lib/sinko/firstboot" || fail "the flag does not remember that the id was dealt with"
 grep -q '^tries=1$' "$ROOT/var/lib/sinko/firstboot" || fail "the flag does not count the start that went without an address"
+box_id="$(cat "$ROOT/var/lib/sinko/box-id")"
+[[ "$box_id" != "$GOLDEN_BOX_ID" ]] || fail "without a network the golden box id was kept"
+grep -q "\"boxId\":\"$box_id\"" "$ROOT/var/www/html/pb/box.json" || fail "box.json still shows the golden box id when the network is not up"
 echo "    a retry does not delete the counter's id again (the scheduler has made one since, and the parent may have said yes)"
 printf '%s\n' fedcba9876543210fedcba9876543210 >"$ROOT/var/lib/sinko/install-id"
 run_firstboot down2 || fail "the second start without a network failed"
 [[ "$(keys_digest)" == "$first_keys" ]] || fail "the host keys were made a second time"
 [[ "$(cat "$ROOT/var/lib/sinko/install-id")" == fedcba9876543210fedcba9876543210 ]] || fail "a retry deleted the counter's id: the box would be counted twice"
+[[ "$(cat "$ROOT/var/lib/sinko/box-id")" == "$box_id" ]] || fail "a retry made another box id: the app would take the box for a new one"
 echo "    the cable arrives: the next start finishes"
 rm "$WORK/net-down"
 run_firstboot up || { cat "$WORK/up.out"; fail "the start with a network failed"; }
 [[ ! -e "$ROOT/var/lib/sinko/firstboot" && "$(keys_digest)" == "$first_keys" ]] || fail "the retry did not finish cleanly, or made new keys"
 [[ -f "$ROOT/var/lib/sinko/install-id" ]] || fail "the counter's id was deleted by the start that finished"
+[[ "$(cat "$ROOT/var/lib/sinko/box-id")" == "$box_id" ]] || fail "the start that finished made another box id"
 grep -q '^SINKO_IP=10.0.0.77$' "$ROOT/etc/sinko/config" || fail "SINKO_IP not updated after the retry"
 [[ "$(grep -c '^ssh-keygen' "$WORK/calls.log")" == 1 ]] || fail "ssh-keygen ran more than once"
 

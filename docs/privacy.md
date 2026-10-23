@@ -68,6 +68,22 @@ There is no Sinko account, no sign-in on a server, no advertising and no trackin
 anything from other websites (the fonts are on the box); it links to this project's GitHub page, and only when you
 tap the link.
 
+### What the box tells devices at home
+
+Two things on the box can be read by any device on your home network without the password, so that the parent page and
+the Sinko app can find the box and know which box it is. Neither leaves your home network.
+
+* **The box announces itself** (Bonjour, the way printers do): its name, that it is a Sinko box, its Sinko version and
+  where its page is. On your own box, `SINKO_MDNS=0` when you install switches this off, together with the `.local` name.
+* **A small information file** (`/pb/box.json`) gives the box's Sinko version, its address on your network, its time zone,
+  its name (the one that ends in `.local`) and a random number the box made for itself, so that the app knows it is the
+  same box after the router gave it a new address. That number is not the counter's code and is never sent anywhere; a
+  ready-made box makes its own when it is first started. On a box you set up yourself, the name is the one you gave the
+  computer: if it says something about your family (your surname, say), every device at home can read it here, as it
+  could already through the `.local` name.
+
+Neither says anything about your children, their devices, your rules, the password or what anybody looks up.
+
 ### The optional anonymous counter
 
 **Off until you say yes.** You are asked in one of four places, and you can answer in any of them:
@@ -260,6 +276,21 @@ something new, this statement changes first, with the release that does it.
 
 ليس في سينكو حساب، ولا تسجيل دخول على خادم، ولا إعلانات، ولا أدوات تتبّع. وصفحة الوالدين لا تحمّل شيئًا من
 مواقع أخرى (فالخطوط محفوظة على الصندوق نفسه)، وفيها رابط إلى صفحة المشروع على GitHub لا يُفتح إلا إذا ضغطت عليه.
+
+### ما يُخبر به الصندوقُ الأجهزةَ في البيت
+
+يستطيع أي جهاز على شبكة بيتك أن يقرأ شيئين من الصندوق دون كلمة المرور، حتى تجد صفحةُ الوالدين وتطبيقُ سينكو الصندوقَ وتعرفا
+أيَّ صندوق هو. ولا يخرج أيٌّ منهما من شبكة بيتك.
+
+* **يُعلن الصندوق عن نفسه** (عبر Bonjour، كما تفعل الطابعات): اسمه، وأنه صندوق سينكو، وإصدار سينكو عليه، ومكان صفحته. وعلى
+  صندوقك الذي بنيته بنفسك، يوقف `SINKO_MDNS=0` عند التثبيت هذا الإعلانَ والاسمَ الذي ينتهي بـ `.local` معًا.
+* **ملف معلومات صغير** (`/pb/box.json`) يذكر إصدار سينكو على الصندوق، وعنوانه على شبكتك، ومنطقته الزمنية، واسمه (الذي
+  ينتهي بـ `.local`)، ورقمًا عشوائيًا صنعه الصندوق لنفسه، حتى يعرف التطبيق أنه الصندوق نفسه بعد أن يعطيه الراوتر عنوانًا
+  جديدًا. وهذا الرقم ليس رمز العدّاد، ولا يُرسَل إلى أي مكان، ويصنع الصندوق الجاهز رقمه الخاص عند أول تشغيل له. وعلى الصندوق
+  الذي أعددته بنفسك، يكون الاسم هو الذي أعطيته للجهاز: فإن دلّ على عائلتك (كاسم العائلة مثلًا) استطاع كل جهاز في البيت أن
+  يقرأه هنا، كما كان يستطيع من قبل عبر الاسم الذي ينتهي بـ `.local`.
+
+ولا يذكر أيٌّ منهما شيئًا عن أطفالك أو أجهزتهم أو قواعدك أو كلمة المرور أو ما يبحث عنه أحد.
 
 ### العدّاد المجهول (اختياري)
 

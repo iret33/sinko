@@ -106,13 +106,23 @@ class AuthTests(MockCase):
         self.assertEqual(j["session"]["validity"], 1800)
 
     def test_wrong_password_and_totp(self):
+        # The shapes of FTL's src/api/auth.c: a wrong password is a 401 with a session (which says whether a code is needed);
+        # every problem with the code is an error object and no session.
         self.assertEqual(self.box.login("nope")[0], 401)
         self.store.totp_code = "123456"
-        status, j = self.box.login()
+        status, j = self.box.login("nope", totp=123456)
         self.assertEqual(status, 401)
-        self.assertTrue(j["session"]["totp"], "the page is told it needs a code")
-        self.assertEqual(self.box.login(totp=111111)[0], 401)
+        self.assertEqual((j["session"]["valid"], j["session"]["totp"]), (False, True), "the password first: the page is told a code is needed")
+        status, j = self.box.login()
+        self.assertEqual(status, 400)
+        self.assertEqual(j, {"error": {"key": "bad_request", "message": "No 2FA token found in JSON payload", "hint": None}})
+        status, j = self.box.login(totp=111111)
+        self.assertEqual(status, 401)
+        self.assertEqual(j, {"error": {"key": "unauthorized", "message": "Invalid 2FA token", "hint": None}})
         self.assertEqual(self.box.login(totp=123456)[0], 200)
+        status, j = self.box.login(totp=123456)
+        self.assertEqual(status, 401, "a code is good for one sign-in")
+        self.assertEqual(j, {"error": {"key": "unauthorized", "message": "Reused 2FA token", "hint": "wait for new token"}})
 
     def test_too_many_sessions_is_a_429(self):
         self.store.max_sessions = 1
@@ -491,8 +501,9 @@ class BoxJsonTests(MockCase):
         self.assertEqual(status, 200)
         self.assertTrue(headers["Content-Type"].startswith("application/json"))
         j = json.loads(payload)
-        self.assertEqual(sorted(j), ["at", "counter", "ip", "mdns", "tz", "utcOffset", "v", "version"])
-        self.assertEqual((j["v"], j["counter"], j["mdns"]), (1, True, True))
+        self.assertEqual(sorted(j), ["api", "at", "boxId", "counter", "hostname", "ip", "mdns", "tz", "utcOffset", "v", "version"])
+        self.assertEqual((j["v"], j["api"], j["counter"], j["mdns"], j["hostname"]), (1, 1, True, True, "sinko"))
+        self.assertRegex(j["boxId"], r"^[0-9a-f]{32}\Z")
         self.assertAlmostEqual(j["at"], time.time(), delta=5)
 
     def test_at_follows_the_boxs_own_clock_and_can_fall_behind(self):

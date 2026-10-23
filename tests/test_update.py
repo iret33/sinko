@@ -115,10 +115,10 @@ class VersionTests(unittest.TestCase):
         self.assertFalse(pb.is_newer("2.9.9", "3.0.0"))
 
     def test_anything_that_is_not_x_y_z_is_not_a_version(self):
-        for bad in ("3.1", "3.2.0-rc1", "v3.2.0", "3.2.0.1", "", None, 3, "a.b.c", "3.2.0\n", "-1.0.0"):
+        for bad in ("3.1", "3.3.0-rc1", "v3.3.0", "3.2.0.1", "", None, 3, "a.b.c", "3.3.0\n", "-1.0.0"):
             self.assertIsNone(pb.parse_version(bad), repr(bad))
             self.assertFalse(pb.is_newer(bad, "3.0.0"))
-            self.assertFalse(pb.is_newer("3.2.0", bad))
+            self.assertFalse(pb.is_newer("3.3.0", bad))
 
 
 class SettingsTests(unittest.TestCase):
@@ -157,10 +157,10 @@ class SettingsTests(unittest.TestCase):
 
     def test_refs(self):
         self.assertEqual(pb.classify_ref("latest"), ("latest", None))
-        self.assertEqual(pb.classify_ref("v3.2.0"), ("tag", "3.2.0"))
+        self.assertEqual(pb.classify_ref("v3.3.0"), ("tag", "3.3.0"))
         self.assertEqual(pb.classify_ref("master"), ("branch", "master"))
         self.assertEqual(pb.classify_ref("feature/x-1.2"), ("branch", "feature/x-1.2"))
-        self.assertEqual(pb.classify_ref("v3.2.0-rc1"), ("branch", "v3.2.0-rc1"))
+        self.assertEqual(pb.classify_ref("v3.3.0-rc1"), ("branch", "v3.3.0-rc1"))
         for bad in ("", "-x", "--upload-pack=touch /tmp/x", "a b", "a..b", "x;rm", "$(id)", "a" * 200, None, "é"):
             with self.assertRaises(pb.UpdateError, msg=repr(bad)):
                 pb.classify_ref(bad)
@@ -171,10 +171,10 @@ class CheckTests(Box):
         return pb.check_for_update(self.site.conf(), running=kw.pop("running", "3.0.0"))
 
     def test_a_newer_release_is_reported_with_notes_built_from_the_configured_repo(self):
-        self.site.set_api(self.site.release_json("3.2.0"))
+        self.site.set_api(self.site.release_json("3.3.0"))
         found = self.check()
-        self.assertEqual((found["version"], found["tag"]), ("3.2.0", "v3.2.0"))
-        self.assertEqual(found["notes"], "https://github.com/iret33/sinko/releases/tag/v3.2.0",
+        self.assertEqual((found["version"], found["tag"]), ("3.3.0", "v3.3.0"))
+        self.assertEqual(found["notes"], "https://github.com/iret33/sinko/releases/tag/v3.3.0",
                          "a URL a server sent (here evil.example) is never passed on")
         self.assertRegex(found["notes"], pb.NOTES_RE.pattern)
 
@@ -185,17 +185,17 @@ class CheckTests(Box):
 
     def test_drafts_prereleases_and_odd_tags_are_ignored(self):
         for extra in ({"draft": True}, {"prerelease": True}):
-            self.site.set_api(self.site.release_json("3.2.0", **extra))
+            self.site.set_api(self.site.release_json("3.3.0", **extra))
             self.assertIsNone(self.check(), extra)
-        for tag in ("v3.2.0-rc1", "3.2.0", "v3.1", "latest", None, 5):
+        for tag in ("v3.3.0-rc1", "3.3.0", "v3.1", "latest", None, 5):
             self.site.set_api({"tag_name": tag, "draft": False, "prerelease": False})
             self.assertIsNone(self.check(), tag)
 
     def test_a_release_list_gives_the_newest_stable_one(self):
-        self.site.set_api([self.site.release_json("3.3.0", prerelease=True), self.site.release_json("3.2.0"),
+        self.site.set_api([self.site.release_json("3.4.0", prerelease=True), self.site.release_json("3.3.0"),
                            self.site.release_json("3.10.0", draft=True), self.site.release_json("3.0.5"),
                            "junk", None])
-        self.assertEqual(self.check()["version"], "3.2.0")
+        self.assertEqual(self.check()["version"], "3.3.0")
         self.assertIsNone(pb.pick_release([]))
         self.assertIsNone(pb.pick_release("nonsense"))
 
@@ -217,18 +217,18 @@ class CheckTests(Box):
     def test_a_pinned_release_needs_no_network_and_a_branch_is_never_offered_a_release(self):
         self.httpd.shutdown()
         self.httpd.server_close()
-        conf = self.site.conf(SINKO_REF="v3.4.5")
-        self.assertEqual(pb.check_for_update(conf)["version"], "3.4.5")
-        self.assertIsNone(pb.check_for_update(conf, running="3.4.5"))
+        conf = self.site.conf(SINKO_REF="v3.5.5")
+        self.assertEqual(pb.check_for_update(conf)["version"], "3.5.5")
+        self.assertIsNone(pb.check_for_update(conf, running="3.5.5"))
         self.assertIsNone(pb.check_for_update(self.site.conf(SINKO_REF="master")))
-        self.assertEqual(pb.check_for_update(self.site.conf(SINKO_REF="master"), ref="v3.5.0")["version"], "3.5.0")
+        self.assertEqual(pb.check_for_update(self.site.conf(SINKO_REF="master"), ref="v3.6.0")["version"], "3.6.0")
 
     def test_the_request_names_the_program_and_the_check_has_a_timeout(self):
         seen = {}
 
         def handler(h):
             seen.update(h.headers)
-            body = json.dumps(self.site.release_json("3.2.0")).encode()
+            body = json.dumps(self.site.release_json("3.3.0")).encode()
             h.send_response(200)
             h.send_header("Content-Length", str(len(body)))
             h.end_headers()
@@ -327,26 +327,26 @@ class ChecksumTests(Box):
                 pb.parse_sha256(bad)
 
     def test_a_download_that_matches_is_kept(self):
-        data = self.site.add_release("3.2.0")
+        data = self.site.add_release("3.3.0")
         dest = os.path.join(self.tmp, "dl")
-        pb.download_release(self.settings(), "v3.2.0", dest)
+        pb.download_release(self.settings(), "v3.3.0", dest)
         with open(dest, "rb") as fh:
             self.assertEqual(fh.read(), data)
 
     def test_a_mismatch_is_refused_and_the_file_is_removed(self):
-        self.site.add_release("3.2.0", sha=("0" * 64 + "  sinko.tar.gz\n").encode())
+        self.site.add_release("3.3.0", sha=("0" * 64 + "  sinko.tar.gz\n").encode())
         dest = os.path.join(self.tmp, "dl")
         with self.assertRaises(pb.UpdateError) as ctx:
-            pb.download_release(self.settings(), "v3.2.0", dest)
+            pb.download_release(self.settings(), "v3.3.0", dest)
         self.assertIn("checksum", str(ctx.exception))
         self.assertFalse(os.path.exists(dest))
 
     def test_a_missing_or_garbled_checksum_file_is_refused(self):
         for sha in (False, b"not a checksum\n", b"\xff\xfe\x00"):
-            self.site.add_release("3.2.0", sha=sha)
+            self.site.add_release("3.3.0", sha=sha)
             dest = os.path.join(self.tmp, "dl")
             with self.assertRaises(pb.UpdateError, msg=repr(sha)):
-                pb.download_release(self.settings(), "v3.2.0", dest)
+                pb.download_release(self.settings(), "v3.3.0", dest)
             self.assertFalse(os.path.exists(dest))
 
     def test_a_missing_tarball_leaves_nothing_behind(self):
@@ -358,15 +358,15 @@ class ChecksumTests(Box):
         self.assertFalse(os.path.exists(dest))
 
     def test_the_size_cap_applies_to_the_tarball(self):
-        self.site.add_release("3.2.0")
+        self.site.add_release("3.3.0")
         with mock.patch.object(pb, "MAX_DOWNLOAD", 100):
             with self.assertRaises(pb.UpdateError):
-                pb.download_release(self.settings(), "v3.2.0", os.path.join(self.tmp, "dl"))
+                pb.download_release(self.settings(), "v3.3.0", os.path.join(self.tmp, "dl"))
         self.assertEqual(pb.MAX_DOWNLOAD, 20 * 1024 * 1024)
 
     def test_latest_download_uses_the_latest_path(self):
         self.assertEqual(pb.release_url(self.settings(), None, "sinko.tar.gz"), self.site.base + "/latest/download/sinko.tar.gz")
-        self.assertEqual(pb.release_url(self.settings(), "v3.2.0", "x"), self.site.base + "/download/v3.2.0/x")
+        self.assertEqual(pb.release_url(self.settings(), "v3.3.0", "x"), self.site.base + "/download/v3.3.0/x")
 
 
 class UnpackTests(unittest.TestCase):
@@ -384,7 +384,7 @@ class UnpackTests(unittest.TestCase):
             fh.write(data)
         return pb.unpack_release(path, self.dest)
 
-    def good_members(self, version="3.2.0", **kw):
+    def good_members(self, version="3.3.0", **kw):
         members = [fake_release.dir_member("sinko")]
         for name, (data, mode) in sorted(fake_release.release_files(version, **kw).items()):
             members.append(fake_release.file_member(name, data, mode))
@@ -399,7 +399,7 @@ class UnpackTests(unittest.TestCase):
         return ctx.exception
 
     def test_a_good_release_unpacks_with_safe_modes(self):
-        self.assertEqual(self.unpack(fake_release.build_release("3.2.0")), "3.2.0")
+        self.assertEqual(self.unpack(fake_release.build_release("3.3.0")), "3.3.0")
         top = os.path.join(self.dest, "sinko")
         for name in ("VERSION", "install.sh", "bin/sinko", "lists/services.json", "web/index.html", "LICENSE"):
             self.assertTrue(os.path.isfile(os.path.join(top, name)), name)
@@ -465,7 +465,7 @@ class UnpackTests(unittest.TestCase):
         self.bad([fake_release.file_member("sinko/install.sh", b"#!/bin/sh\necho second\n", 0o755)], why="duplicate")
 
     def test_the_version_file_must_be_a_version(self):
-        for text in (b"latest\n", b"3.1\n", b"", b"3.2.0; rm -rf /\n", b"x" * 500):
+        for text in (b"latest\n", b"3.1\n", b"", b"3.3.0; rm -rf /\n", b"x" * 500):
             self.bad([fake_release.file_member("sinko/VERSION", text)], drop=("sinko/VERSION",), why=repr(text))
             shutil.rmtree(self.dest)
             os.mkdir(self.dest)
@@ -492,7 +492,7 @@ class UnpackTests(unittest.TestCase):
         self.assertEqual(pb._CappedReader(io.BytesIO(b"x" * 100), 100).read(None), b"x" * 100)
 
     def test_damaged_input_is_an_update_error_not_a_traceback(self):
-        good = fake_release.build_release("3.2.0")
+        good = fake_release.build_release("3.3.0")
         for label, data in (("truncated", good[:len(good) // 2]), ("not gzip", b"hello world"), ("empty", b""),
                             ("plain tar", fake_release.tar_bytes(self.good_members(), gz=False)),
                             ("corrupt", good[:100] + bytes(b ^ 0xFF for b in good[100:140]) + good[140:])):
@@ -503,14 +503,14 @@ class UnpackTests(unittest.TestCase):
 
     def test_the_dot_folder_entry_that_tar_adds_when_archiving_dot_is_harmless(self):
         members = [fake_release.dir_member("./")] + self.good_members()
-        self.assertEqual(self.unpack(fake_release.tar_bytes(members)), "3.2.0")
+        self.assertEqual(self.unpack(fake_release.tar_bytes(members)), "3.3.0")
 
     def test_it_works_on_every_python_the_box_could_have(self):
         script = (
             "import importlib.machinery, importlib.util, os, sys, tarfile\n"
             "loader = importlib.machinery.SourceFileLoader('s', sys.argv[1])\n"
             "m = importlib.util.module_from_spec(importlib.util.spec_from_loader('s', loader)); loader.exec_module(m)\n"
-            "assert m.unpack_release(sys.argv[2], sys.argv[3]) == '3.2.0'\n"
+            "assert m.unpack_release(sys.argv[2], sys.argv[3]) == '3.3.0'\n"
             "try:\n"
             "    m.unpack_release(sys.argv[4], sys.argv[5])\n"
             "except m.UpdateError:\n"
@@ -520,7 +520,7 @@ class UnpackTests(unittest.TestCase):
         good = os.path.join(self.tmp, "good.tar.gz")
         evil = os.path.join(self.tmp, "evil.tar.gz")
         with open(good, "wb") as fh:
-            fh.write(fake_release.build_release("3.2.0"))
+            fh.write(fake_release.build_release("3.3.0"))
         link = tarfile.TarInfo("sinko/x")
         link.type = tarfile.SYMTYPE
         link.linkname = "/etc"
@@ -560,19 +560,19 @@ class CacheTests(Box):
         self.assertEqual(pb.cached_versions(), [])
 
     def test_prune_keeps_the_installed_release_and_the_newest_older_one(self):
-        self.put("3.3.0", "3.2.0", "3.0.0", "2.9.0")
-        pb.prune_cache("3.3.0")
-        self.assertEqual(pb.cached_versions(), ["3.3.0", "3.2.0"])
+        self.put("3.4.0", "3.3.0", "3.0.0", "2.9.0")
+        pb.prune_cache("3.4.0")
+        self.assertEqual(pb.cached_versions(), ["3.4.0", "3.3.0"])
 
     def test_prune_after_a_rollback_keeps_the_installed_release_not_just_the_newest(self):
-        self.put("3.2.0", "3.0.0", "2.9.0")
+        self.put("3.3.0", "3.0.0", "2.9.0")
         pb.prune_cache("3.0.0")                       # a later rollback still has 2.9.0 to go to
         self.assertEqual(pb.cached_versions(), ["3.0.0", "2.9.0"])
 
     def test_prune_never_drops_the_installed_release_even_when_it_is_the_oldest(self):
-        self.put("3.3.0", "3.2.0", "3.0.0")
+        self.put("3.4.0", "3.3.0", "3.0.0")
         pb.prune_cache("3.0.0")
-        self.assertEqual(pb.cached_versions(), ["3.3.0", "3.0.0"], "the installed one and the newest other one")
+        self.assertEqual(pb.cached_versions(), ["3.4.0", "3.0.0"], "the installed one and the newest other one")
 
     def test_prune_with_the_installed_release_not_cached_keeps_the_newest_older_one(self):
         self.put("2.9.0", "2.8.0")
@@ -582,27 +582,27 @@ class CacheTests(Box):
 
 class UpdateFlowTests(Box):
     def test_update_installs_the_new_release_and_stores_both_for_rollback(self):
-        self.publish("3.2.0")
+        self.publish("3.3.0")
         self.site.add_release(CURRENT)                 # the release this box runs: fetched once as the rollback copy
         result = self.updater().update()
-        self.assertEqual((result["status"], result["from"], result["to"], result["error"]), ("ok", CURRENT, "3.2.0", None))
-        self.assertEqual(self.installed(), "3.2.0")
-        self.assertEqual(self.installs(), ["install 3.2.0 src=%s noninteractive=1 ref=latest" % os.path.join(self.app, "src")])
+        self.assertEqual((result["status"], result["from"], result["to"], result["error"]), ("ok", CURRENT, "3.3.0", None))
+        self.assertEqual(self.installed(), "3.3.0")
+        self.assertEqual(self.installs(), ["install 3.3.0 src=%s noninteractive=1 ref=latest" % os.path.join(self.app, "src")])
         self.assertEqual(pb.read_update_result(), result)
-        self.assertEqual(pb.cached_versions(), ["3.2.0", CURRENT])
+        self.assertEqual(pb.cached_versions(), ["3.3.0", CURRENT])
         self.assertEqual(self.leftovers(), [])
         src = os.path.join(self.app, "src")
-        self.assertEqual(self.read(os.path.join(src, "VERSION")), "3.2.0")
+        self.assertEqual(self.read(os.path.join(src, "VERSION")), "3.3.0")
         self.assertTrue(os.access(os.path.join(src, "install.sh"), os.X_OK))
         self.assertFalse(os.path.exists(src + ".old"))
         self.assertFalse(pb.RunLock.is_held(), "the lock is released")
-        self.assertTrue(any("now at version 3.2.0" in l for l in self.lines), self.lines)
+        self.assertTrue(any("now at version 3.3.0" in l for l in self.lines), self.lines)
 
     def test_the_download_comes_from_the_tag_when_the_version_is_known(self):
-        self.publish("3.2.0")
+        self.publish("3.3.0")
         self.site.add_release(CURRENT)
         self.updater().update()
-        self.assertEqual(self.site.count("/releases/download/v3.2.0/sinko.tar.gz"), 2, "tarball and checksum")
+        self.assertEqual(self.site.count("/releases/download/v3.3.0/sinko.tar.gz"), 2, "tarball and checksum")
         self.assertEqual(self.site.count("/latest/download/"), 0)
 
     def test_when_the_box_is_up_to_date_nothing_is_downloaded_or_installed(self):
@@ -614,7 +614,7 @@ class UpdateFlowTests(Box):
         self.assertEqual(pb.read_update_result()["status"], "ok")
 
     def test_no_published_release_is_not_an_error(self):
-        self.site.set_api([self.site.release_json("3.5.0", prerelease=True)])
+        self.site.set_api([self.site.release_json("3.6.0", prerelease=True)])
         result = self.updater().update()
         self.assertEqual((result["status"], result["to"]), ("ok", CURRENT))
         self.assertTrue(any("No release" in l for l in self.lines))
@@ -626,22 +626,22 @@ class UpdateFlowTests(Box):
         self.assertEqual(len(self.installs()), 1)
 
     def test_a_pinned_release_is_installed_and_the_installer_is_told_the_pin(self):
-        self.publish("3.3.0", latest=False)
+        self.publish("3.4.0", latest=False)
         self.site.add_release(CURRENT)
-        result = self.updater().update(ref="v3.3.0")
-        self.assertEqual(result["to"], "3.3.0")
-        self.assertIn("ref=v3.3.0", self.installs()[0])
+        result = self.updater().update(ref="v3.4.0")
+        self.assertEqual(result["to"], "3.4.0")
+        self.assertIn("ref=v3.4.0", self.installs()[0])
         self.assertEqual(self.site.count("/api/latest"), 0, "a pin needs no metadata")
 
     def test_the_version_that_is_put_back_is_told_the_ref_the_box_had_not_the_pin_that_failed(self):
-        self.publish("3.3.0", latest=False, install_ok=False)
+        self.publish("3.4.0", latest=False, install_ok=False)
         self.site.add_release(CURRENT)
-        result = self.updater().update(ref="v3.3.0")
+        result = self.updater().update(ref="v3.4.0")
         self.assertEqual((result["status"], result["rolledBack"]), ("failed", True))
-        self.assertEqual([l.rsplit("ref=", 1)[1] for l in self.installs()], ["v3.3.0", "latest"])
+        self.assertEqual([l.rsplit("ref=", 1)[1] for l in self.installs()], ["v3.4.0", "latest"])
         os.unlink(self.log_path)
-        self.updater(conf=self.site.conf(SINKO_REF="v" + CURRENT)).update(ref="v3.3.0")
-        self.assertEqual([l.rsplit("ref=", 1)[1] for l in self.installs()], ["v3.3.0", "v" + CURRENT], "a pinned box goes back to its pin")
+        self.updater(conf=self.site.conf(SINKO_REF="v" + CURRENT)).update(ref="v3.4.0")
+        self.assertEqual([l.rsplit("ref=", 1)[1] for l in self.installs()], ["v3.4.0", "v" + CURRENT], "a pinned box goes back to its pin")
 
     def test_an_older_pin_is_refused_unless_forced(self):
         self.site.add_release("2.9.0")
@@ -654,27 +654,27 @@ class UpdateFlowTests(Box):
         self.assertEqual(self.installed(), "2.9.0")
 
     def test_the_installer_failing_puts_the_previous_version_back(self):
-        self.publish("3.2.0", install_ok=False)
+        self.publish("3.3.0", install_ok=False)
         self.site.add_release(CURRENT)
         result = self.updater().update()
-        self.assertEqual((result["status"], result["from"], result["to"]), ("failed", CURRENT, "3.2.0"))
+        self.assertEqual((result["status"], result["from"], result["to"]), ("failed", CURRENT, "3.3.0"))
         self.assertIn("installer stopped", result["error"])
         self.assertIn("previous version (%s) was put back" % CURRENT, result["error"])
         self.assertLessEqual(len(result["error"]), 200)
-        self.assertEqual([l.split()[1] for l in self.installs()], ["3.2.0", CURRENT])
+        self.assertEqual([l.split()[1] for l in self.installs()], ["3.3.0", CURRENT])
         self.assertEqual(self.installed(), CURRENT)
         self.assertEqual(pb.cached_versions(), [CURRENT], "a release that failed is not kept")
         self.assertEqual(self.read(os.path.join(self.app, "src", "VERSION")), CURRENT)
         self.assertEqual(pb.read_update_result(), result)
 
     def test_a_failing_selfcheck_of_the_new_version_rolls_back_too(self):
-        self.publish("3.2.0", selfcheck_ok=False)
+        self.publish("3.3.0", selfcheck_ok=False)
         self.site.add_release(CURRENT)
         result = self.updater().update()
         self.assertEqual(result["status"], "failed")
         self.assertIn("did not pass its own check (the fake page is broken)", result["error"])
         self.assertIn("put back", result["error"])
-        self.assertEqual([l.split()[1] for l in self.installs()], ["3.2.0", CURRENT])
+        self.assertEqual([l.split()[1] for l in self.installs()], ["3.3.0", CURRENT])
         self.assertEqual(self.installed(), CURRENT)
 
     def test_the_selfcheck_that_judges_the_update_is_the_one_that_was_just_installed(self):
@@ -685,21 +685,21 @@ class UpdateFlowTests(Box):
             with open(os.path.join(self.app, "VERSION")) as fh:
                 calls.append(fh.read().strip())
             return real()
-        self.publish("3.2.0")
+        self.publish("3.3.0")
         self.site.add_release(CURRENT)
         self.updater(selfcheck=spy).update()
-        self.assertEqual(calls, ["3.2.0"], "the new program is already in place when it is judged")
+        self.assertEqual(calls, ["3.3.0"], "the new program is already in place when it is judged")
 
     def test_without_an_earlier_copy_a_failed_update_says_so(self):
-        self.publish("3.2.0", install_ok=False)         # v3.0.0 is not on the fake GitHub: no rollback copy can be fetched
+        self.publish("3.3.0", install_ok=False)         # v3.0.0 is not on the fake GitHub: no rollback copy can be fetched
         result = self.updater().update()
         self.assertEqual(result["status"], "failed")
         self.assertIn("no earlier copy", result["error"])
-        self.assertEqual([l.split()[1] for l in self.installs()], ["3.2.0"])
+        self.assertEqual([l.split()[1] for l in self.installs()], ["3.3.0"])
         self.assertTrue(any(l.startswith("Note: no copy of the current version") for l in self.lines), self.lines)
 
     def test_a_rollback_that_fails_as_well_says_so_and_is_not_reported_as_back(self):
-        self.publish("3.2.0", install_ok=False)
+        self.publish("3.3.0", install_ok=False)
         self.site.add_release(CURRENT, install_ok=False)
         result = self.updater().update()
         self.assertEqual(result["status"], "failed")
@@ -711,7 +711,7 @@ class UpdateFlowTests(Box):
         self.site.add_release(CURRENT)
         os.makedirs(pb.cache_dir(), exist_ok=True)
         shutil.copy(self._write_tarball(CURRENT), pb.cache_file(CURRENT))
-        self.publish("3.2.0", install_ok=False)
+        self.publish("3.3.0", install_ok=False)
         result = self.updater().update()
         self.assertIn("put back", result["error"])
         self.assertEqual(self.site.count("/releases/download/v%s/" % CURRENT), 0)
@@ -723,7 +723,7 @@ class UpdateFlowTests(Box):
         return path
 
     def test_a_checksum_mismatch_installs_nothing(self):
-        self.publish("3.2.0", sha=("0" * 64 + "  sinko.tar.gz\n").encode())
+        self.publish("3.3.0", sha=("0" * 64 + "  sinko.tar.gz\n").encode())
         result = self.updater().update()
         self.assertEqual(result["status"], "failed")
         self.assertIn("checksum", result["error"])
@@ -733,15 +733,15 @@ class UpdateFlowTests(Box):
         self.assertEqual(self.leftovers(), [])
 
     def test_a_missing_checksum_file_installs_nothing(self):
-        self.publish("3.2.0", sha=False)
+        self.publish("3.3.0", sha=False)
         self.assertEqual(self.updater().update()["status"], "failed")
         self.assertEqual(self.installs(), [])
 
     def test_a_tarball_that_names_another_version_than_its_tag_is_refused(self):
-        self.publish("3.2.0", tarball=fake_release.build_release("3.3.0"))
+        self.publish("3.3.0", tarball=fake_release.build_release("3.4.0"))
         result = self.updater().update()
         self.assertEqual(result["status"], "failed")
-        self.assertIn("version 3.3.0, not 3.2.0", result["error"])
+        self.assertIn("version 3.4.0, not 3.3.0", result["error"])
         self.assertEqual(self.installs(), [])
 
     def test_a_hostile_tarball_is_refused_and_leaves_no_staging_folder(self):
@@ -749,8 +749,8 @@ class UpdateFlowTests(Box):
         link.type = tarfile.SYMTYPE
         link.linkname = "/etc"
         members = [fake_release.dir_member("sinko")] + [
-            fake_release.file_member(n, d, m) for n, (d, m) in fake_release.release_files("3.2.0").items()] + [(link, None)]
-        self.publish("3.2.0", tarball=fake_release.tar_bytes(members))
+            fake_release.file_member(n, d, m) for n, (d, m) in fake_release.release_files("3.3.0").items()] + [(link, None)]
+        self.publish("3.3.0", tarball=fake_release.tar_bytes(members))
         result = self.updater().update()
         self.assertEqual(result["status"], "failed")
         self.assertIn("not a valid Sinko release", result["error"])
@@ -760,11 +760,11 @@ class UpdateFlowTests(Box):
 
     def test_when_the_metadata_cannot_be_read_the_latest_download_is_used(self):
         self.site.set_api({}, status=403)               # rate limited
-        self.site.add_release("3.2.0")
-        self.site.make_latest("3.2.0")
+        self.site.add_release("3.3.0")
+        self.site.make_latest("3.3.0")
         self.site.add_release(CURRENT)
         result = self.updater().update()
-        self.assertEqual((result["status"], result["to"]), ("ok", "3.2.0"))
+        self.assertEqual((result["status"], result["to"]), ("ok", "3.3.0"))
         self.assertGreaterEqual(self.site.count("/releases/latest/download/sinko.tar.gz"), 1)
         self.assertTrue(any("trying the latest download" in l for l in self.lines), self.lines)
 
@@ -789,7 +789,7 @@ class UpdateFlowTests(Box):
         self.assertEqual(pb.read_update_result()["status"], "failed")
 
     def test_two_updates_never_run_at_once(self):
-        self.publish("3.2.0")
+        self.publish("3.3.0")
         pb.write_update_result("ok", "2.0.0", "3.0.0", None, 1.0)
         holder = pb.RunLock()
         self.assertTrue(holder.acquire())
@@ -810,13 +810,13 @@ class UpdateFlowTests(Box):
         def installer(src, ref):
             seen.append(pb.read_update_result())
             return 0
-        self.publish("3.2.0")
+        self.publish("3.3.0")
         self.site.add_release(CURRENT)
         self.updater(installer=installer, selfcheck=lambda: (True, "")).update()
         self.assertEqual(seen, [None])
 
     def test_an_unexpected_crash_is_still_reported_and_the_lock_released(self):
-        self.publish("3.2.0")
+        self.publish("3.3.0")
         with mock.patch.object(pb, "unpack_release", side_effect=ValueError("boom")):
             with self.assertLogs("sinko", level="ERROR"):
                 result = self.updater().update()
@@ -834,7 +834,7 @@ class UpdateFlowTests(Box):
             if len(calls) == 1:
                 raise OSError("no bash")
             return 0
-        self.publish("3.2.0")
+        self.publish("3.3.0")
         self.site.add_release(CURRENT)
         with self.assertLogs("sinko", level="ERROR"):
             result = self.updater(installer=installer, selfcheck=lambda: (True, "")).update()
@@ -842,17 +842,17 @@ class UpdateFlowTests(Box):
         self.assertEqual(len(calls), 2)
 
     def test_declining_the_question_changes_nothing(self):
-        self.publish("3.2.0")
+        self.publish("3.3.0")
         asked = []
         result = self.updater().update(confirm=lambda current, to: asked.append((current, to)) or False)
         self.assertIsNone(result)
-        self.assertEqual(asked, [(CURRENT, "3.2.0")])
+        self.assertEqual(asked, [(CURRENT, "3.3.0")])
         self.assertEqual(self.site.count("sinko.tar.gz"), 0)
         self.assertIsNone(pb.read_update_result())
         self.assertFalse(pb.RunLock.is_held())
 
     def test_too_little_disk_space_stops_before_downloading(self):
-        self.publish("3.2.0")
+        self.publish("3.3.0")
         with mock.patch.object(pb, "MIN_FREE_BYTES", 1 << 60):
             result = self.updater().update()
         self.assertEqual(result["status"], "failed")
@@ -869,7 +869,7 @@ class UpdateFlowTests(Box):
         self.assertEqual(self.leftovers(), [])
 
     def test_an_update_never_leaves_a_downloaded_file_readable_by_others(self):
-        self.publish("3.2.0")
+        self.publish("3.3.0")
         self.site.add_release(CURRENT)
         self.updater().update()
         self.assertEqual(stat.S_IMODE(os.stat(self.state).st_mode), 0o700)
@@ -878,16 +878,16 @@ class UpdateFlowTests(Box):
 
 class RollbackTests(Box):
     def test_rollback_reinstalls_the_newest_older_release_from_the_cache(self):
-        self.publish("3.2.0")
+        self.publish("3.3.0")
         self.site.add_release(CURRENT)
         self.updater().update()
-        self.assertEqual(self.installed(), "3.2.0")
-        with mock.patch.object(pb, "VERSION", "3.2.0"):
+        self.assertEqual(self.installed(), "3.3.0")
+        with mock.patch.object(pb, "VERSION", "3.3.0"):
             result = self.updater().rollback()
-        self.assertEqual((result["status"], result["from"], result["to"], result["error"]), ("ok", "3.2.0", CURRENT, None))
+        self.assertEqual((result["status"], result["from"], result["to"], result["error"]), ("ok", "3.3.0", CURRENT, None))
         self.assertEqual(self.installed(), CURRENT)
-        self.assertEqual([l.split()[1] for l in self.installs()], ["3.2.0", CURRENT])
-        self.assertEqual(pb.cached_versions(), ["3.2.0", CURRENT], "a rollback keeps both, so the update can be redone")
+        self.assertEqual([l.split()[1] for l in self.installs()], ["3.3.0", CURRENT])
+        self.assertEqual(pb.cached_versions(), ["3.3.0", CURRENT], "a rollback keeps both, so the update can be redone")
 
     def test_rollback_without_an_older_copy_says_so(self):
         result = self.updater().rollback()
@@ -921,7 +921,7 @@ class RollbackTests(Box):
 class BranchPathTests(Box):
     """The developer path: `--ref master` fetches the repository with git."""
 
-    def make_repo(self, version="3.2.0-dev"):
+    def make_repo(self, version="3.3.0-dev"):
         self.repo = os.path.join(self.tmp, "repo")
         os.makedirs(self.repo, exist_ok=True)
         for name, (data, mode) in fake_release.release_files(version.split("-")[0]).items():
@@ -946,21 +946,21 @@ class BranchPathTests(Box):
         self.make_repo()
         self.site.add_release(CURRENT)
         result = self.updater(conf=self.conf()).update()
-        self.assertEqual((result["status"], result["to"]), ("ok", "3.2.0"))
-        self.assertEqual(self.installs(), ["install 3.2.0 src=%s noninteractive=1 ref=master" % os.path.join(self.app, "src")])
+        self.assertEqual((result["status"], result["to"]), ("ok", "3.3.0"))
+        self.assertEqual(self.installs(), ["install 3.3.0 src=%s noninteractive=1 ref=master" % os.path.join(self.app, "src")])
         self.assertTrue(os.path.isdir(os.path.join(self.app, "src", ".git")))
-        self.assertEqual(self.installed(), "3.2.0")
+        self.assertEqual(self.installed(), "3.3.0")
 
     def test_a_later_run_fetches_what_changed(self):
         self.make_repo()
         self.site.add_release(CURRENT)
         self.updater(conf=self.conf()).update()
         with open(os.path.join(self.repo, "VERSION"), "w") as fh:
-            fh.write("3.3.0\n")
+            fh.write("3.4.0\n")
         self.git("commit", "-q", "-am", "next")
         result = self.updater(conf=self.conf()).update()
-        self.assertEqual((result["status"], result["to"]), ("ok", "3.3.0"))
-        self.assertEqual(self.installed(), "3.3.0")
+        self.assertEqual((result["status"], result["to"]), ("ok", "3.4.0"))
+        self.assertEqual(self.installed(), "3.4.0")
 
     def test_a_branch_is_installed_even_when_its_version_number_has_not_changed(self):
         self.make_repo(CURRENT)
@@ -1017,37 +1017,37 @@ class OutcomeTests(Box):
             return json.load(fh)
 
     def test_a_success_says_nothing_failed(self):
-        self.publish("3.2.0")
+        self.publish("3.3.0")
         self.site.add_release(CURRENT)
         result = self.updater().update()
         self.assertEqual((result["rolledBack"], result["transient"]), (None, False))
         self.assertEqual(self.raw_result()["rolledBack"], None)
 
     def test_the_previous_version_back_and_passing_its_check_is_the_only_true(self):
-        self.publish("3.2.0", install_ok=False)
+        self.publish("3.3.0", install_ok=False)
         self.site.add_release(CURRENT)
         result = self.updater().update()
         self.assertEqual((result["status"], result["rolledBack"], result["transient"]), ("failed", True, False))
         self.assertIs(self.raw_result()["rolledBack"], True)
 
     def test_a_new_version_that_fails_its_check_with_the_old_one_passing_is_true_too(self):
-        self.publish("3.2.0", selfcheck_ok=False)
+        self.publish("3.3.0", selfcheck_ok=False)
         self.site.add_release(CURRENT)
         self.assertIs(self.updater().update()["rolledBack"], True)
 
     def test_an_old_version_that_is_put_back_but_fails_its_own_check_is_not_true(self):
-        self.publish("3.2.0", install_ok=False)
+        self.publish("3.3.0", install_ok=False)
         self.site.add_release(CURRENT, selfcheck_ok=False)
         result = self.updater().update()
         self.assertIs(result["rolledBack"], False)
         self.assertIn("did not work either", result["error"])
 
     def test_with_nothing_to_go_back_to_it_is_false(self):
-        self.publish("3.2.0", install_ok=False)                 # no copy of 3.0.0 on the fake GitHub
+        self.publish("3.3.0", install_ok=False)                 # no copy of 3.0.0 on the fake GitHub
         self.assertIs(self.updater().update()["rolledBack"], False)
 
     def test_a_failure_before_anything_was_installed_is_true_only_when_the_box_passes_its_check(self):
-        self.publish("3.2.0", sha=("0" * 64 + "  sinko.tar.gz\n").encode())
+        self.publish("3.3.0", sha=("0" * 64 + "  sinko.tar.gz\n").encode())
         checks = []
 
         def passes():
@@ -1065,24 +1065,24 @@ class OutcomeTests(Box):
 
     def test_a_download_that_fails_is_transient_and_a_bad_release_is_not(self):
         self.site.set_api({}, status=500)
-        result = self.updater().update(ref="v3.2.0")             # no such release on the fake GitHub: HTTP 404
+        result = self.updater().update(ref="v3.3.0")             # no such release on the fake GitHub: HTTP 404
         self.assertEqual((result["status"], result["transient"]), ("failed", True))
         self.assertEqual(self.raw_result()["transient"], True)
-        self.publish("3.3.0", sha=("0" * 64 + "  sinko.tar.gz\n").encode())
+        self.publish("3.4.0", sha=("0" * 64 + "  sinko.tar.gz\n").encode())
         self.assertFalse(self.updater().update()["transient"], "a checksum that does not match: the release is the trouble")
-        self.publish("3.4.0", install_ok=False)
+        self.publish("3.5.0", install_ok=False)
         self.site.add_release(CURRENT)
         self.assertFalse(self.updater().update()["transient"], "an installer that fails: the release is the trouble")
 
     def test_a_full_disk_is_transient(self):
-        self.publish("3.2.0")
+        self.publish("3.3.0")
         with mock.patch.object(pb.shutil, "disk_usage", return_value=mock.Mock(free=1024)):
             result = self.updater().update()
         self.assertEqual((result["status"], result["transient"]), ("failed", True))
         self.assertIn("not enough free space", result["error"])
 
     def test_an_unexpected_exception_after_the_install_is_false_and_before_it_is_checked(self):
-        self.publish("3.2.0")
+        self.publish("3.3.0")
         self.site.add_release(CURRENT)
         with mock.patch.object(pb, "prune_cache", side_effect=RuntimeError("boom")), self.assertLogs("sinko", level="ERROR"):
             result = self.updater().update()
@@ -1094,25 +1094,25 @@ class OutcomeTests(Box):
 
     def test_the_reason_is_never_a_command_or_a_hint_to_type_something(self):
         reasons = []
-        self.publish("3.2.0", install_ok=False)                           # rolled back
+        self.publish("3.3.0", install_ok=False)                           # rolled back
         self.site.add_release(CURRENT)
         reasons.append(self.updater().update()["error"])
         reasons.append(self.updater().update()["error"])                  # again: the cache now holds 3.0.0
-        self.publish("3.2.1", install_ok=False)
+        self.publish("3.3.1", install_ok=False)
         self.site.add_release(CURRENT, install_ok=False)                   # rollback fails too
         shutil.rmtree(pb.cache_dir(), ignore_errors=True)
         reasons.append(self.updater().update()["error"])
-        self.publish("3.2.2", install_ok=False)
+        self.publish("3.3.2", install_ok=False)
         self.site.routes.pop("/releases/download/v%s/sinko.tar.gz" % CURRENT)      # nothing to go back to
         self.site.routes.pop("/releases/download/v%s/sinko.tar.gz.sha256" % CURRENT)
         shutil.rmtree(pb.cache_dir(), ignore_errors=True)
         reasons.append(self.updater().update()["error"])
-        self.publish("3.2.3", selfcheck_ok=False)
+        self.publish("3.3.3", selfcheck_ok=False)
         reasons.append(self.updater().update()["error"])
-        self.publish("3.2.4", sha=("0" * 64 + "  sinko.tar.gz\n").encode())
+        self.publish("3.3.4", sha=("0" * 64 + "  sinko.tar.gz\n").encode())
         reasons.append(self.updater().update()["error"])
         reasons.append(self.updater().update(ref="v9.9.9")["error"])
-        self.publish("3.2.5", tarball=b"not a tarball")
+        self.publish("3.3.5", tarball=b"not a tarball")
         reasons.append(self.updater().update()["error"])
         for reason in reasons:
             self.assertTrue(reason and len(reason) <= 200, reason)
@@ -1120,7 +1120,7 @@ class OutcomeTests(Box):
                 self.assertNotIn(banned, reason, reason)
 
     def test_the_cli_adds_the_hint_for_the_person_at_the_keyboard_but_not_the_stored_reason(self):
-        self.publish("3.2.0", install_ok=False)
+        self.publish("3.3.0", install_ok=False)
         self.site.add_release(CURRENT, install_ok=False)
         code, _, err = CommandTests.run_cli(self, "update", "--yes", "--from-panel")
         self.assertEqual(code, 1)
@@ -1129,7 +1129,7 @@ class OutcomeTests(Box):
 
     def test_everything_is_flushed_before_the_installer_starts_and_again_before_the_check(self):
         events = []
-        self.publish("3.2.0")
+        self.publish("3.3.0")
         self.site.add_release(CURRENT)
 
         def installer(src, ref):
@@ -1145,7 +1145,7 @@ class OutcomeTests(Box):
 
     def test_a_downloaded_copy_is_flushed_and_its_folder_entry_too_before_it_is_relied_on(self):
         synced = []
-        self.publish("3.2.0")
+        self.publish("3.3.0")
         self.site.add_release(CURRENT)
         with mock.patch.object(pb, "fsync_path", side_effect=synced.append), \
                 mock.patch.object(pb, "_fsync_dir", side_effect=lambda d: synced.append(("dir", d))):
@@ -1157,15 +1157,15 @@ class OutcomeTests(Box):
                          "and their names in the folder, so that the rename survives a power cut")
 
     def test_a_scheduler_side_failure_notes_whether_the_next_try_may_come_soon(self):
-        result = {"status": "failed", "to": "3.2.0", "at": 1234.5, "transient": True}
+        result = {"status": "failed", "to": "3.3.0", "at": 1234.5, "transient": True}
         pb.note_failure(result)
-        self.assertTrue(pb.failure_is_transient({"at": 1234.5, "to": "3.2.0"}))
-        self.assertFalse(pb.failure_is_transient({"at": 1234.5, "to": "3.3.0"}), "another release")
-        self.assertFalse(pb.failure_is_transient({"at": 9999.0, "to": "3.2.0"}), "another run")
+        self.assertTrue(pb.failure_is_transient({"at": 1234.5, "to": "3.3.0"}))
+        self.assertFalse(pb.failure_is_transient({"at": 1234.5, "to": "3.4.0"}), "another release")
+        self.assertFalse(pb.failure_is_transient({"at": 9999.0, "to": "3.3.0"}), "another run")
         pb.note_failure(dict(result, transient=False))
-        self.assertFalse(pb.failure_is_transient({"at": 1234.5, "to": "3.2.0"}))
+        self.assertFalse(pb.failure_is_transient({"at": 1234.5, "to": "3.3.0"}))
         pb.atomic_write(pb.state_path("update-failure.json"), "garbage")
-        self.assertFalse(pb.failure_is_transient({"at": 1234.5, "to": "3.2.0"}))
+        self.assertFalse(pb.failure_is_transient({"at": 1234.5, "to": "3.3.0"}))
 
 
 MB = 1024 * 1024
@@ -1189,7 +1189,7 @@ class DiskSpaceTests(Box):
         self.assertGreater(pb.DISK_WARN_BYTES, pb.MIN_FREE_BYTES)
 
     def test_between_100_and_200_mb_it_stops_before_anything_is_downloaded_and_the_box_is_said_to_be_untouched(self):
-        self.publish("3.2.0")
+        self.publish("3.3.0")
         self.site.add_release(CURRENT)
         checks = []
         with self.free(150):
@@ -1208,32 +1208,32 @@ class DiskSpaceTests(Box):
         self.assertEqual(pb.read_update_result(), result)
 
     def test_rolled_back_comes_from_the_check_not_from_the_reason(self):
-        self.publish("3.2.0")
+        self.publish("3.3.0")
         with self.free(150):
             result = self.updater(selfcheck=lambda: (False, "page is broken")).update()
         self.assertEqual((result["status"], result["rolledBack"], result["transient"]), ("failed", False, True))
 
     def test_200_mb_exactly_is_not_enough_and_a_little_more_is(self):
-        self.publish("3.2.0")
+        self.publish("3.3.0")
         self.site.add_release(CURRENT)
         with self.free(200):
             self.assertEqual(self.updater().update()["status"], "failed")
         self.assertEqual(self.installs(), [])
         with mock.patch.object(pb.shutil, "disk_usage", return_value=mock.Mock(free=200 * MB + 1)):
             result = self.updater().update()
-        self.assertEqual((result["status"], result["to"]), ("ok", "3.2.0"))
+        self.assertEqual((result["status"], result["to"]), ("ok", "3.3.0"))
 
     def test_with_room_for_the_installer_the_update_goes_on(self):
-        self.publish("3.2.0")
+        self.publish("3.3.0")
         self.site.add_release(CURRENT)
         with self.free(500):
             result = self.updater().update()
-        self.assertEqual((result["status"], result["to"], result["error"]), ("ok", "3.2.0", None))
+        self.assertEqual((result["status"], result["to"], result["error"]), ("ok", "3.3.0", None))
         self.assertEqual(len(self.installs()), 1)
 
     def test_room_that_the_downloads_themselves_used_up_is_noticed_before_the_installer_starts(self):
         # 500 MB at the start, 150 MB when the release has been downloaded, unpacked and stored (and the rollback copy too).
-        self.publish("3.2.0")
+        self.publish("3.3.0")
         self.site.add_release(CURRENT)
         with self.free(500, 150):
             result = self.updater().update()
@@ -1241,13 +1241,13 @@ class DiskSpaceTests(Box):
         self.assertIn("150 MB are free", result["error"])
         self.assertEqual(self.installs(), [], "the installer was never started: it would have refused, and so would the rollback")
         self.assertEqual(self.installed(), CURRENT)
-        self.assertNotIn("3.2.0", pb.cached_versions(), "a release that was not installed is no rollback target")
+        self.assertNotIn("3.3.0", pb.cached_versions(), "a release that was not installed is no rollback target")
         self.assertEqual(self.leftovers(), [])
 
     def test_the_branch_path_checks_again_too(self):
         # (the same check, after the clone: git writes a whole checkout before the installer starts)
         installer_calls = []
-        with mock.patch.object(pb.Updater, "_fetch_branch", return_value=(os.path.join(self.app, "src"), "3.2.0")), \
+        with mock.patch.object(pb.Updater, "_fetch_branch", return_value=(os.path.join(self.app, "src"), "3.3.0")), \
                 self.free(500, 150):
             result = self.updater(installer=lambda s, r: installer_calls.append(1) or 0,
                                   selfcheck=lambda: (True, "")).update(ref="master")
@@ -1255,24 +1255,24 @@ class DiskSpaceTests(Box):
         self.assertEqual(installer_calls, [])
 
     def test_a_rollback_by_hand_asks_for_the_same_room_and_changes_nothing_without_it(self):
-        self.publish("3.2.0")
+        self.publish("3.3.0")
         self.site.add_release(CURRENT)
         self.updater().update()
-        self.assertEqual(self.installed(), "3.2.0")
+        self.assertEqual(self.installed(), "3.3.0")
         installs = list(self.installs())
-        with mock.patch.object(pb, "VERSION", "3.2.0"), self.free(150):
+        with mock.patch.object(pb, "VERSION", "3.3.0"), self.free(150):
             result = self.updater().rollback()
         self.assertEqual(result["status"], "failed")
         self.assertIn("not enough free space", result["error"])
         self.assertEqual(self.installs(), installs)
-        self.assertEqual(self.installed(), "3.2.0")
-        with mock.patch.object(pb, "VERSION", "3.2.0"), self.free(500):
+        self.assertEqual(self.installed(), "3.3.0")
+        with mock.patch.object(pb, "VERSION", "3.3.0"), self.free(500):
             self.assertEqual(self.updater().rollback()["status"], "ok")
         self.assertEqual(self.installed(), CURRENT)
 
     def test_the_page_and_the_scheduler_see_a_failure_that_is_neither_alarming_nor_final(self):
         # transient: tried again within the hour, not after a week; rolledBack true: the page does not tell anybody to unplug the box.
-        self.publish("3.2.0")
+        self.publish("3.3.0")
         with self.free(150):
             result = self.updater().update()
         self.assertIs(result["transient"], True)
@@ -1423,10 +1423,10 @@ class CommandTests(Box):
         return code, out.getvalue(), err.getvalue()
 
     def test_check_says_whether_a_newer_version_exists_and_changes_nothing(self):
-        self.publish("3.2.0")
+        self.publish("3.3.0")
         code, out, _ = self.run_cli("update", "--check")
         self.assertEqual(code, 0)
-        self.assertIn("Update available: Sinko 3.2.0 (this box has %s)" % CURRENT, out)
+        self.assertIn("Update available: Sinko 3.3.0 (this box has %s)" % CURRENT, out)
         self.publish(CURRENT)
         code, out, _ = self.run_cli("update", "--check")
         self.assertEqual((code, out.strip()), (0, "Sinko %s is the newest version." % CURRENT))
@@ -1435,21 +1435,21 @@ class CommandTests(Box):
         self.assertIsNone(pb.read_update_result())
 
     def test_an_update_by_hand_that_worked_is_told_to_the_page_and_one_from_the_panel_is_not(self):
-        self.publish("3.2.0")
+        self.publish("3.3.0")
         self.site.add_release(CURRENT)
         with mock.patch.object(pb, "note_update") as note:
             code, _, _ = self.run_cli("update", "--yes")
         self.assertEqual(code, 0)
         note.assert_called_once()
-        self.assertEqual((note.call_args[0][0]["status"], note.call_args[0][0]["to"]), ("ok", "3.2.0"))
-        self.publish("3.3.0")
+        self.assertEqual((note.call_args[0][0]["status"], note.call_args[0][0]["to"]), ("ok", "3.3.0"))
+        self.publish("3.4.0")
         with mock.patch.object(pb, "note_update") as note:
             code, _, _ = self.run_cli("update", "--yes", "--from-panel")
         self.assertEqual(code, 0)
         note.assert_not_called()                        # the scheduler copies the result of a run the page started
 
     def test_a_failed_update_by_hand_is_not_told_as_one_that_worked(self):
-        self.publish("3.2.0", install_ok=False)
+        self.publish("3.3.0", install_ok=False)
         self.site.add_release(CURRENT)
         with mock.patch.object(pb, "note_update") as note:
             code, _, _ = self.run_cli("update", "--yes")
@@ -1468,7 +1468,7 @@ class CommandTests(Box):
         self.assertIn("developer branch 'master'", out)
 
     def test_check_on_a_pinned_box_says_it_is_pinned_and_not_that_it_has_the_newest_version(self):
-        self.publish("3.2.0")                                     # a newer release exists, but the box is pinned to its own
+        self.publish("3.3.0")                                     # a newer release exists, but the box is pinned to its own
         with mock.patch.object(pb, "read_config", lambda *a: {"SINKO_REF": "v" + CURRENT}):
             code, out, _ = self.run_cli("update", "--check")
         self.assertEqual(code, 0)
@@ -1491,15 +1491,15 @@ class CommandTests(Box):
 
     def test_updating_to_a_chosen_release_says_the_box_is_pinned_and_how_to_follow_releases_again(self):
         path = self.config_file("SINKO_HOSTNAME=family.lan\nSINKO_REF=latest\n")
-        self.publish("3.2.0", latest=False)
+        self.publish("3.3.0", latest=False)
         self.site.add_release(CURRENT)
         with mock.patch.object(pb, "CONFIG_FILE", path):
-            code, out, _ = self.run_cli("update", "--yes", "--ref", "v3.2.0")
+            code, out, _ = self.run_cli("update", "--yes", "--ref", "v3.3.0")
         self.assertEqual(code, 0)
-        self.assertIn("pinned to v3.2.0", out)
+        self.assertIn("pinned to v3.3.0", out)
         self.assertIn("sudo sinko update --ref latest", out)
         with open(path) as fh:
-            self.assertIn("SINKO_REF=v3.2.0\n", fh.read(), "saved: by the installer in real life, here by the command")
+            self.assertIn("SINKO_REF=v3.3.0\n", fh.read(), "saved: by the installer in real life, here by the command")
 
     def test_going_back_to_the_newest_release_unpins_even_when_it_is_already_installed(self):
         path = self.config_file("SINKO_REF=v%s\nSINKO_IP=192.168.1.5\n" % CURRENT)
@@ -1535,10 +1535,10 @@ class CommandTests(Box):
 
     def test_a_failed_update_does_not_change_the_pin(self):
         path = self.config_file("SINKO_REF=latest\n")
-        self.publish("3.2.0", install_ok=False)
+        self.publish("3.3.0", install_ok=False)
         self.site.add_release(CURRENT)
         with mock.patch.object(pb, "CONFIG_FILE", path):
-            code, out, _ = self.run_cli("update", "--yes", "--ref", "v3.2.0")
+            code, out, _ = self.run_cli("update", "--yes", "--ref", "v3.3.0")
         self.assertEqual(code, 1)
         self.assertNotIn("pinned", out)
 
@@ -1546,7 +1546,7 @@ class CommandTests(Box):
     # runs before the setup, the units and the self-check): so these runs show what is left in the settings.
     def failing_pin_run(self, config_text, *args, old_installs=True, **build):
         path = self.config_file(config_text)
-        self.publish("3.2.0", latest=False, install_ok=False, **build)
+        self.publish("3.3.0", latest=False, install_ok=False, **build)
         if old_installs:
             self.site.add_release(CURRENT)
         with mock.patch.object(pb, "CONFIG_FILE", path), mock.patch.dict(os.environ, {"SINKO_CONFIG_FILE": path}):
@@ -1558,56 +1558,56 @@ class CommandTests(Box):
         return [line.rsplit("ref=", 1)[1] for line in self.installs()]
 
     def test_a_failed_update_to_a_chosen_release_leaves_the_pin_as_it_was_after_the_rollback_installer_ran(self):
-        code, out, err, config = self.failing_pin_run("SINKO_HOSTNAME=family.lan\nSINKO_REF=latest\n", "--ref", "v3.2.0")
+        code, out, err, config = self.failing_pin_run("SINKO_HOSTNAME=family.lan\nSINKO_REF=latest\n", "--ref", "v3.3.0")
         self.assertEqual(code, 1)
-        self.assertEqual(self.refs_given_to_the_installer(), ["v3.2.0", "latest"],
+        self.assertEqual(self.refs_given_to_the_installer(), ["v3.3.0", "latest"],
                          "the version that is put back is told the ref the box had, not the one that failed")
         self.assertEqual(self.installed(), CURRENT)
         self.assertIn("SINKO_REF=latest\n", config)
-        self.assertNotIn("v3.2.0", config)
+        self.assertNotIn("v3.3.0", config)
         self.assertIn("SINKO_HOSTNAME=family.lan\n", config, "nothing else in the file changed")
-        self.assertIn("choice of v3.2.0 was not kept", err)
+        self.assertIn("choice of v3.3.0 was not kept", err)
         self.assertIn("still follows the newest release", err)
         self.assertNotIn("pinned", out)
 
     def test_a_pinned_box_that_fails_to_move_to_another_release_stays_pinned_to_its_own(self):
-        code, out, err, config = self.failing_pin_run("SINKO_REF=v%s\n" % CURRENT, "--ref", "v3.2.0")
+        code, out, err, config = self.failing_pin_run("SINKO_REF=v%s\n" % CURRENT, "--ref", "v3.3.0")
         self.assertEqual(code, 1)
-        self.assertEqual(self.refs_given_to_the_installer(), ["v3.2.0", "v" + CURRENT])
+        self.assertEqual(self.refs_given_to_the_installer(), ["v3.3.0", "v" + CURRENT])
         self.assertIn("SINKO_REF=v%s\n" % CURRENT, config)
         self.assertIn("still follows release v%s" % CURRENT, err)
 
     def test_without_a_copy_to_go_back_to_the_settings_are_put_back_by_the_command(self):
         # The new release's installer wrote its ref and died, and no installer ran after it: only keep_pin can undo that.
-        code, out, err, config = self.failing_pin_run("SINKO_REF=latest\nSINKO_IP=192.168.1.5\n", "--ref", "v3.2.0",
+        code, out, err, config = self.failing_pin_run("SINKO_REF=latest\nSINKO_IP=192.168.1.5\n", "--ref", "v3.3.0",
                                                       old_installs=False)
         self.assertEqual(code, 1)
-        self.assertEqual(self.refs_given_to_the_installer(), ["v3.2.0"], "no rollback installer ran")
+        self.assertEqual(self.refs_given_to_the_installer(), ["v3.3.0"], "no rollback installer ran")
         self.assertEqual(sorted(config.split()), ["SINKO_IP=192.168.1.5", "SINKO_REF=latest"])
         self.assertIn("still follows the newest release", err)
 
     def test_a_rollback_that_fails_too_leaves_the_pin_as_it_was_as_well(self):
         path = self.config_file("SINKO_REF=latest\n")
-        self.publish("3.2.0", latest=False, install_ok=False)
+        self.publish("3.3.0", latest=False, install_ok=False)
         self.site.add_release(CURRENT, install_ok=False)
         with mock.patch.object(pb, "CONFIG_FILE", path), mock.patch.dict(os.environ, {"SINKO_CONFIG_FILE": path}):
-            code, _, err = self.run_cli("update", "--yes", "--ref", "v3.2.0")
+            code, _, err = self.run_cli("update", "--yes", "--ref", "v3.3.0")
         self.assertEqual(code, 1)
         self.assertIn("did not work either", err)
         with open(path) as fh:
             self.assertEqual(fh.read().strip(), "SINKO_REF=latest")
 
     def test_a_missing_ref_line_means_the_newest_release_and_is_put_back_as_such(self):
-        code, out, err, config = self.failing_pin_run("SINKO_HOSTNAME=family.lan\n", "--ref", "v3.2.0", old_installs=False)
+        code, out, err, config = self.failing_pin_run("SINKO_HOSTNAME=family.lan\n", "--ref", "v3.3.0", old_installs=False)
         self.assertEqual(code, 1)
         self.assertIn("SINKO_REF=latest\n", config)
-        self.assertNotIn("v3.2.0", config)
+        self.assertNotIn("v3.3.0", config)
 
     def test_a_failure_before_the_installer_changes_nothing_in_the_settings_and_says_what_the_box_follows(self):
         path = self.config_file("SINKO_REF=latest\n")
-        self.publish("3.2.0", latest=False, sha=("0" * 64 + "  sinko.tar.gz\n").encode())
+        self.publish("3.3.0", latest=False, sha=("0" * 64 + "  sinko.tar.gz\n").encode())
         with mock.patch.object(pb, "CONFIG_FILE", path), mock.patch.dict(os.environ, {"SINKO_CONFIG_FILE": path}):
-            code, _, err = self.run_cli("update", "--yes", "--ref", "v3.2.0")
+            code, _, err = self.run_cli("update", "--yes", "--ref", "v3.3.0")
         self.assertEqual(code, 1)
         self.assertEqual(self.installs(), [])
         with open(path) as fh:
@@ -1616,7 +1616,7 @@ class CommandTests(Box):
 
     def test_a_failed_update_without_a_ref_says_nothing_about_a_pin(self):
         path = self.config_file("SINKO_REF=latest\n")
-        self.publish("3.2.0", install_ok=False)
+        self.publish("3.3.0", install_ok=False)
         self.site.add_release(CURRENT)
         with mock.patch.object(pb, "CONFIG_FILE", path), mock.patch.dict(os.environ, {"SINKO_CONFIG_FILE": path}):
             code, _, err = self.run_cli("update", "--yes")
@@ -1639,15 +1639,15 @@ class CommandTests(Box):
         missing = os.path.join(self.tmp, "no-such-folder", "config")
         said = io.StringIO()
         with contextlib.redirect_stderr(said):
-            pb.keep_pin("latest", "v3.2.0", missing)
+            pb.keep_pin("latest", "v3.3.0", missing)
         # (read_config of a missing file says "latest" = nothing to put back, so only the explanation is printed)
         self.assertIn("still follows the newest release", said.getvalue())
-        path = self.config_file("SINKO_REF=v3.2.0\n")
+        path = self.config_file("SINKO_REF=v3.3.0\n")
         os.chmod(path, 0o444)
         with mock.patch.object(pb, "write_config_value", side_effect=OSError("read-only file system")):
             err = io.StringIO()
             with contextlib.redirect_stderr(err):
-                pb.keep_pin("latest", "v3.2.0", path)
+                pb.keep_pin("latest", "v3.3.0", path)
         self.assertIn("could not put the setting back to latest", err.getvalue())
 
     def help_of(self, *args):
@@ -1679,14 +1679,14 @@ class CommandTests(Box):
         self.assertIn("could not save the choice of v%s" % CURRENT, err)
 
     def test_without_yes_and_without_a_terminal_it_refuses_instead_of_hanging(self):
-        self.publish("3.2.0")
+        self.publish("3.3.0")
         code, _, err = self.run_cli("update")
         self.assertEqual(code, 1)
         self.assertIn("--yes", err)
         self.assertEqual(self.site.count("sinko.tar.gz"), 0)
 
     def test_with_a_terminal_it_asks_and_n_means_no(self):
-        self.publish("3.2.0")
+        self.publish("3.3.0")
         with mock.patch("builtins.input", return_value="n"):
             code, out, _ = self.run_cli("update", stdin_tty=True)
         self.assertEqual(code, 1)
@@ -1696,24 +1696,24 @@ class CommandTests(Box):
             self.assertEqual(self.run_cli("update", stdin_tty=True)[0], 1)
 
     def test_yes_updates_and_the_exit_status_follows_the_result(self):
-        self.publish("3.2.0")
+        self.publish("3.3.0")
         self.site.add_release(CURRENT)
         code, out, _ = self.run_cli("update", "--yes")
         self.assertEqual(code, 0)
-        self.assertEqual(self.installed(), "3.2.0")
-        self.assertIn("now at version 3.2.0", out)
-        self.publish("3.3.0", install_ok=False)
+        self.assertEqual(self.installed(), "3.3.0")
+        self.assertIn("now at version 3.3.0", out)
+        self.publish("3.4.0", install_ok=False)
         code, _, err = self.run_cli("update", "--yes", "--force")
         self.assertEqual(code, 1)
         self.assertIn("the update failed", err)
 
     def test_from_panel_never_asks_and_leaves_the_result_for_the_scheduler(self):
-        self.publish("3.2.0")
+        self.publish("3.3.0")
         self.site.add_release(CURRENT)
         code, _, _ = self.run_cli("update", "--yes", "--from-panel")
         self.assertEqual(code, 0)
-        self.assertEqual(pb.read_update_result()["to"], "3.2.0")
-        self.publish("3.3.0")
+        self.assertEqual(pb.read_update_result()["to"], "3.3.0")
+        self.publish("3.4.0")
         self.assertEqual(self.run_cli("update", "--from-panel")[0], 0, "--from-panel implies --yes")
 
     def test_an_update_that_is_already_running_is_reported(self):
@@ -1922,13 +1922,13 @@ class RepairNoteTests(unittest.TestCase):
         self.assertGreater(u["at"], time.time() - 60)
 
     def test_a_way_back_that_was_cut_off_is_marked_as_having_worked(self):
-        # The update to 3.2.0 failed, the previous version (this one) was being put back when the power went: the program
+        # The update to 3.3.0 failed, the previous version (this one) was being put back when the power went: the program
         # was back and the page was not. The repair reinstalls this version, so the previous version IS back.
-        self.put(status="failed", **{"from": pb.VERSION}, to="3.2.0", rolledBack=False,
+        self.put(status="failed", **{"from": pb.VERSION}, to="3.3.0", rolledBack=False,
                  error="The update did not finish, and the box does not pass its own check (page and program are not the same)")
         pb.note_repaired()
         u = self.state()["update"]
-        self.assertEqual((u["status"], u["rolledBack"], u["to"]), ("failed", True, "3.2.0"))
+        self.assertEqual((u["status"], u["rolledBack"], u["to"]), ("failed", True, "3.3.0"))
         self.assertIn("previous version (%s) was put back by the repair" % pb.VERSION, u["error"])
         self.assertLessEqual(len(u["error"]), 200)
         self.assertGreater(u["at"], time.time() - 60)
@@ -1978,9 +1978,9 @@ class RollbackNoteTests(unittest.TestCase):
         return pb.parse_state(next(g for g in self.store.groups if g["name"] == "pb-state")["comment"])
 
     def test_the_undone_release_is_recorded_as_failed_so_auto_update_skips_it(self):
-        pb.note_rollback("3.2.0", "3.0.0")
+        pb.note_rollback("3.3.0", "3.0.0")
         u = self.state()["update"]
-        self.assertEqual((u["status"], u["to"], u["from"]), ("failed", "3.2.0", "3.0.0"))
+        self.assertEqual((u["status"], u["to"], u["from"]), ("failed", "3.3.0", "3.0.0"))
         self.assertIn("by hand", u["error"])
         self.assertGreater(u["at"], time.time() - 60)
 
@@ -1989,7 +1989,7 @@ class RollbackNoteTests(unittest.TestCase):
         state["schedule"]["enabled"] = True
         state["update"]["auto"] = True
         pb.Controller(self.api, pb.load_catalog(LISTS)).write_state(state)
-        pb.note_rollback("3.2.0", "3.0.0")
+        pb.note_rollback("3.3.0", "3.0.0")
         self.assertTrue(self.state()["schedule"]["enabled"])
         self.assertTrue(self.state()["update"]["auto"])
 
@@ -1997,7 +1997,7 @@ class RollbackNoteTests(unittest.TestCase):
         self.httpd.shutdown()
         self.httpd.server_close()
         with self.assertLogs("sinko", level="WARNING"):
-            pb.note_rollback("3.2.0", "3.0.0")
+            pb.note_rollback("3.3.0", "3.0.0")
 
     def test_patch_state_writes_only_when_something_changed(self):
         writes = self.store.writes
@@ -2015,7 +2015,7 @@ class UpdateNoteTests(unittest.TestCase):
     setUp = RollbackNoteTests.setUp
     state = RollbackNoteTests.state
 
-    def ok(self, frm="3.0.0", to="3.2.0"):
+    def ok(self, frm="3.0.0", to="3.3.0"):
         return {"status": "ok", "from": frm, "to": to, "error": None, "rolledBack": None, "at": time.time(), "transient": False}
 
     def put_update(self, **fields):
@@ -2024,26 +2024,26 @@ class UpdateNoteTests(unittest.TestCase):
         pb.Controller(self.api, pb.load_catalog(LISTS)).write_state(state)
 
     def test_an_update_by_hand_replaces_an_older_rollback_note(self):
-        pb.note_rollback("3.2.0", "3.0.0")
+        pb.note_rollback("3.3.0", "3.0.0")
         result = self.ok()
         pb.note_update(result)
         u = self.state()["update"]
-        self.assertEqual((u["status"], u["from"], u["to"], u["error"], u["rolledBack"]), ("ok", "3.0.0", "3.2.0", None, None))
+        self.assertEqual((u["status"], u["from"], u["to"], u["error"], u["rolledBack"]), ("ok", "3.0.0", "3.3.0", None, None))
         self.assertEqual(u["at"], result["at"])
 
     def test_a_run_the_page_started_is_left_to_the_scheduler(self):
-        self.put_update(status="running", to="3.3.0", at=time.time())
+        self.put_update(status="running", to="3.4.0", at=time.time())
         pb.note_update(self.ok())
         u = self.state()["update"]
-        self.assertEqual((u["status"], u["to"]), ("running", "3.3.0"))
+        self.assertEqual((u["status"], u["to"]), ("running", "3.4.0"))
 
     def test_the_installed_release_is_no_longer_on_offer_and_a_newer_one_still_is(self):
-        self.put_update(latest="3.2.0", notes="https://github.com/iret33/sinko/releases/tag/v3.2.0")
-        pb.note_update(self.ok())
-        self.assertEqual((self.state()["update"]["latest"], self.state()["update"]["notes"]), (None, None))
         self.put_update(latest="3.3.0", notes="https://github.com/iret33/sinko/releases/tag/v3.3.0")
         pb.note_update(self.ok())
-        self.assertEqual(self.state()["update"]["latest"], "3.3.0")
+        self.assertEqual((self.state()["update"]["latest"], self.state()["update"]["notes"]), (None, None))
+        self.put_update(latest="3.4.0", notes="https://github.com/iret33/sinko/releases/tag/v3.4.0")
+        pb.note_update(self.ok())
+        self.assertEqual(self.state()["update"]["latest"], "3.4.0")
 
     def test_the_other_parts_of_the_state_are_kept(self):
         self.put_update(auto=True)
@@ -2321,7 +2321,7 @@ class TransportErrorTests(unittest.TestCase):
 
     def test_the_notes_of_a_rollback_by_hand_survive_it_as_well(self):
         with self.assertLogs("sinko", level="WARNING"):
-            pb.note_rollback("3.2.0", "3.0.0")
+            pb.note_rollback("3.3.0", "3.0.0")
 
 
 class SchedulerStatusTests(unittest.TestCase):
