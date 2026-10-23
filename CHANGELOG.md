@@ -3,7 +3,7 @@
 All notable changes to Sinko. Versions follow [Semantic Versioning](https://semver.org); the newest release is at the top.
 Boxes learn about a release from this repository's GitHub releases, whose notes are the section of this file.
 
-## [3.2.0] - Unreleased
+## [3.2.0] - 2026-10-23
 
 ### Added
 - **The Sinko app can find the box at home.** The box announces itself on the home network (Bonjour, the way printers
