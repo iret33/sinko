@@ -53,7 +53,7 @@ test('update card: the result of an attempt is shown for a while, a failure for 
   assert.equal(f.error, 'The download did not match its checksum.');
   assert.equal(f.latest, '3.1.0', 'and it can be tried again');
   assert.equal(view({ status: 'failed', to: '3.1.0', latest: '3.1.0', at: NOW - 8 * 86400 }).phase, 'available', 'after a week it is just an update on offer');
-  assert.equal(view({ status: 'failed', to: '3.1.0', latest: '3.2.0', at: NOW - 3600 }).phase, 'available', 'a failure of an older version is not the story now');
+  assert.equal(view({ status: 'failed', to: '3.1.0', latest: '3.3.0', at: NOW - 3600 }).phase, 'available', 'a failure of an older version is not the story now');
   assert.equal(view({ status: 'failed', to: '3.1.0', at: NOW - 3600 }, '3.0.0').phase, 'failed', 'failed and nothing else on offer');
   assert.equal(view({ status: 'failed', latest: '3.1.0', at: NOW - 3600 }).phase, 'failed', 'a failure that never learned which version it was still counts for the one on offer');
 });
@@ -168,14 +168,14 @@ test('a number for a router: four numbers, and not one that cannot be the box on
 
 test('box.json: only the documented shape is believed, field by field', () => {
   // api, boxId and hostname are additions of 3.2 (the box's contract with the app, its own number, its name): "v" stays 1.
-  const good = { v: 1, api: 1, version: '3.2.0', boxId: '0123456789abcdef0123456789abcdef', hostname: 'sinko', ip: '192.168.1.50', tz: 'Asia/Bahrain',
+  const good = { v: 1, api: 1, version: '3.3.0', boxId: '0123456789abcdef0123456789abcdef', hostname: 'sinko', ip: '192.168.1.50', tz: 'Asia/Bahrain',
     utcOffset: '+03:00', counter: true, mdns: true, at: 1790000000 };
-  assert.deepEqual(B.parseBoxInfo(good), { api: 1, version: '3.2.0', boxId: '0123456789abcdef0123456789abcdef', hostname: 'sinko', ip: '192.168.1.50',
+  assert.deepEqual(B.parseBoxInfo(good), { api: 1, version: '3.3.0', boxId: '0123456789abcdef0123456789abcdef', hostname: 'sinko', ip: '192.168.1.50',
     tz: 'Asia/Bahrain', utcOffset: '+03:00', counter: true, mdns: true, at: 1790000000 });
   for (const none of [null, undefined, 'x', 7, [], {}, { v: 2, ip: '192.168.1.50', at: 1790000000 }, { v: '1' }]) assert.equal(B.parseBoxInfo(none), null, JSON.stringify(none));
   // null fields are legal (the box can have no route, no zone name): they cost only what they were for
-  assert.deepEqual(B.parseBoxInfo({ v: 1, api: 1, version: '3.2.0', boxId: null, hostname: null, ip: null, tz: null, utcOffset: '+00:00', counter: false,
-    mdns: false, at: 5 }), { api: 1, version: '3.2.0', boxId: '', hostname: '', ip: '', tz: '', utcOffset: '+00:00', counter: false, mdns: false, at: 5 });
+  assert.deepEqual(B.parseBoxInfo({ v: 1, api: 1, version: '3.3.0', boxId: null, hostname: null, ip: null, tz: null, utcOffset: '+00:00', counter: false,
+    mdns: false, at: 5 }), { api: 1, version: '3.3.0', boxId: '', hostname: '', ip: '', tz: '', utcOffset: '+00:00', counter: false, mdns: false, at: 5 });
   // a box older than 3.2 writes none of the new fields: they are absent, everything else is as before
   assert.deepEqual(B.parseBoxInfo({ v: 1, version: '3.1.0', ip: '192.168.1.50', tz: 'Asia/Bahrain', utcOffset: '+03:00', counter: true, mdns: true, at: 5 }),
     { api: 0, version: '3.1.0', boxId: '', hostname: '', ip: '192.168.1.50', tz: 'Asia/Bahrain', utcOffset: '+03:00', counter: true, mdns: true, at: 5 });

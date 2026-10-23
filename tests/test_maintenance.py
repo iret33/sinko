@@ -209,7 +209,7 @@ class Fixture(unittest.TestCase):
         mutate(state)
         self.ctl.write_state(state)
 
-    def release(self, version="3.2.0"):
+    def release(self, version="3.3.0"):
         return {"version": version, "tag": "v" + version, "notes": "https://github.com/iret33/sinko/releases/tag/v" + version}
 
     def advance(self, seconds):
@@ -255,7 +255,7 @@ class QuietTests(Fixture):
 
     def test_the_jobs_never_change_a_rule(self):
         before = self.rules()
-        self.found = self.release("3.2.0")
+        self.found = self.release("3.3.0")
         self.ip = "192.168.1.77"
         self.set_state(lambda s: s["update"].update(request=111, checkRequest=222, auto=True))
         self.set_state(lambda s: s["power"].update(request=333, action="reboot"))
@@ -295,14 +295,14 @@ class JobIsolationTests(Fixture):
 
 class UpdateRequestTests(Fixture):
     def test_a_request_stores_the_marker_clears_it_and_only_then_starts_the_runner(self):
-        self.found = self.release("3.2.0")
+        self.found = self.release("3.3.0")
         marker = self.stamp()
-        self.set_state(lambda s: s["update"].update(request=marker, latest="3.2.0"))
+        self.set_state(lambda s: s["update"].update(request=marker, latest="3.3.0"))
         before = self.state()["update"]
         actions = self.pass_()
         self.assertIn("update requested by the page", actions)
         u = self.state()["update"]
-        self.assertEqual((u["status"], u["from"], u["to"], u["request"], u["error"]), ("running", pb.VERSION, "3.2.0", None, None))
+        self.assertEqual((u["status"], u["from"], u["to"], u["request"], u["error"]), ("running", pb.VERSION, "3.3.0", None, None))
         self.assertEqual(u["at"], self.now.timestamp())
         self.assertEqual(pb.load_handled(), {"update": marker})
         self.assertEqual(before["status"], "idle")
@@ -434,13 +434,13 @@ class AutoUpdateTests(Fixture):
     def setUp(self):
         super().setUp()
         self.now = dt.datetime(2026, 9, 18, 3, 30)                 # inside the window
-        self.set_state(lambda s: s["update"].update(auto=True, latest="3.2.0"))
+        self.set_state(lambda s: s["update"].update(auto=True, latest="3.3.0"))
 
     def test_inside_the_window_a_newer_release_is_installed(self):
         actions = self.pass_()
-        self.assertIn("automatic update to 3.2.0", actions)
+        self.assertIn("automatic update to 3.3.0", actions)
         u = self.state()["update"]
-        self.assertEqual((u["status"], u["from"], u["to"]), ("running", pb.VERSION, "3.2.0"))
+        self.assertEqual((u["status"], u["from"], u["to"]), ("running", pb.VERSION, "3.3.0"))
         self.assertEqual(self.runner_calls, ["running"])
         self.assertEqual(pb.load_handled(), {}, "no request, so no marker")
 
@@ -478,13 +478,13 @@ class AutoUpdateTests(Fixture):
         self.assertEqual(self.runner_calls, ["running"])
 
     def test_a_release_that_failed_in_the_last_week_is_not_tried_again(self):
-        self.set_state(lambda s: s["update"].update(status="failed", to="3.2.0", error="x",
+        self.set_state(lambda s: s["update"].update(status="failed", to="3.3.0", error="x",
                                                     at=self.now.timestamp() - 6 * 86400))
         self.settle()
         self.assertEqual(self.runner_calls, [])
 
     def test_after_a_week_it_is_tried_again(self):
-        self.set_state(lambda s: s["update"].update(status="failed", to="3.2.0", error="x",
+        self.set_state(lambda s: s["update"].update(status="failed", to="3.3.0", error="x",
                                                     at=self.now.timestamp() - 7 * 86400 - 1))
         self.settle()
         self.assertEqual(self.runner_calls, ["running"])
@@ -496,7 +496,7 @@ class AutoUpdateTests(Fixture):
 
     def test_a_rollback_by_hand_blocks_the_release_that_was_undone(self):
         # what `sinko rollback` leaves behind is an ordinary failed update of the release that was undone
-        self.set_state(lambda s: s["update"].update(status="failed", to="3.2.0", error="Went back to 3.0.0 by hand.",
+        self.set_state(lambda s: s["update"].update(status="failed", to="3.3.0", error="Went back to 3.0.0 by hand.",
                                                     at=self.now.timestamp() - 3600))
         self.settle()
         self.assertEqual(self.runner_calls, [])
@@ -507,7 +507,7 @@ class AutoUpdateTests(Fixture):
         self.assertEqual(self.runner_calls, [])
 
     def test_the_parent_can_still_update_by_hand_after_a_failure(self):
-        self.set_state(lambda s: s["update"].update(status="failed", to="3.2.0", error="x", at=self.now.timestamp() - 3600,
+        self.set_state(lambda s: s["update"].update(status="failed", to="3.3.0", error="x", at=self.now.timestamp() - 3600,
                                                     request=77))
         self.settle()
         self.assertEqual(self.runner_calls, ["running"])
@@ -516,17 +516,17 @@ class AutoUpdateTests(Fixture):
 class ReconcileTests(Fixture):
     def running(self, **kw):
         fields = dict(status="running", **{"from": "3.0.0"})
-        fields.update(to="3.2.0", at=self.now.timestamp() - 60, latest="3.2.0")
+        fields.update(to="3.3.0", at=self.now.timestamp() - 60, latest="3.3.0")
         fields.update(kw)
         self.set_state(lambda s: s["update"].update(fields))
 
     def test_an_ok_result_is_copied_into_the_state_and_the_file_removed(self):
         self.running()
-        pb.write_update_result("ok", "3.0.0", "3.2.0", None, self.now.timestamp() - 5)
-        with mock.patch.object(pb, "VERSION", "3.2.0"):
+        pb.write_update_result("ok", "3.0.0", "3.3.0", None, self.now.timestamp() - 5)
+        with mock.patch.object(pb, "VERSION", "3.3.0"):
             actions = self.pass_()
         u = self.state()["update"]
-        self.assertEqual((u["status"], u["from"], u["to"], u["error"]), ("ok", "3.0.0", "3.2.0", None))
+        self.assertEqual((u["status"], u["from"], u["to"], u["error"]), ("ok", "3.0.0", "3.3.0", None))
         self.assertEqual(u["at"], self.now.timestamp() - 5)
         self.assertIsNone(u["latest"], "the release that is installed is no longer an update")
         self.assertIsNone(u["notes"])
@@ -535,15 +535,15 @@ class ReconcileTests(Fixture):
 
     def test_a_failed_result_keeps_the_release_on_offer_and_shows_the_reason(self):
         self.running()
-        pb.write_update_result("failed", "3.0.0", "3.2.0", "The installer stopped with an error.", self.now.timestamp() - 5)
+        pb.write_update_result("failed", "3.0.0", "3.3.0", "The installer stopped with an error.", self.now.timestamp() - 5)
         self.pass_()
         u = self.state()["update"]
-        self.assertEqual((u["status"], u["error"], u["latest"]), ("failed", "The installer stopped with an error.", "3.2.0"))
+        self.assertEqual((u["status"], u["error"], u["latest"]), ("failed", "The installer stopped with an error.", "3.3.0"))
         self.assertIsNone(pb.read_update_result())
 
     def test_a_result_that_says_nothing_to_do_clears_a_stale_offer(self):
         self.running(to=None)
-        pb.write_update_result("ok", "3.0.0", "3.2.0", None, self.now.timestamp())
+        pb.write_update_result("ok", "3.0.0", "3.3.0", None, self.now.timestamp())
         self.pass_()
         self.assertIsNone(self.state()["update"]["latest"])
 
@@ -555,7 +555,7 @@ class ReconcileTests(Fixture):
         self.assertIsNotNone(pb.read_update_result(), "left alone")
 
     def test_a_result_without_a_running_update_is_ignored(self):
-        pb.write_update_result("ok", "3.0.0", "3.2.0", None, self.now.timestamp())
+        pb.write_update_result("ok", "3.0.0", "3.3.0", None, self.now.timestamp())
         self.settle()
         self.assertEqual(self.state()["update"]["status"], "idle")
 
@@ -600,15 +600,15 @@ class ReconcileTests(Fixture):
     def test_the_result_arriving_after_a_scheduler_restart_is_still_picked_up(self):
         # The installer restarts this service: the new process has no memory of the run, only the state and the file.
         self.running()
-        pb.write_update_result("ok", "3.0.0", "3.2.0", None, self.now.timestamp())
+        pb.write_update_result("ok", "3.0.0", "3.3.0", None, self.now.timestamp())
         fresh = pb.Maintenance(self.api, config_path=self.config_path, monotonic=lambda: self.mono, job_factory=InlineJob)
-        with mock.patch.object(pb, "VERSION", "3.2.0"):
+        with mock.patch.object(pb, "VERSION", "3.3.0"):
             fresh.run(self.now)
         self.assertEqual(self.state()["update"]["status"], "ok")
 
     def test_an_offer_that_is_installed_by_hand_is_forgotten(self):
-        self.set_state(lambda s: s["update"].update(latest="3.2.0", notes="https://github.com/iret33/sinko/releases/tag/v3.2.0"))
-        with mock.patch.object(pb, "VERSION", "3.2.0"):
+        self.set_state(lambda s: s["update"].update(latest="3.3.0", notes="https://github.com/iret33/sinko/releases/tag/v3.3.0"))
+        with mock.patch.object(pb, "VERSION", "3.3.0"):
             self.pass_()
         self.assertIsNone(self.state()["update"]["latest"])
         self.assertIsNone(self.state()["update"]["notes"])
@@ -617,7 +617,7 @@ class ReconcileTests(Fixture):
         self.running()
         pb.ensure_state_dir()
         pb.atomic_write(pb.state_path("update-result.json"),
-                        json.dumps({"status": "failed", "from": "3.0.0", "to": "3.2.0", "error": "e" * 900, "at": self.now.timestamp()}))
+                        json.dumps({"status": "failed", "from": "3.0.0", "to": "3.3.0", "error": "e" * 900, "at": self.now.timestamp()}))
         self.pass_()
         self.assertEqual(len(self.state()["update"]["error"]), 200)
 
@@ -627,24 +627,24 @@ class RolledBackTests(Fixture):
 
     def running(self, **kw):
         fields = dict(status="running", **{"from": "3.0.0"})
-        fields.update(to="3.2.0", at=self.now.timestamp() - 60, latest="3.2.0")
+        fields.update(to="3.3.0", at=self.now.timestamp() - 60, latest="3.3.0")
         fields.update(kw)
         self.set_state(lambda s: s["update"].update(fields))
 
     def test_the_runners_answer_is_copied_for_a_failure_and_dropped_for_a_success(self):
         for rolled, want in ((True, True), (False, False), (None, None)):
             self.running()
-            pb.write_update_result("failed", "3.0.0", "3.2.0", "x", self.now.timestamp() - 5, rolled_back=rolled)
+            pb.write_update_result("failed", "3.0.0", "3.3.0", "x", self.now.timestamp() - 5, rolled_back=rolled)
             self.pass_()
             self.assertIs(self.state()["update"]["rolledBack"], want, rolled)
         self.running(rolledBack=True)
-        pb.write_update_result("ok", "3.0.0", "3.2.0", None, self.now.timestamp() - 5, rolled_back=True)
-        with mock.patch.object(pb, "VERSION", "3.2.0"):
+        pb.write_update_result("ok", "3.0.0", "3.3.0", None, self.now.timestamp() - 5, rolled_back=True)
+        with mock.patch.object(pb, "VERSION", "3.3.0"):
             self.pass_()
         self.assertEqual((self.state()["update"]["status"], self.state()["update"]["rolledBack"]), ("ok", None))
 
     def test_a_new_run_forgets_the_last_ones_answer(self):
-        self.set_state(lambda s: s["update"].update(status="failed", rolledBack=True, at=0, request=3, latest="3.2.0"))
+        self.set_state(lambda s: s["update"].update(status="failed", rolledBack=True, at=0, request=3, latest="3.3.0"))
         self.pass_()
         self.assertEqual((self.state()["update"]["status"], self.state()["update"]["rolledBack"]), ("running", None))
 
@@ -657,17 +657,17 @@ class RolledBackTests(Fixture):
                                self.now.timestamp() - 5, rolled_back=True, transient=True)
         self.pass_()
         u = self.state()["update"]
-        self.assertEqual((u["status"], u["to"], u["rolledBack"]), ("failed", "3.2.0", True))
+        self.assertEqual((u["status"], u["to"], u["rolledBack"]), ("failed", "3.3.0", True))
         self.assertTrue(pb.failure_is_transient(u), "tried again within the hour, not after a week")
 
     def test_a_result_that_says_the_failure_was_the_network_is_remembered_for_the_retry_rule(self):
         self.running()
-        pb.write_update_result("failed", "3.0.0", "3.2.0", "The server answered HTTP 502 for sinko.tar.gz.",
+        pb.write_update_result("failed", "3.0.0", "3.3.0", "The server answered HTTP 502 for sinko.tar.gz.",
                                self.now.timestamp() - 5, rolled_back=True, transient=True)
         self.pass_()
         self.assertTrue(pb.failure_is_transient(self.state()["update"]))
         self.running()
-        pb.write_update_result("failed", "3.0.0", "3.2.0", "The installer stopped with an error (exit status 1).",
+        pb.write_update_result("failed", "3.0.0", "3.3.0", "The installer stopped with an error (exit status 1).",
                                self.now.timestamp() - 4, rolled_back=True, transient=False)
         self.pass_()
         self.assertFalse(pb.failure_is_transient(self.state()["update"]))
@@ -678,7 +678,7 @@ class RolledBackTests(Fixture):
     def test_the_new_version_in_place_and_passing_its_check_means_the_update_did_finish(self):
         # The box lost power during the 90 seconds of the check: the update was fine, and it must not be called failed.
         self.gone()
-        with mock.patch.object(pb, "VERSION", "3.2.0"):
+        with mock.patch.object(pb, "VERSION", "3.3.0"):
             self.settle()
         u = self.state()["update"]
         self.assertEqual((u["status"], u["error"], u["rolledBack"], u["latest"]), ("ok", None, None, None))
@@ -690,7 +690,7 @@ class RolledBackTests(Fixture):
         u = self.state()["update"]
         self.assertEqual((u["status"], u["rolledBack"]), ("failed", True))
         self.assertEqual(u["error"], "The update did not finish. This box still works with version %s." % pb.VERSION)
-        self.assertEqual(u["latest"], "3.2.0", "the release stays on offer")
+        self.assertEqual(u["latest"], "3.3.0", "the release stays on offer")
 
     def test_a_box_that_fails_its_check_is_said_to_have_nothing_to_go_back_to(self):
         self.gone()
@@ -735,7 +735,7 @@ class RolledBackTests(Fixture):
     def test_a_result_that_arrives_while_the_check_runs_is_not_overwritten(self):
         self.gone()
         self.pass_()
-        pb.write_update_result("failed", "3.0.0", "3.2.0", "The installer stopped with an error (exit status 1).",
+        pb.write_update_result("failed", "3.0.0", "3.3.0", "The installer stopped with an error (exit status 1).",
                                self.now.timestamp(), rolled_back=True)
         self.set_state(lambda s: s["update"].update(at=self.now.timestamp() - 1))        # the page or a new run moved on
         self.pass_()
@@ -773,11 +773,11 @@ class RetryPolicyTests(Fixture):
         self.advance(1799)
         self.settle()
         self.assertEqual(len(self.check_calls), 1, "not before half an hour")
-        self.found = self.release("3.2.0")
+        self.found = self.release("3.3.0")
         self.advance(2)
         self.settle()
         self.assertEqual(len(self.check_calls), 2)
-        self.assertEqual(self.state()["update"]["latest"], "3.2.0", "found a day sooner than before")
+        self.assertEqual(self.state()["update"]["latest"], "3.3.0", "found a day sooner than before")
 
     def test_the_retry_is_spread_so_that_boxes_behind_one_address_do_not_ask_together(self):
         self.found = pb.UpdateError("offline")
@@ -794,7 +794,7 @@ class RetryPolicyTests(Fixture):
         self.assertEqual(len(self.check_calls), 2)
 
     def test_a_good_check_still_waits_a_day(self):
-        self.found = self.release("3.2.0")
+        self.found = self.release("3.3.0")
         self.advance(121)
         self.settle()
         self.advance(3 * 3600)
@@ -802,9 +802,9 @@ class RetryPolicyTests(Fixture):
         self.assertEqual(len(self.check_calls), 1)
 
     def failed(self, transient, age):
-        self.set_state(lambda s: s["update"].update(auto=True, latest="3.2.0", status="failed", to="3.2.0", error="x",
+        self.set_state(lambda s: s["update"].update(auto=True, latest="3.3.0", status="failed", to="3.3.0", error="x",
                                                     at=self.now.timestamp() - age))
-        pb.note_failure({"at": self.now.timestamp() - age, "to": "3.2.0", "transient": transient})
+        pb.note_failure({"at": self.now.timestamp() - age, "to": "3.3.0", "transient": transient})
 
     def test_a_failure_of_the_network_is_tried_again_the_same_night_after_half_an_hour(self):
         self.now = dt.datetime(2026, 9, 18, 3, 30)
@@ -823,9 +823,9 @@ class RetryPolicyTests(Fixture):
 
     def test_the_note_belongs_to_one_run_only(self):
         self.now = dt.datetime(2026, 9, 18, 3, 30)
-        self.set_state(lambda s: s["update"].update(auto=True, latest="3.2.0", status="failed", to="3.2.0", error="x",
+        self.set_state(lambda s: s["update"].update(auto=True, latest="3.3.0", status="failed", to="3.3.0", error="x",
                                                     at=self.now.timestamp() - 3600))
-        pb.note_failure({"at": 12345.0, "to": "3.2.0", "transient": True})          # about an older run
+        pb.note_failure({"at": 12345.0, "to": "3.3.0", "transient": True})          # about an older run
         self.settle()
         self.assertEqual(self.runner_calls, [])
 
@@ -839,7 +839,7 @@ class RetryPolicyTests(Fixture):
 
 class CheckTests(Fixture):
     def test_the_first_check_is_two_minutes_after_start_and_then_daily(self):
-        self.found = self.release("3.2.0")
+        self.found = self.release("3.3.0")
         self.advance(60)
         self.settle()
         self.assertEqual(self.check_calls, [], "too early")
@@ -847,7 +847,7 @@ class CheckTests(Fixture):
         self.settle()
         self.assertEqual(len(self.check_calls), 1)
         u = self.state()["update"]
-        self.assertEqual((u["latest"], u["notes"], u["checked"]), ("3.2.0", self.found["notes"], self.now.timestamp()))
+        self.assertEqual((u["latest"], u["notes"], u["checked"]), ("3.3.0", self.found["notes"], self.now.timestamp()))
         self.advance(23 * 3600)
         self.settle()
         self.assertEqual(len(self.check_calls), 1)
@@ -856,7 +856,7 @@ class CheckTests(Fixture):
         self.assertEqual(len(self.check_calls), 2)
 
     def test_an_unchanged_answer_is_not_written_again_within_a_day_but_is_after(self):
-        self.found = self.release("3.2.0")
+        self.found = self.release("3.3.0")
         self.advance(121)
         self.settle()
         writes = self.store.writes
@@ -871,7 +871,7 @@ class CheckTests(Fixture):
         self.assertEqual(self.state()["update"]["checked"], self.now.timestamp(), "older than a day: refreshed")
 
     def test_no_newer_release_clears_an_old_offer(self):
-        self.set_state(lambda s: s["update"].update(latest="3.2.0", notes="https://github.com/iret33/sinko/releases/tag/v3.2.0"))
+        self.set_state(lambda s: s["update"].update(latest="3.3.0", notes="https://github.com/iret33/sinko/releases/tag/v3.3.0"))
         self.found = None
         self.advance(121)
         self.settle()
@@ -879,7 +879,7 @@ class CheckTests(Fixture):
         self.assertEqual((u["latest"], u["notes"], u["checked"]), (None, None, self.now.timestamp()))
 
     def test_a_failed_check_keeps_the_old_answer_and_says_little(self):
-        self.set_state(lambda s: s["update"].update(latest="3.2.0", checked=123.0))
+        self.set_state(lambda s: s["update"].update(latest="3.3.0", checked=123.0))
         self.found = pb.UpdateError("offline")
         self.advance(121)
         writes = self.store.writes
@@ -887,12 +887,12 @@ class CheckTests(Fixture):
             self.settle()
         self.assertEqual(len(logs.records), 1)
         u = self.state()["update"]
-        self.assertEqual((u["latest"], u["checked"]), ("3.2.0", 123.0))
+        self.assertEqual((u["latest"], u["checked"]), ("3.3.0", 123.0))
         self.assertEqual(self.store.writes, writes)
 
     def test_a_check_request_checks_at_once_and_always_records_the_time(self):
-        self.found = self.release("3.2.0")
-        self.set_state(lambda s: s["update"].update(latest="3.2.0", notes=self.found["notes"], checked=self.now.timestamp() - 5))
+        self.found = self.release("3.3.0")
+        self.set_state(lambda s: s["update"].update(latest="3.3.0", notes=self.found["notes"], checked=self.now.timestamp() - 5))
         self.set_state(lambda s: s["update"].update(checkRequest=555))
         actions = self.settle()
         self.assertIn("check requested by the page", actions)
@@ -903,7 +903,7 @@ class CheckTests(Fixture):
         self.assertEqual(pb.load_handled(), {"check": 555})
 
     def test_a_check_request_is_acted_on_once(self):
-        self.found = self.release("3.2.0")
+        self.found = self.release("3.3.0")
         self.set_state(lambda s: s["update"].update(checkRequest=555))
         self.settle()
         self.advance(15)
@@ -918,7 +918,7 @@ class CheckTests(Fixture):
         self.assertIsNone(self.state()["update"]["checkRequest"])
 
     def test_a_check_request_while_a_check_is_running_is_not_lost(self):
-        self.found = self.release("3.2.0")
+        self.found = self.release("3.3.0")
         self.advance(121)
         self.pass_()                                   # the periodic check is running (its result is not collected yet)
         self.set_state(lambda s: s["update"].update(checkRequest=9))
@@ -939,11 +939,11 @@ class CheckTests(Fixture):
 
     def test_a_pinned_box_checks_for_its_pin(self):
         with open(self.config_path, "w") as fh:
-            fh.write(CONFIG.replace("SINKO_REF=latest", "SINKO_REF=v3.3.0"))
+            fh.write(CONFIG.replace("SINKO_REF=latest", "SINKO_REF=v3.4.0"))
         self.advance(121)
         self.settle()
         self.assertEqual(len(self.check_calls), 1)
-        self.assertEqual(self.check_calls[0]["SINKO_REF"], "v3.3.0")
+        self.assertEqual(self.check_calls[0]["SINKO_REF"], "v3.4.0")
 
     def test_no_periodic_check_while_the_clock_cannot_be_trusted(self):
         self.clock_trusted = False
@@ -1061,8 +1061,8 @@ class StaleRequestTests(Fixture):
 
     def test_old_requests_of_every_kind_are_dropped_and_never_acted_on(self):
         old = self.stamp(3600)
-        self.found = self.release("3.2.0")
-        self.set_state(lambda s: s["update"].update(request=old, checkRequest=old + 1, latest="3.2.0"))
+        self.found = self.release("3.3.0")
+        self.set_state(lambda s: s["update"].update(request=old, checkRequest=old + 1, latest="3.3.0"))
         self.set_state(lambda s: s["power"].update(request=old + 2, action="reboot"))
         with self.assertLogs("sinko", level="INFO") as logs:
             self.settle()
@@ -1079,8 +1079,8 @@ class StaleRequestTests(Fixture):
         self.assertEqual((self.runner_calls, self.state()["update"]["request"]), ([], None), "and putting one back changes nothing")
 
     def test_a_request_made_a_moment_ago_is_acted_on_and_so_is_the_next_one_after_an_old_one(self):
-        self.found = self.release("3.2.0")
-        self.set_state(lambda s: s["update"].update(request=self.stamp(7200), latest="3.2.0"))
+        self.found = self.release("3.3.0")
+        self.set_state(lambda s: s["update"].update(request=self.stamp(7200), latest="3.3.0"))
         self.settle()
         self.assertEqual(self.runner_calls, [])
         self.set_state(lambda s: s["update"].update(request=self.stamp(20), checkRequest=self.stamp(25)))
@@ -1851,7 +1851,7 @@ class TickDoesNotWaitTests(Fixture):
 
         def slow_check(conf):
             gate.wait(10)
-            return self.release("3.2.0")
+            return self.release("3.3.0")
         m = pb.Maintenance(self.api, config_path=self.config_path, monotonic=lambda: self.mono, check=slow_check,
                            default_ip=lambda: None)
         self.advance(121)
@@ -1866,7 +1866,7 @@ class TickDoesNotWaitTests(Fixture):
             if self.state()["update"]["latest"]:
                 break
             time.sleep(0.01)
-        self.assertEqual(self.state()["update"]["latest"], "3.2.0")
+        self.assertEqual(self.state()["update"]["latest"], "3.3.0")
 
     def test_the_scheduler_loop_runs_the_tick_first_and_the_jobs_after_it(self):
         order = []
@@ -1945,7 +1945,7 @@ class OneTickTests(Fixture):
 
     def everything_at_once(self):
         self.ip = "192.168.1.77"
-        self.found = self.release("3.2.0")
+        self.found = self.release("3.3.0")
         self.set_state(lambda s: s["update"].update(request=11, checkRequest=12))
         self.advance(200)                                  # the first check and the first address look are due
 
@@ -1959,7 +1959,7 @@ class OneTickTests(Fixture):
         self.assertEqual(len(self.check_calls), 1)
         self.assertEqual([c[0] for c in self.address_calls], ["192.168.1.77"])
         u = self.state()["update"]
-        self.assertEqual((u["status"], u["request"], u["checkRequest"], u["latest"]), ("running", None, None, "3.2.0"))
+        self.assertEqual((u["status"], u["request"], u["checkRequest"], u["latest"]), ("running", None, None, "3.3.0"))
         self.assertEqual(pb.load_handled(), {"update": 11, "check": 12})
 
     def test_a_power_request_in_the_same_tick_is_dropped_because_the_update_has_just_begun(self):
@@ -2010,7 +2010,7 @@ class EverythingFailsTests(Fixture):
         self.power_error = OSError("no systemctl")
         self.address_error = OSError("no pihole-FTL")
         self.ip = "192.168.1.77"
-        self.set_state(lambda s: s["update"].update(request=1, checkRequest=2, auto=True, latest="3.2.0"))
+        self.set_state(lambda s: s["update"].update(request=1, checkRequest=2, auto=True, latest="3.3.0"))
         self.set_state(lambda s: s["power"].update(request=3, action="reboot"))
         self.advance(200)
         with self.assertLogs("sinko", level="WARNING") as logs:
@@ -2133,7 +2133,7 @@ class PageRepairTests(Fixture):
 
     def test_not_while_the_state_says_an_update_is_running_and_not_counting_it(self):
         for _ in range(15):
-            self.set_state(lambda s: s["update"].update(status="running", at=self.now.timestamp(), to="3.2.0"))
+            self.set_state(lambda s: s["update"].update(status="running", at=self.now.timestamp(), to="3.3.0"))
             self.watch(1)
         self.assertEqual(self.repairs, [])
         self.set_state(lambda s: s["update"].update(status="ok", at=self.now.timestamp()))
@@ -2487,7 +2487,7 @@ class ClockHoldTests(Fixture):
         self.bedtime()
         guard = pb.ClockGuard(uptime=lambda: 30.0, synchronized=lambda: False)
         ctl = pb.Controller(self.api, self.catalog, "https://lists.example/l", clock_trusted=guard.trusted)
-        self.set_state(lambda s: s["update"].update(auto=True, latest="3.2.0"))
+        self.set_state(lambda s: s["update"].update(auto=True, latest="3.3.0"))
         m = pb.Maintenance(self.api, config_path=self.config_path, monotonic=lambda: self.mono, job_factory=InlineJob,
                            clock_ok=guard.trusted, check=self.fake_check, start_runner=self.fake_runner,
                            power=self.fake_power, default_ip=lambda: self.ip, apply_address=self.fake_apply,
