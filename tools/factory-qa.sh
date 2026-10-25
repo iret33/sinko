@@ -966,7 +966,10 @@ verdict_passed() {
   rm -f "$FLAG" "$REPORT" "$(webroot)/pb/factory-qa.txt"
   systemctl disable "$UNIT" >/dev/null 2>&1 || true
   rm -f "$UNIT_FILE"
-  systemctl daemon-reload >/dev/null 2>&1 || true
+  # No `systemctl daemon-reload` after this: this script runs AS that unit, and a reload that no longer finds its file makes systemd
+  # forget the unit's TimeoutStartSec=infinity. Its default, 90 s counted from the unit's start, then kills a run that took longer
+  # than that (SIGTERM, exit 143) before the lights and the power-off: found on a real Orange Pi Zero 3, where waiting for the
+  # network made a run take 88 s. The unit is gone at the next start anyway, and the power-off is next.
   stop_testing_lights
   led_victory_dance
   led_all 1                                          # every light stays on until the power is cut: then it is safe to unplug

@@ -46,6 +46,9 @@ mv "$STUBS/systemctl" "$STUBS/systemctl.lib"
 cat >"$STUBS/systemctl" <<'EOF'
 #!/usr/bin/env bash
 if [[ "$1" == stop && " $* " == *" armbian-led-state.service "* ]]; then echo "saved at shutdown: every light on" >"$ROOT/etc/armbian-leds.conf"; fi
+# A reload after the test's own unit file is gone: the test runs as that unit, and systemd then forgets its TimeoutStartSec=infinity
+# (the default of 90 s kills it before the power-off, as it did on the real board). Noted here, checked by the good-box scenario.
+if [[ "$1" == daemon-reload && ! -e "$ROOT/etc/systemd/system/sinko-factory-qa.service" ]]; then : >"$WORK/reload-without-unit"; fi
 exec "$WORK/stubs/systemctl.lib" "$@"
 EOF
 # systemd-run: only says what it was asked to start ($WORK/systemd-run-fails: it cannot).
@@ -319,6 +322,7 @@ compgen -G "$ROOT/etc/ssh/ssh_host_*" >/dev/null && fail "this start's SSH host 
 [[ ! -e "$FLAG" ]] || fail "the flag is still there: the test would run again at the customer's"
 [[ ! -e "$ROOT/etc/systemd/system/sinko-factory-qa.service" ]] || fail "the unit file is still there"
 grep -q "systemctl disable sinko-factory-qa.service" "$WORK/calls.log" || fail "the unit was not disabled"
+[[ ! -e "$WORK/reload-without-unit" ]] || fail "systemd was reloaded after the unit file was removed, from inside that unit: its TimeoutStartSec=infinity is gone then, and the default of 90 s kills a slow run before the power-off"
 [[ ! -e "$REPORT" && ! -e "$ROOT/var/www/html/pb/factory-qa.txt" && ! -e "$WORK/qa-run" ]] || fail "a report or the test's notes were left"
 [[ ! -e "$ROOT/var/lib/sinko/.factory-qa-write" ]] || fail "the card's write test left its file"
 grep -q "systemctl poweroff" "$WORK/calls.log" || fail "the box did not switch itself off"

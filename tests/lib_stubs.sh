@@ -542,7 +542,7 @@ fresh_start() {
     "$WORK/py-old" "$WORK/password-in-env" "$WORK/curl.log" "$WORK/ftl-makes-cert" "$WORK/ftl-cert-fail" \
     "$WORK/ip-static" "$WORK/ftl-stop-fails" "$WORK/credential-stuck" "$WORK/sched-crashloop" "$WORK/sched-starting" "$WORK/sched-age" \
     "$WORK/run" "$WORK/setpassword-needs-stdin" "$WORK/df-free-kb" "$WORK/dpkg-configfiles" "$WORK/sshd-no-G" "$WORK/sshd-no-T-h" \
-    "$WORK/dd-io-error" "$WORK/dd-readonly" "$WORK/dd-killed" "$WORK/dd-no-end" "$WORK/password-plaintext"
+    "$WORK/dd-io-error" "$WORK/dd-readonly" "$WORK/dd-killed" "$WORK/dd-no-end" "$WORK/password-plaintext" "$WORK/reload-without-unit"
   mkdir -p "$ROOT/etc/pihole" "$ROOT/etc/ssh" "$ROOT/var/www/html" "$ROOT/var/log" "$WORK/units"
   touch "$ROOT/etc/pihole/pihole.toml" "$WORK/units/pihole-FTL.service.active" "$WORK/units/pihole-FTL.service.enabled"
   : >"$WORK/calls.log"
