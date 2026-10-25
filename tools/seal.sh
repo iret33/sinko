@@ -257,7 +257,8 @@ archived_journals() {
   done < <(log_dirs) | LC_ALL=C sort -u || true
 }
 
-# FTL's own answer, without quotes and blanks (a write-only secret prints ******** when it is set, and nothing when not).
+# FTL's own answer, without quotes and blanks (a write-only secret prints ******** when it is set, and nothing when not; the
+# exception is webserver.api.password, see credentials_clear).
 # Fails when FTL cannot be asked: "cannot tell" must never count as "empty".
 ftl_value() {  # key
   local out
@@ -317,9 +318,11 @@ wifi_files() {
   done
   return 0
 }
-# Files that still carry a network secret after the Wi-Fi networks are gone.
+# Files that still carry a network secret after the Wi-Fi networks are gone. A secret is an assignment at the start of a line
+# (psk=…, password: …, wpa-psk <key> in /etc/network/interfaces), not the bare word: Debian's own /etc/wpa_supplicant/functions.sh
+# (package wpasupplicant, on every box with Wi-Fi tools) has the line "psk wpa-psk" and holds no secret.
 leftover_secrets() {
-  grep -rIlsE '^[[:space:]]*(psk|wep-key[0-9]|password|leap-password)[[:space:]]*[=:]|wpa-psk|wpa_psk' \
+  grep -rIlsE '^[[:space:]]*(psk|wep-key[0-9]|password|leap-password|wpa_psk)[[:space:]]*[=:]|^[[:space:]]*wpa-psk[[:space:]]+[^[:space:]]' \
     "$R/etc/netplan" "$R/etc/NetworkManager/system-connections" "$R/etc/wpa_supplicant" "$R/etc/network/interfaces" "$R/etc/network/interfaces.d" 2>/dev/null || true
   grep -Ils "^[[:space:]]*FR_net_wifi_key=['\"]?[^'\"[:space:]]" "$R"/boot/armbian_first_run.txt* 2>/dev/null || true
 }
@@ -714,6 +717,9 @@ credentials_clear() {  # no web password, two-factor secret or application passw
   local key v
   for key in password pwhash totp_secret app_pwhash; do
     v="$(ftl_value "webserver.api.$key")" || return 1
+    # webserver.api.password is write-only and is never stored (pihole.toml has no such line; what is stored is pwhash): Pi-hole
+    # v6.8 prints its placeholder, ********, whether or not a password is set. Anything else printed there is a password.
+    if [[ "$key" == password && "$v" == '********' ]]; then continue; fi
     [[ -z "$v" ]] || return 1
   done
 }

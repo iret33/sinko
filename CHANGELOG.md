@@ -13,6 +13,12 @@ Boxes learn about a release from this repository's GitHub releases, whose notes 
   off, and a box that fails flashes SOS and keeps a report. Customers' boxes never run it. How to use it:
   `docs/factory-qa.md`.
 
+### Fixed
+- **The seal now finishes on a real Armbian box.** `tools/seal.sh`, and with it `tools/prepare-golden-master.sh`, stopped at its
+  last check on an Orange Pi Zero 3 for two things that are not secrets: Debian's own `/etc/wpa_supplicant/functions.sh`, which
+  has the word `wpa-psk` in it, and Pi-hole v6.8's write-only password setting, which prints `********` whether or not a
+  password is set. A Wi-Fi key or a password that really is left behind still stops it.
+
 ## [3.2.0] - 2026-10-23
 
 ### Added

@@ -238,6 +238,10 @@ if len(args) == 2:
     value = conf.get(args[1], "")
     if args[1] == "webserver.api.totp_secret":          # like FTL: a write-only secret prints ******** when set, nothing when not
         value = "********" if value else ""
+    if args[1] == "webserver.api.password":             # like FTL v6.8: write-only and never stored, printed masked whether or not a password is set
+        value = "********"
+        if os.path.exists(work + "/password-plaintext"):  # $WORK/password-plaintext: an FTL that prints what it stored (the file holds it)
+            value = open(work + "/password-plaintext").read().strip()
     print(value)
     # Like FTL: with -q, a true/false setting is also the exit status.
     sys.exit(1 if "-q" in sys.argv and conf.get(args[1]) == "false" else 0)
@@ -538,7 +542,7 @@ fresh_start() {
     "$WORK/py-old" "$WORK/password-in-env" "$WORK/curl.log" "$WORK/ftl-makes-cert" "$WORK/ftl-cert-fail" \
     "$WORK/ip-static" "$WORK/ftl-stop-fails" "$WORK/credential-stuck" "$WORK/sched-crashloop" "$WORK/sched-starting" "$WORK/sched-age" \
     "$WORK/run" "$WORK/setpassword-needs-stdin" "$WORK/df-free-kb" "$WORK/dpkg-configfiles" "$WORK/sshd-no-G" "$WORK/sshd-no-T-h" \
-    "$WORK/dd-io-error" "$WORK/dd-readonly" "$WORK/dd-killed" "$WORK/dd-no-end"
+    "$WORK/dd-io-error" "$WORK/dd-readonly" "$WORK/dd-killed" "$WORK/dd-no-end" "$WORK/password-plaintext"
   mkdir -p "$ROOT/etc/pihole" "$ROOT/etc/ssh" "$ROOT/var/www/html" "$ROOT/var/log" "$WORK/units"
   touch "$ROOT/etc/pihole/pihole.toml" "$WORK/units/pihole-FTL.service.active" "$WORK/units/pihole-FTL.service.enabled"
   : >"$WORK/calls.log"

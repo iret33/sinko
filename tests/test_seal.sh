@@ -88,6 +88,9 @@ make_golden() {
   printf '[connection]\nid=HomeNet\ntype=wifi\n[wifi-security]\npsk=seller-wifi-pass\n' >"$ROOT/etc/NetworkManager/system-connections/HomeNet.nmconnection"
   printf '[connection]\nid=Wired\ntype=ethernet\n' >"$ROOT/etc/NetworkManager/system-connections/Wired.nmconnection"
   printf 'ctrl_interface=/run/wpa_supplicant\nnetwork={\n  ssid="HomeNet"\n  psk="seller-wifi-pass"\n}\n' >"$ROOT/etc/wpa_supplicant/wpa_supplicant.conf"
+  # Debian's own script of the wpasupplicant package (on a box with Wi-Fi tools): no secret in it, but the word wpa-psk. The seal's
+  # last check took it for the seller's Wi-Fi key on a real Orange Pi Zero 3.
+  printf '# ifupdown glue of the Debian package wpasupplicant\nfor opt in\n\t\t\t\tpsk wpa-psk\n\t\t\t\tssid wpa-ssid\ndo :; done\n' >"$ROOT/etc/wpa_supplicant/functions.sh"
   echo "nm-secret-key" >"$ROOT/var/lib/NetworkManager/secret_key"
   mkdir -p "$ROOT/boot"
   printf "FR_net_wifi_enabled=1\nFR_net_wifi_ssid='HomeNet'\nFR_net_wifi_key='seller-wifi-pass'\n" >"$ROOT/boot/armbian_first_run.txt.off"
@@ -262,6 +265,7 @@ for wifi in etc/netplan/30-wifis-dhcp.yaml etc/NetworkManager/system-connections
   [[ ! -e "$ROOT/$wifi" ]] || fail "$wifi is still there"
 done
 [[ -f "$ROOT/boot/armbian_first_run.txt.template" ]] || fail "Armbian's empty first-start template was removed"
+[[ -f "$ROOT/etc/wpa_supplicant/functions.sh" ]] || fail "Debian's own wpa_supplicant script was removed"
 [[ -f "$ROOT/etc/netplan/10-dhcp-all-interfaces.yaml" && -f "$ROOT/etc/NetworkManager/system-connections/Wired.nmconnection" ]] || fail "the wired network setup was removed"
 grep -rq "seller-wifi-pass" "$ROOT/etc" "$ROOT/boot" && fail "the seller's Wi-Fi password is still in a file"
 echo "    zeros are written over the free space by default (deleting only frees blocks), after a sync, and again synced"
@@ -374,6 +378,20 @@ touch "$WORK/credential-stuck"
 if bash "$SEAL" --yes >"$WORK/cred.out" 2>&1; then fail "sealed although a two-factor secret / application password is still set"; fi
 grep -q "two-factor secret or an application password could not be removed" "$WORK/cred.out" || { cat "$WORK/cred.out"; fail "no message about the secrets"; }
 [[ ! -e "$ROOT/var/lib/sinko/firstboot" && -e "$ROOT/etc/ssh/ssh_host_ed25519_key" && -e "$ROOT/etc/pihole/tls.pem" ]] || fail "something was armed or deleted after the failure"
+
+echo "--- a Wi-Fi key left in a file that the plan does not know stops the seal at its last check; Debian's own wpa_supplicant scripts do not"
+make_golden
+mkdir -p "$ROOT/etc/network/interfaces.d"
+printf 'auto wlan0\niface wlan0 inet dhcp\n    wpa-ssid HomeNet\n    wpa-psk seller-wifi-pass\n' >"$ROOT/etc/network/interfaces.d/wlan0"
+if bash "$SEAL" --yes >"$WORK/leftsecret.out" 2>&1; then fail "sealed although a Wi-Fi key is still in /etc/network/interfaces.d"; fi
+grep -q "a network secret is still in a file: $ROOT/etc/network/interfaces.d/wlan0" "$WORK/leftsecret.out" || { cat "$WORK/leftsecret.out"; fail "no message about the Wi-Fi key that is still in a file"; }
+if grep -q "functions.sh" "$WORK/leftsecret.out"; then fail "Debian's own wpa_supplicant script was taken for a Wi-Fi key"; fi
+
+echo "--- Pi-hole's write-only password setting prints ******** whether or not a password is set (FTL v6.8): not a password; a password printed as stored is"
+make_golden
+echo "plaintext-web-password" >"$WORK/password-plaintext"
+if bash "$SEAL" --yes >"$WORK/pwleft.out" 2>&1; then fail "sealed although Pi-hole's password setting still shows a password"; fi
+grep -q "a Pi-hole password, two-factor secret or application password is still set" "$WORK/pwleft.out" || { cat "$WORK/pwleft.out"; fail "no message about the password that is still set"; }
 
 echo "--- a unit that is not ready to be copied is refused (dry run and real run), every reason is listed, nothing is changed"
 make_golden
