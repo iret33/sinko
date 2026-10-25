@@ -12,7 +12,7 @@ NAME=sinko
 
 # What a box needs. Not shipped: tests, docs, the site, the counter service, development tools.
 PATHS=(bin lists model web systemd install.sh uninstall.sh VERSION LICENSE NOTICE)
-for t in tools/seal.sh tools/firstboot.sh; do [[ -e "$t" ]] && PATHS+=("$t"); done
+for t in tools/seal.sh tools/firstboot.sh tools/factory-qa.sh tools/prepare-golden-master.sh; do [[ -e "$t" ]] && PATHS+=("$t"); done
 for p in "${PATHS[@]}"; do [[ -e "$p" ]] || { echo "build-release: missing $p" >&2; exit 1; }; done
 
 version="$(tr -d '[:space:]' <VERSION)"

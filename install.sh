@@ -943,14 +943,15 @@ install_files() {
   # The small AI model that learns new addresses of blocked apps (off until the parent switches it on). A source tree from
   # before it has none: the learner then says it cannot read the model and learns nothing.
   if [[ -f "$SRC/model/host-model.json" ]]; then put 644 "$SRC/model/host-model.json" "$APP_DIR/model/host-model.json"; fi
-  # The ready-made image tools. A git checkout holds other scripts too (release build, …): only these two belong on a box.
-  for name in seal.sh firstboot.sh; do
+  # The ready-made image tools. A git checkout holds other scripts too (release build, …): only these four belong on a box.
+  local image_tools=" seal.sh firstboot.sh factory-qa.sh prepare-golden-master.sh "
+  for name in $image_tools; do
     if [[ -f "$SRC/tools/$name" ]]; then put 755 "$SRC/tools/$name" "$APP_DIR/tools/$name"; fi
   done
   for f in "$APP_DIR"/tools/*.sh; do
     [[ -e "$f" ]] || continue
     name="$(basename "$f")"
-    if [[ ( "$name" != seal.sh && "$name" != firstboot.sh ) || ! -f "$SRC/tools/$name" ]]; then rm -f "$f"; fi
+    if [[ "$image_tools" != *" $name "* || ! -f "$SRC/tools/$name" ]]; then rm -f "$f"; fi
   done
   ln -sfn "$APP_DIR/bin/sinko" "$BIN_LINK.sinko-new"
   mv -T -f "$BIN_LINK.sinko-new" "$BIN_LINK"
@@ -1193,6 +1194,11 @@ install_services() {
   # Installed on every box but enabled only by tools/seal.sh, on the ready-made image (it is also guarded by a flag file).
   if [[ -f "$SRC/systemd/sinko-firstboot.service" ]]; then
     put 644 "$SRC/systemd/sinko-firstboot.service" "$UNIT_DIR/sinko-firstboot.service"
+  fi
+  # The same for the factory test: enabled only by tools/prepare-golden-master.sh on the golden unit, guarded by its own flag,
+  # and a box that passed the test deletes this file (an update brings it back, disabled and without the flag: it never runs).
+  if [[ -f "$SRC/systemd/sinko-factory-qa.service" ]]; then
+    put 644 "$SRC/systemd/sinko-factory-qa.service" "$UNIT_DIR/sinko-factory-qa.service"
   fi
   sync                          # the unit files are on disk before systemd reads them (an empty unit file is a masked unit)
   systemctl daemon-reload

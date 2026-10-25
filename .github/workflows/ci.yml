@@ -45,7 +45,7 @@ jobs:
           pip install shellcheck-py
           shopt -s nullglob
           shellcheck install.sh uninstall.sh tools/*.sh tests/*.sh site/assemble.sh
-      - name: Installer, updates source, migration, image tools (stubbed system; needs root and ports 18080-18084, 18091)
+      - name: Installer, updates source, migration, image tools, factory test (stubbed system; needs root and ports 18080-18087, 18091)
         run: sudo -E env "PATH=$PATH" bash tests/run_shell_tests.sh
 
   web:

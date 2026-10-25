@@ -15,7 +15,7 @@ DOCS = [
     "docs/maintainers/releasing.md", "SECURITY.md", "CONTRIBUTING.md", "NOTICE", "COPYING.md", "TRADEMARK.md",
     "telemetry/README.md", "site/README.md", "site/strings.js", "site/index.html", ".github/ISSUE_TEMPLATE/bug_report.yml",
     "README.md", "docs/install.md", "docs/how-it-works.md", "docs/img/README.md", "docs/maintainers/architecture.md",
-    "hardware/case/README.md", "docs/maintainers/host-model.md", "model/README.md",
+    "hardware/case/README.md", "docs/maintainers/host-model.md", "model/README.md", "docs/factory-qa.md",
 ]
 
 
@@ -589,6 +589,55 @@ class TheWatchdogAndShutDownAreDescribedAsTheSealDoesIt(unittest.TestCase):
         for needle in ("`unattended-upgrades` is not installed or not switched on", "no time service is on",
                        "pinned to a version or follows a branch", "an account other than root can log in on the console"):
             self.assertIn(needle, guide)
+
+
+class TheFactoryGuideSaysWhatTheTestDoes(unittest.TestCase):
+    """docs/factory-qa.md quotes the limits, paths and light patterns that tools/factory-qa.sh decides: a technician acts on them."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.script = read("tools/factory-qa.sh")
+        cls.guide = flat(read("docs/factory-qa.md"))
+
+    def constant(self, name):
+        m = re.search(r'^%s=(?:"\$\{SINKO_QA_\w+:-)?([0-9]+)' % name, self.script, re.M)
+        self.assertIsNotNone(m, name)
+        return m.group(1)
+
+    def test_the_limits_in_the_guide_are_the_script_s(self):
+        self.assertIn("below %s °C" % self.constant("MAX_TEMP_C"), self.guide)
+        self.assertIn("At least %s MB, and not the 1.5 GB board" % self.constant("MIN_RAM_MB"), self.guide)
+        self.assertIn("at least %s MB free on the card" % self.constant("MIN_FREE_MB"), self.guide)
+        self.assertIn("a link of at least %s Mbit/s" % self.constant("MIN_LINK_MBIT"), self.guide)
+        self.assertIn("`database.DBinterval` is %s" % self.constant("DBINTERVAL"), self.guide)
+        self.assertIn("waits up to %s seconds for Pi-hole" % self.constant("WAIT"), self.guide)
+        self.assertIn("QA_CLIENT=127.0.0.2", self.script)
+        self.assertIn("the address `127.0.0.2`", self.guide)
+
+    def test_the_paths_and_names_agree(self):
+        for needle in ("/root/FAILED_QA_REPORT.txt", "/var/lib/sinko/factory-qa", "sinko-factory-qa.service", "sinko-factory-qa-sos.service",
+                       "pb/factory-qa.txt", "/run/sinko-factory-qa", "armbian-led-state.service", "armbian-leds.conf"):
+            self.assertIn(needle, self.script)
+            self.assertIn(needle, self.guide)
+        unit = read("systemd/sinko-factory-qa.service")
+        self.assertIn("ConditionPathExists=/var/lib/sinko/factory-qa\n", unit)
+        self.assertIn("ExecStart=/opt/sinko/tools/factory-qa.sh\n", unit)
+        self.assertIn('FLAG="$STATE_DIR/factory-qa"', read("tools/prepare-golden-master.sh"))
+
+    def test_the_light_patterns_are_the_ones_described(self):
+        # 100 steps of 80 ms is the 8-second chase; then five flashes; SOS is dot dot dot, dash dash dash, dot dot dot.
+        self.assertIn("for (( s = 0; s < 100; s++ ))", self.script)
+        self.assertIn("pause 0.08", self.script)
+        self.assertIn("for (( s = 0; s < 5; s++ ))", self.script)
+        self.assertIn("for letter in ... --- ...; do", self.script)
+        self.assertIn("A fast chase for 8 seconds, then both lights flash five times", self.guide)
+        self.assertIn("S O S (· · · — — — · · ·)", self.guide)
+
+    def test_the_seal_the_guide_describes_is_the_one_the_test_runs(self):
+        self.assertIn("opts=(--yes --no-zerofill)", self.script)
+        self.assertIn("`tools/seal.sh --yes --no-zerofill --hostname <the golden unit's>`", self.guide)
+        for needle in ("prepare-golden-master.sh", "factory-qa.md"):
+            self.assertIn(needle, read("docs/product-image.md"))
 
 
 class ThePiholeVersionInAboutIsReal(unittest.TestCase):

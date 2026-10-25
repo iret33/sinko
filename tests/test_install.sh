@@ -319,9 +319,12 @@ grep -q "not allowed" "$WORK/git-http.out" || { cat "$WORK/git-http.out"; fail "
 grep -q "Starting the installer from the downloaded version" "$WORK/piped.out" || fail "the piped run did not start the downloaded installer"
 grep -q "Installing version $(cat "$REPO/VERSION") from $ROOT/opt/sinko/src" "$WORK/piped.out" || fail "the downloaded copy was not the one installed"
 grep -q "Sinko is ready" "$WORK/piped.out" || fail "the piped run did not finish"
-[[ -x "$ROOT/opt/sinko/tools/seal.sh" && -x "$ROOT/opt/sinko/tools/firstboot.sh" ]] || fail "the image tools were not installed from the developer path"
+for tool in seal.sh firstboot.sh factory-qa.sh prepare-golden-master.sh; do
+  [[ -x "$ROOT/opt/sinko/tools/$tool" ]] || fail "the image tool $tool was not installed from the developer path"
+done
 [[ ! -e "$ROOT/opt/sinko/tools/build-release.sh" ]] || fail "a development tool was installed on the box"
 [[ -f "$ROOT/etc/systemd/system/sinko-firstboot.service" && ! -e "$WORK/units/sinko-firstboot.service.enabled" ]] || fail "the first-start unit must be installed and not enabled"
+[[ -f "$ROOT/etc/systemd/system/sinko-factory-qa.service" && ! -e "$WORK/units/sinko-factory-qa.service.enabled" ]] || fail "the factory test's unit must be installed and not enabled"
 grep -q "Starting the installer from the downloaded version" "$LOG" || fail "the install log lost the start of the piped run"
 grep -q "Installing version" "$LOG" || fail "the install log lost the rest of the piped run (re-exec lost the log copy)"
 
@@ -647,7 +650,8 @@ echo "--- uninstall"
 # Things a running box has: runtime data, the first-start unit, the shortcut an earlier migration left, a start page of the user's own.
 printf '%s\n' 0123456789abcdef0123456789abcdef >"$ROOT/var/lib/sinko/install-id"
 echo '{"update": 1}' >"$ROOT/var/lib/sinko/handled.json"
-touch "$ROOT/var/lib/sinko/firstboot" "$WORK/units/sinko-firstboot.service.enabled"
+touch "$ROOT/var/lib/sinko/firstboot" "$WORK/units/sinko-firstboot.service.enabled" "$ROOT/var/lib/sinko/factory-qa" \
+      "$WORK/units/sinko-factory-qa.service.enabled"
 ln -s "$ROOT/opt/sinko/bin/sinko" "$ROOT/usr/local/bin/pihole-bahrain"
 echo "    declining the question changes nothing"
 echo n >"$WORK/answer"
@@ -663,8 +667,10 @@ grep -q 'systemctl --no-block try-reload-or-restart avahi-daemon.service' "$WORK
 [[ -d "$ROOT/etc/avahi/services" ]] || fail "avahi's own folder was removed"
 [[ ! -e "$ROOT/opt/sinko" && ! -e "$ROOT/var/www/html/pb" && ! -e "$ROOT/etc/sinko" ]] || fail "files left behind"
 [[ ! -e "$ROOT/var/lib/sinko" ]] || fail "the runtime data folder (install-id, update results, first-start flag) was left behind"
-[[ ! -e "$ROOT/etc/systemd/system/sinko-firstboot.service" && ! -e "$ROOT/etc/systemd/system/sinko.service" && ! -e "$ROOT/etc/systemd/system/sinko-lists.timer" ]] || fail "a unit file was left behind"
-[[ ! -e "$WORK/units/sinko-firstboot.service.enabled" && ! -e "$WORK/units/sinko.service.enabled" ]] || fail "a unit was left enabled"
+[[ ! -e "$ROOT/etc/systemd/system/sinko-firstboot.service" && ! -e "$ROOT/etc/systemd/system/sinko.service" && ! -e "$ROOT/etc/systemd/system/sinko-lists.timer" \
+   && ! -e "$ROOT/etc/systemd/system/sinko-factory-qa.service" ]] || fail "a unit file was left behind"
+[[ ! -e "$WORK/units/sinko-firstboot.service.enabled" && ! -e "$WORK/units/sinko.service.enabled" && ! -e "$WORK/units/sinko-factory-qa.service.enabled" ]] \
+  || fail "a unit was left enabled"
 grep -q 'systemctl disable --now sinko.service sinko-lists.timer sinko-firstboot.service' "$WORK/calls.log" || fail "the first-start unit was not disabled"
 [[ ! -e "$ROOT/usr/local/bin/pihole-bahrain" && ! -L "$ROOT/usr/local/bin/pihole-bahrain" ]] || fail "the old-command shortcut was left behind"
 grep -q 'apt-get \(remove\|purge\)' "$WORK/calls.log" && fail "uninstall removed a package (avahi-daemon and unattended-upgrades stay)"

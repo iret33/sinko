@@ -158,6 +158,7 @@ Use it together with Screen Time (iPhone) or Family Link (Android). More in the 
 | [`docs/privacy.md`](docs/privacy.md) | What is sent, where, and how to turn it off (English and Arabic) |
 | [`docs/how-it-works.md`](docs/how-it-works.md) | Pi-hole groups, the live picture, the block lists, files on the box |
 | [`docs/product-image.md`](docs/product-image.md), [`docs/selling.md`](docs/selling.md) | Making and selling ready-made boxes |
+| [`docs/factory-qa.md`](docs/factory-qa.md) | The factory test: every ready-made box tests itself, shows the result on its lights and seals itself |
 | [`docs/hardware-test-checklist.md`](docs/hardware-test-checklist.md) | What to test on a real box before a release or a sale |
 | [`hardware/case/`](hardware/case/README.md) | A case to print for the Orange Pi Zero 3 (version 1.1), with the parts list (English and Arabic) |
 | [`docs/maintainers/`](docs/maintainers) | Architecture and contracts; releasing |
@@ -168,7 +169,7 @@ Use it together with Screen Time (iPhone) or Family Link (Android). More in the 
 ```bash
 python3 -m unittest discover -s tests -p "test_*.py"    # box program, updater, lists, doctor, diagnose, copy, release build; with playwright also the real page against the real scheduler
 node --test tests/*.test.js                              # the page's logic (state, live picture, My box)
-sudo bash tests/run_shell_tests.sh                       # installer, migration, seal, first start (stubbed system)
+sudo bash tests/run_shell_tests.sh                       # installer, migration, seal, first start, factory test (stubbed system)
 python3 tests/ui_smoke.py --shots /tmp/shots             # the page in a real browser, English and Arabic (needs playwright)
 python3 tests/mock_pihole.py --web web --setup --live    # the page at http://127.0.0.1:8080, password "test", with demo traffic
 ```

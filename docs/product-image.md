@@ -2,7 +2,9 @@
 
 The method is a **golden unit**: set up one box properly, *seal* it (remove everything that must be unique or private),
 copy its card to an image file, and flash that image onto every card you ship. The first time a customer's box starts, it
-personalises itself and shows a welcome screen where the parent chooses their own password.
+personalises itself and shows a welcome screen where the parent chooses their own password. With the **factory test**, every
+card also tests itself at its first start on your bench, shows the result on the board's lights, and seals itself again and
+switches off when it passes: [`factory-qa.md`](factory-qa.md).
 
 **A ready-made box has no login**, for the customer and for you: root is locked, SSH passwords are off, and there is no key
 and no support account in the image. Everything in the customer-facing text, and everything you promise in your shop,
@@ -48,6 +50,10 @@ a computer to flash and copy cards. Read [`selling.md`](selling.md) first for th
      `/etc/systemd/system/getty@.service.d` and `serial-getty@.service.d` by hand).
 
 ## 2. Seal it
+
+**With the factory test** (for a batch), run `sudo /opt/sinko/tools/prepare-golden-master.sh` instead of the two commands
+below: it runs the test's checks on this unit first, then this same seal, then arms the test for every card made from the
+image ([`factory-qa.md`](factory-qa.md), section 2). Everything this section says about the seal holds for it.
 
 ```bash
 sudo /opt/sinko/tools/seal.sh --dry-run     # shows everything it will remove, changes nothing
@@ -143,6 +149,9 @@ switched on again for a card flashed from it (unless the seal's plan says it re-
 ## 4. Flash and check each card
 
 Flash with [balenaEtcher](https://etcher.balena.io) (it verifies what it wrote) or `xzcat image.img.xz | sudo dd of=/dev/sdX bs=4M conv=fsync`.
+With the factory test armed, start every card once at the bench, Ethernet first and then power, and wait for its lights to
+say passed and the box to switch itself off ([`factory-qa.md`](factory-qa.md), section 4): it is then sealed for its customer
+again, and the checks below start from a box like the ones you ship.
 For every unit: card in the right size class, power supply tested, case closed, a quick-start card in the box
 ([`quick-start-card.md`](quick-start-card.md)). Every tenth unit (and the first of each batch), **start it once** on a real network and check:
 

@@ -244,6 +244,17 @@ computer. Only a unit built for testing has a shell.
       flashed from the image, after its first start, `http://sinko.local/pb/box.json` shows another `boxId` (and a second
       card yet another), `hostname` is `sinko` and `avahi-browse -rt _sinko._tcp` lists it. After a power cut and after an
       update the `boxId` stays the same.
+- [ ] **The factory test** ([`factory-qa.md`](factory-qa.md)). Run `sudo /opt/sinko/tools/factory-qa.sh --leds` on a test unit:
+      the three patterns (testing, passed, SOS) are told apart from a metre away, and the lights are as before afterwards.
+      Prepare a golden unit with `prepare-golden-master.sh` (`--dry-run` first), image it, flash a card and start it with the
+      cable in: the lights beat one after the other within two minutes, then chase and flash five times, both stay on, and
+      every light goes off when the box has switched itself off. Write down how long it took. Mount the card: no
+      `/var/lib/sinko/factory-qa`, no `/etc/systemd/system/sinko-factory-qa.service`, `/var/lib/sinko/firstboot` is there, and
+      `/etc/armbian-leds.conf` is the golden unit's. Start it again: no factory test, the lights as usual, the welcome screen.
+- [ ] **A box that fails the factory test.** Flash another card and start it with no cable: SOS within two minutes, and
+      `/root/FAILED_QA_REPORT.txt` on the card names the missing link. Plug the cable in, pull the power and plug it in again:
+      it passes. Once more on a bench network without NTP, or without internet: SOS, and
+      `http://<the box's address>/pb/factory-qa.txt` names the clock or `github.com`.
 - [ ] Pull the power five times during normal use: no corruption; the box starts every time.
 - [ ] Leave it running for 72 hours with a few phones: no memory growth (`free -m`), temperature acceptable in the case,
       SD card writes modest (`cat /sys/block/mmcblk0/stat`, compare before and after).

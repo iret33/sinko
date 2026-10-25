@@ -79,9 +79,10 @@ fi
 
 # ---- 2. The services, the page and the program
 echo "==> Stopping services"
-systemctl disable --now sinko.service sinko-lists.timer sinko-firstboot.service 2>/dev/null || true
+systemctl disable --now sinko.service sinko-lists.timer sinko-firstboot.service sinko-factory-qa.service 2>/dev/null || true
 systemctl stop sinko-update.service 2>/dev/null || true       # an update that is running right now
-rm -f "$UNIT_DIR/sinko.service" "$UNIT_DIR/sinko-lists.service" "$UNIT_DIR/sinko-lists.timer" "$UNIT_DIR/sinko-firstboot.service"
+rm -f "$UNIT_DIR/sinko.service" "$UNIT_DIR/sinko-lists.service" "$UNIT_DIR/sinko-lists.timer" "$UNIT_DIR/sinko-firstboot.service" \
+      "$UNIT_DIR/sinko-factory-qa.service"
 systemctl daemon-reload 2>/dev/null || true
 
 WEBROOT="$(pihole-FTL --config -q webserver.paths.webroot 2>/dev/null || true)"
@@ -108,7 +109,8 @@ if [[ -L "$legacy_bin" && "$(readlink -f "$legacy_bin")" == "$(readlink -f "$BIN
 fi
 
 rm -rf "$APP_DIR" "$R/etc/sinko" "$R/usr/local/bin/sinko" "$R/usr/local/bin/sinko.sinko-new"
-# Runtime data: update results, rollback copies, the counter's random id, the first-start flag, the install lock.
+# Runtime data: update results, rollback copies, the counter's random id, the first-start and factory-test flags, the
+# install lock.
 if [[ -n "$STATE_DIR" && "$STATE_DIR" != "$R" && "$STATE_DIR" != / ]]; then
   rm -rf "$STATE_DIR"
 fi

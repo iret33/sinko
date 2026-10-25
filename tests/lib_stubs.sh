@@ -515,7 +515,8 @@ make_release() {
   stage="$(mktemp -d)"
   mkdir -p "$stage/sinko" "$out"
   local p
-  for p in bin lists web systemd install.sh uninstall.sh VERSION LICENSE NOTICE tools/seal.sh tools/firstboot.sh; do
+  for p in bin lists web systemd install.sh uninstall.sh VERSION LICENSE NOTICE tools/seal.sh tools/firstboot.sh tools/factory-qa.sh \
+           tools/prepare-golden-master.sh; do
     [[ -e "$from/$p" ]] || continue
     mkdir -p "$stage/sinko/$(dirname "$p")"
     cp -a "$from/$p" "$stage/sinko/$p"

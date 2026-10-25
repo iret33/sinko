@@ -25,7 +25,7 @@ Needs Python 3.9+, Node 20+, bash and, for browser tests, Playwright with Chromi
 pip install playwright && python -m playwright install chromium     # once
 python3 -m unittest discover -s tests -p "test_*.py"                # box program, lists, doctor, diagnose, copy, and (with Playwright) the real page against the real scheduler
 node --test tests/*.test.js                                          # page logic
-sudo bash tests/run_shell_tests.sh                                   # installer, migration, seal, first start, on a stubbed system
+sudo bash tests/run_shell_tests.sh                                   # installer, migration, seal, first start, factory test, on a stubbed system
 shellcheck install.sh uninstall.sh tools/*.sh tests/*.sh            # shell lint
 python3 tests/ui_smoke.py --shots /tmp/shots                         # the page in a real browser, English and Arabic
 python3 tests/mock_pihole.py --web web --setup --live               # the page at http://127.0.0.1:8080 (password "test")

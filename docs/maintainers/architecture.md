@@ -15,6 +15,7 @@ Orange Pi Zero 3.
 | `sinko` CLI + scheduler | `bin/sinko` → `/opt/sinko/bin/sinko`, symlink `/usr/local/bin/sinko` | root (systemd `sinko.service` runs `sinko run`) | Python 3 standard library only |
 | Installer | `install.sh` | root | idempotent: install, update and migrate |
 | Appliance tools | `tools/seal.sh`, `tools/firstboot.sh`, `systemd/sinko-firstboot.service` | root | prepare / personalise the ready-made image |
+| Factory test | `tools/prepare-golden-master.sh`, `tools/factory-qa.sh`, `systemd/sinko-factory-qa.service` | root | every flashed card tests itself at its first start, seals itself again and switches off when it passes ([`../factory-qa.md`](../factory-qa.md)) |
 | Release build | `tools/build-release.sh`, `.github/workflows/release.yml` | CI | produces the three release assets |
 | Counter service | `telemetry/` (Cloudflare Worker + D1) | Cloudflare | anonymous "boxes online" count, opt-in |
 | Project site | `site/` → GitHub Pages | browser | landing page with live counters |
@@ -28,7 +29,7 @@ rules).
 ## Names, paths, environment
 
 * Command `sinko`; repo `iret33/sinko` (`SINKO_REPO_SLUG`); units `sinko.service`, `sinko-lists.service`, `sinko-lists.timer`,
-  `sinko-firstboot.service`; transient unit `sinko-update`.
+  `sinko-firstboot.service`, `sinko-factory-qa.service`; transient units `sinko-update` and `sinko-factory-qa-sos`.
 * `/opt/sinko` (code; `/opt/sinko/src` is the last downloaded source), `/etc/sinko/config` (settings, shell-compatible
   `KEY=value`), `/var/lib/sinko/` (runtime data owned by root, see below), `/var/log/sinko-install.log`.
 * Legacy (pihole-bahrain ≤ 2.2.x): `/opt/pihole-bahrain`, `/etc/pihole-bahrain`, units `pihole-bahrain*.service|timer`,
@@ -61,6 +62,7 @@ rules).
 | `forget-pending` | the counter's id waiting for its "forget me" request to succeed (retried every ping interval; no pings meanwhile) |
 | `removed` | set by `sinko remove` so a running scheduler does not repair what was removed on purpose; cleared by `setup` |
 | `firstboot` | flag file: the ready-made image still has to personalise itself |
+| `factory-qa` | flag file: this card still has to pass the factory test (`hostname=`, `tailscale=`, `keep_ssh=`, `made=`, written by `prepare-golden-master.sh`); removed by a test that passed |
 
 `/run/sinko/heartbeat.json` (memory, no card wear) is written by the scheduler after each good pass; the self-check reads it.
 
@@ -69,7 +71,8 @@ rules).
 Tag `vX.Y.Z` with `VERSION` = `X.Y.Z` (CI checks). `tools/build-release.sh` builds, reproducibly:
 
 * `sinko.tar.gz`: one top-level directory `sinko/` containing `bin/ lists/ model/ web/ systemd/ tools/seal.sh tools/firstboot.sh
-  install.sh uninstall.sh VERSION LICENSE NOTICE` (no tests, docs, site, telemetry or development tools).
+  tools/factory-qa.sh tools/prepare-golden-master.sh install.sh uninstall.sh VERSION LICENSE NOTICE` (no tests, docs, site,
+  telemetry or development tools).
 * `sinko.tar.gz.sha256`: one line, `<hex>  sinko.tar.gz`.
 * `install.sh`: byte-identical to the file in the tag (the one-liner).
 
@@ -375,6 +378,20 @@ locks the default root password / password SSH logins, removes Armbian's first-l
 repairs the local name/address for the actual network (`sinko configure`), refreshes `SINKO_IP`, then deletes the flag.
 `docs/product-image.md` is the seller's procedure.
 
+**Factory test.** `prepare-golden-master.sh` runs `factory-qa.sh --check` on the golden unit (it refuses on any failure, changing
+nothing), then `seal.sh`, and only then writes the flag `/var/lib/sinko/factory-qa` and enables `sinko-factory-qa.service`
+(installed on every box like the first-start unit, `ConditionPathExists=` the flag, ordered after `sinko-firstboot.service`,
+Pi-hole and the scheduler, a oneshot with no start timeout). At a card's first start the test waits up to 60 s for Pi-hole, the
+network, the page, the scheduler and the clock, starts `sinko-firstboot.service` once more when its flag is still there (a link
+that came up after the first start's 30 s), then checks the board (`/proc`, `/sys/class/thermal`, `/sys/class/net`, the
+lights in `/sys/class/leds` found by their `leds-gpio` driver), the card, Pi-hole's database (read-only, as `sql_rows` reads it),
+DNS on port 53, a block and unblock of TikTok for a made-up client `127.0.0.2` through the API the page uses, the page and
+`box.json`, `sinko selfcheck`, the absence of a password and the finished first start; the Pi-hole part loads `bin/sinko` as a
+module and uses its `Api`. A pass runs `seal.sh --yes --no-zerofill --hostname <flag>`, deletes Tailscale's identity when it is
+installed, removes the flag, the report and the unit file, disables the unit, puts back `/etc/armbian-leds.conf`, and powers
+off. A failure writes `/root/FAILED_QA_REPORT.txt` (and a copy at `/pb/factory-qa.txt`), keeps the flag, and shows SOS from a
+transient unit (`systemd-run`) so that the test unit ends as failed.
+
 The seal refuses a unit that is not ready (it names every problem; the account check is made again before the last step so
 `--skip-checks` cannot bypass it): a service or timer not enabled, no avahi, automatic security updates not installed or not
 switched on (unless `SINKO_OS_UPDATES=0`), no time service, a unit pinned to a version or following a branch (its boxes would
@@ -392,7 +409,8 @@ sensors), systemd behaviour (`systemd-run`, reboot from the service), Armbian fi
 `_sinko._tcp`, the Orange Pi Zero 3's thermal sensor path, and a real GitHub release round trip. Also the things that depend on how slow a
 real card and board are (the 20-second self-check, the restore window, the 15-second watchdog during a restart), on the
 board's driver (Shut down and `CONFIG_WATCHDOG_NOWAYOUT`), on the real web server (the one-hour cache and the `?v=` addresses),
-and on a cut of the power at the one moment between the program's replacement and the page's swap.
+and on a cut of the power at the one moment between the program's replacement and the page's swap. The factory test's lights,
+its power-off and Armbian's light file (`armbian-led-state.service`) are tested on a fake `/sys` only: the board shows the rest.
 
 ## Amendments agreed after the first review (these override the text above where they differ)
 

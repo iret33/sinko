@@ -1,0 +1,23 @@
+[Unit]
+Description=Sinko factory test (a freshly flashed box tests itself, then seals itself and switches off)
+Documentation=https://github.com/iret33/sinko/blob/master/docs/factory-qa.md
+# Installed on every box, enabled only by tools/prepare-golden-master.sh on the golden unit, and it only runs while the flag
+# file exists: a box that passes removes the flag, disables this unit and deletes this file, so a customer's box never runs it.
+ConditionPathExists=/var/lib/sinko/factory-qa
+# What the test needs to have started: this box's own keys, name and address (the first start), Pi-hole, the scheduler, the
+# network. network.target only says the network is being configured, not that it is up; the test waits for that itself.
+After=local-fs.target remote-fs.target network.target network-online.target sinko-firstboot.service pihole-FTL.service sinko.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/sinko/tools/factory-qa.sh
+# The test waits for what it needs (60 seconds at most), and the seal after a pass rebuilds the block lists from the internet:
+# no start timeout. (None is the default for a oneshot; it is written here so that nobody adds one.)
+TimeoutStartSec=infinity
+# Also on the console (HDMI or the serial port), for a technician who has one attached.
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=multi-user.target

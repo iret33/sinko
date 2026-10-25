@@ -61,9 +61,10 @@ class ReleaseBuild(unittest.TestCase):
     def test_what_the_documents_send_a_seller_to_look_for_is_inside(self):
         # docs/selling.md and docs/product-image.md name these paths on the box: they only exist there if the release carries them.
         for need in ("tools/seal.sh", "tools/firstboot.sh", "systemd/sinko-firstboot.service", "systemd/sinko-lists.service",
+                     "tools/factory-qa.sh", "tools/prepare-golden-master.sh", "systemd/sinko-factory-qa.service",
                      "lists/LICENSE", "web/fonts/OFL.txt", "web/fonts/plex-arabic-arabic-400.woff2"):
             self.assertIn("sinko/" + need, self.members)
-        for name in ("tools/seal.sh", "tools/firstboot.sh"):
+        for name in ("tools/seal.sh", "tools/firstboot.sh", "tools/factory-qa.sh", "tools/prepare-golden-master.sh"):
             self.assertTrue(self.members["sinko/" + name].mode & 0o111, name)
 
     def test_the_start_page_carries_the_stamp_the_installer_fills_in(self):

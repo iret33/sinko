@@ -98,8 +98,10 @@ grep -q "raw.githubusercontent.com/iret33/sinko/master/lists" "$ROOT/etc/sinko/c
 [[ "$(stat -c %a "$ROOT/var/lib/sinko/cache/sinko-$VERSION_NOW.tar.gz")" == 600 ]] || fail "the verified tarball was not kept for rollback (0600)"
 cmp -s "$ROOT/var/lib/sinko/cache/sinko-$VERSION_NOW.tar.gz" "$SERVE/releases/latest/download/sinko.tar.gz" || fail "the cached tarball is not the download"
 ls "$ROOT"/opt/sinko/.download.* >/dev/null 2>&1 && fail "the temporary download folder was left behind"
-[[ -x "$ROOT/opt/sinko/tools/seal.sh" && -x "$ROOT/opt/sinko/tools/firstboot.sh" ]] || fail "the image tools are not in /opt/sinko/tools"
-[[ "$(find "$ROOT/opt/sinko/tools" -type f | wc -l)" == 2 ]] || fail "something other than seal.sh and firstboot.sh is in /opt/sinko/tools"
+for tool in seal.sh firstboot.sh factory-qa.sh prepare-golden-master.sh; do
+  [[ -x "$ROOT/opt/sinko/tools/$tool" ]] || fail "the image tool $tool is not in /opt/sinko/tools"
+done
+[[ "$(find "$ROOT/opt/sinko/tools" -type f | wc -l)" == 4 ]] || fail "something other than the four image tools is in /opt/sinko/tools"
 [[ -f "$ROOT/etc/systemd/system/sinko-firstboot.service" && ! -e "$WORK/units/sinko-firstboot.service.enabled" ]] || fail "the first-start unit must be installed, not enabled"
 
 echo "--- a password given to the one-liner survives the start of the downloaded installer, and is in no program's environment"

@@ -94,4 +94,17 @@ if command -v systemd-analyze >/dev/null; then
 else
   echo "    (systemd-analyze is not installed: ordering not verified)"
 fi
+echo "--- sinko-factory-qa.service: only while its flag exists, after the first start, Pi-hole and the scheduler, and never cut short"
+qa="$UNITS/sinko-factory-qa.service"
+grep -q '^ConditionPathExists=/var/lib/sinko/factory-qa$' "$qa" || fail "the factory test is not guarded by its flag file (it would run on a customer's box)"
+grep -q '^Type=oneshot$' "$qa" || fail "the factory test is not a oneshot"
+grep -q '^ExecStart=/opt/sinko/tools/factory-qa.sh$' "$qa" || fail "the unit does not run tools/factory-qa.sh"
+for after in sinko-firstboot.service pihole-FTL.service sinko.service network-online.target network.target local-fs.target remote-fs.target; do
+  grep -E '^After=' "$qa" | grep -qw -- "$after" || fail "the factory test could start before $after"
+done
+grep -q '^Wants=network-online.target$' "$qa" || fail "the factory test does not pull in network-online.target (After= alone waits for nothing)"
+grep -q '^TimeoutStartSec=infinity$' "$qa" || fail "a start timeout could kill the seal at the end of the test"
+grep -q '^WantedBy=multi-user.target$' "$qa" || fail "the factory test cannot be enabled"
+grep -qE '^(Restart|RemainAfterExit)=' "$qa" && fail "a restart policy would test (and seal) again and again"
+grep -E '^Before=' "$qa" | grep -q 'sinko-firstboot' && fail "the factory test must come after the first start, not before it"
 echo "units tests passed"

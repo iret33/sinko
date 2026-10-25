@@ -3,6 +3,16 @@
 All notable changes to Sinko. Versions follow [Semantic Versioning](https://semver.org); the newest release is at the top.
 Boxes learn about a release from this repository's GitHub releases, whose notes are the section of this file.
 
+## [3.3.0] - Unreleased
+
+### Added
+- **For sellers of ready-made boxes: a factory test.** `tools/prepare-golden-master.sh` tests the golden unit, seals it and
+  arms the test. Every card flashed from its image then tests itself the first time it starts: the board (SoC, cores,
+  temperature, memory, the card, the network port, the clock), Pi-hole, a real block and unblock of TikTok, the page and the
+  box program. The board's lights show the result: a box that passes seals itself again for its customer and switches itself
+  off, and a box that fails flashes SOS and keeps a report. Customers' boxes never run it. How to use it:
+  `docs/factory-qa.md`.
+
 ## [3.2.0] - 2026-10-23
 
 ### Added
