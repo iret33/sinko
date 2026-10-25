@@ -155,8 +155,9 @@ EOF
 python3 "$WORK/dns.py" "$DNSPORT" "http://127.0.0.1:$PORT" "$WORK" "$REPO/lists" >"$WORK/dns.log" 2>&1 &
 DNS_PID=$!
 qa_cleanup() {
+  local rc=$?                                        # the status the test ends with: the kill below must not turn a failure into 0
   kill "$DNS_PID" 2>/dev/null || true
-  fake_system_cleanup
+  fake_system_cleanup "$rc"
 }
 trap qa_cleanup EXIT
 

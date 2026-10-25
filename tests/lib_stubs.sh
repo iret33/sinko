@@ -37,7 +37,7 @@ fake_system_init() {
 }
 
 fake_system_cleanup() {
-  local rc=$?
+  local rc=${1:-$?}                                  # a test with a cleanup of its own passes the status it was ending with
   [[ -n "${MOCK_PID:-}" ]] && kill "$MOCK_PID" 2>/dev/null
   [[ -n "${HTTP_PID:-}" ]] && kill "$HTTP_PID" 2>/dev/null
   if [[ -n "${GUARD_BEFORE:-}" && "$(guard_state)" != "$GUARD_BEFORE" ]]; then
