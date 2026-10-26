@@ -592,7 +592,7 @@ def part_stale(browser):
     ctx, page = open_page(browser, url, "en")
     page.evaluate("() => { window.__before = 1; PBBox.timing.staleEvery = 0; }")
     installed_behind_the_pages_back(store)
-    page.evaluate("() => document.getElementById('bedOn').dispatchEvent(new Event('change', { bubbles: true }))")        # a bedtime is being edited
+    page.evaluate("() => document.getElementById('bedStart').dispatchEvent(new Event('change', { bubbles: true }))")     # a bedtime is being edited (the switch saves at once)
     page.evaluate("() => document.dispatchEvent(new Event('visibilitychange'))")
     time.sleep(1.5)
     expect(not reloaded(page), "a bedtime that is being typed is not thrown away by a reload")
@@ -1737,7 +1737,8 @@ def contrast(page, roots, label, minimum=3):
 
 def part_contrast(browser):
     """Every component that was added or changed for My box, the first run and the update banner, measured in light and dark, in both languages."""
-    main_roots = ["#updateBanner", "#setup", "#banner", "#devices", "#services", ".help", ".foot"]
+    # the control panel and the savings card have flat backgrounds since 3.3, so every word on them can be measured too
+    main_roots = ["#hero", "#saved", "#updateBanner", "#setup", "#banner", "#devices", "#services", ".help", ".foot"]
     for scheme in ("light", "dark"):
         for lang in ("en", "ar"):
             tag = "[%s %s]" % (scheme, lang)
@@ -1746,13 +1747,18 @@ def part_contrast(browser):
             offer_update(store)
             store.box_info_age = 25 * 60
             ctx, page = open_page(browser, url, lang, color_scheme=scheme)
-            page.click("[data-id=youtube]")
+            page.click("[data-id=youtube] [data-want=block]")
             page.wait_for_selector("[data-id=youtube].tile-blocked")
             page.click("[data-act=pause]")
             page.wait_for_selector(".device .tag")
             page.evaluate("() => { PBBox.timing.heartbeatGrace = 1; }")
             eventually(lambda: (page.evaluate("() => document.dispatchEvent(new Event('visibilitychange'))"), page.is_visible("#banner"))[1], 8)
-            contrast(page, main_roots, tag + " main page (update banner, setup list, banner, blocked app, paused tag)", 12)
+            contrast(page, main_roots, tag + " main page (control panel, savings card, update banner, setup list, banner, blocked app, paused tag)", 12)
+            page.click("#heroBtn")                                  # the dark panel: internet off
+            page.wait_for_selector("#hero.is-off")
+            contrast(page, ["#hero"], tag + " the control panel with the internet off", 3)
+            page.click("#heroBtn")
+            page.wait_for_selector("#hero:not(.is-off)")
             shot(page, "contrast-main-%s-%s.png" % (scheme, lang), full=True)
             store.edit_state(lambda st: st["update"].update({"status": "failed", "to": "3.3.0", "latest": "3.3.0", "at": int(time.time()), "error": "x", "rolledBack": False}))
             page.evaluate("() => document.dispatchEvent(new Event('visibilitychange'))")

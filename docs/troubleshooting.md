@@ -17,7 +17,7 @@ Own install, in this order:
    "answered normally", no child rule matches that address.
 
 Ready-made box: no commands, but the same checks by eye. In the page, is the device added, and does the live picture
-show it asking when you open the app (turn Wi-Fi off and on on the child's device first)? In the router, is the DNS server
+(**See it live**) show it asking when you open the app (turn Wi-Fi off and on on the child's device first)? In the router, is the DNS server
 the box's address (and only that)? If the device never shows up, the cause is below, under "DNS never reaches the box".
 
 The usual causes:

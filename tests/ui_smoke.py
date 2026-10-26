@@ -51,7 +51,8 @@ def expect(cond, msg):
 
 
 def pressed(page, sid):
-    return page.get_attribute("[data-id=%s]" % sid, "aria-pressed") == "true"
+    """The app's row says Block (its "Block" key is the pressed one of the two)."""
+    return page.get_attribute("[data-id=%s] [data-want=block]" % sid, "aria-pressed") == "true"
 
 
 def settle(page):
@@ -95,8 +96,12 @@ with sync_playwright() as p:
     expect({k: agreed.get(k) for k in ("terms", "learn", "telemetry")} == {"terms": {"agreed": 1}, "learn": {"on": True}, "telemetry": {"on": True}},
            "agreeing records the terms and both choices: %r" % {k: agreed.get(k) for k in ("terms", "learn", "telemetry")})
     page.wait_for_selector(".tile")
-    expect(page.inner_text("#heroTitle") == "Children are online", "hero shows online state")
-    expect(page.locator(".tile").count() == 19, "19 service tiles")
+    expect(page.inner_text("#heroTitle") == "Children\u2019s internet is on", "the control panel says the children's internet is on")
+    expect(page.locator(".tile").count() == 19, "19 app rows")
+    expect(page.locator(".tile [data-want=allow][aria-pressed=true]").count() == 19, "every app starts allowed, said by its Allow key")
+    expect(page.is_hidden("#heroFor"), "no device yet: no 'off for a while' keys")
+    expect("not shared its numbers yet" in page.inner_text("#savedBody"), "the savings card says the box has not counted yet (no ledger)")
+    expect(page.is_hidden("#liveView") and page.locator("#live").count() == 1, "the live picture waits behind its own button")
     expect(page.inner_text("#heroBtn") == "Add device", "first run: hero asks to add a device")
     shot(page, "02-home.png", full=True)
 
@@ -118,9 +123,10 @@ with sync_playwright() as p:
     expect("Sara's iPad" in page.inner_text("#devices"), "device added from picker")
 
     restarts = store.dns_restarts
-    page.click("[data-id=youtube]")
+    page.click("[data-id=youtube] [data-want=block]")
     settle(page)
-    expect(pressed(page, "youtube"), "YouTube blocked by tap")
+    expect(pressed(page, "youtube"), "YouTube blocked with its Block key")
+    expect("tile-blocked" in (page.get_attribute("[data-id=youtube]", "class") or ""), "and its row is marked blocked")
     expect(store.dns_restarts == restarts + 1, "a rule change clears the box's DNS cache so it applies at once (%d -> %d)" % (restarts, store.dns_restarts))
 
     page.click("[data-act=homework]")
@@ -134,21 +140,60 @@ with sync_playwright() as p:
     settle(page)
     expect(page.inner_text("#heroKicker") == "Free time", "free-time timer running")
     expect(not pressed(page, "tiktok"), "free time allows TikTok")
-    expect(page.is_disabled("[data-id=tiktok]"), "tiles locked while timer runs")
+    expect(page.is_disabled("[data-id=tiktok] [data-want=allow]") and page.is_disabled("[data-id=tiktok] [data-want=block]"),
+           "apps are locked while a timer runs")
     clock = page.inner_text("#heroClock")
     expect(clock.startswith("59:") or clock.startswith("1:00:"), "countdown shows ~1 hour (%s)" % clock)
     shot(page, "05-timer.png", full=True)
 
     page.click("#heroBtn")
     settle(page)
-    expect(page.inner_text("#heroTitle") == "Children are online", "timer ended")
+    expect(page.inner_text("#heroTitle") == "Children\u2019s internet is on", "timer ended")
     expect(pressed(page, "tiktok") and pressed(page, "youtube") and not pressed(page, "whatsapp"),
            "rules from before the timer restored")
 
     page.click("#heroBtn")
     settle(page)
     expect(page.inner_text("#heroTitle") == "Children\u2019s internet is off", "internet off")
+    expect("is-off" in page.get_attribute("#hero", "class") and page.inner_text("#heroBtn") == "Turn it back on",
+           "the whole panel goes dark and its key says how to undo it")
+    expect(page.is_hidden("#heroFor"), "no 'off for a while' keys while it is already off")
     shot(page, "06-off.png")
+    page.click("#heroBtn")
+    settle(page)
+    expect(page.inner_text("#heroTitle") == "Children\u2019s internet is on", "and back on")
+
+    # --- the 'off for a while' keys: an offline break of a set length, or until the morning (the end of bedtime, else 07:00 on the box)
+    expect("key-off" in page.get_attribute("#heroBtn", "class") and page.is_visible("#off30"), "the big key is the orange one, with the keys for a while")
+    page.click("#off30")
+    settle(page)
+    tm = store.state()["timer"]
+    expect(tm and tm["mode"] == "block" and abs(tm["until"] - (time.time() + 1800)) < 30, "Off for 30 min starts a 30-minute break (%r)" % tm)
+    expect(page.inner_text("#heroKicker") == "Offline break" and page.inner_text("#heroTitle") == "Children\u2019s internet is off",
+           "the panel says it is off, for a break")
+    expect("Back on at" in page.inner_text("#heroSub"), "and when it comes back")
+    page.click("#heroBtn")
+    settle(page)
+    expect(store.state()["timer"] is None and page.inner_text("#heroTitle") == "Children\u2019s internet is on", "Turn it back on ends the break")
+    # The third key: in the evening and at night "Off until <morning>" (the end of bedtime, else 07:00 on the box's clock); in the
+    # daytime, when the morning is more than 15 hours away, "Off for 2 hours" instead.
+    label = page.inner_text("#offMorning")
+    third = page.get_attribute("#offMorning", "data-act")
+    page.click("#offMorning")
+    settle(page)
+    tm = store.state()["timer"]
+    sched = store.state()["schedule"]
+    morning = sched["end"] if sched.get("enabled") and sched.get("days") else "07:00"
+    off = store.box_info["utcOffset"]                            # the box's zone (box.json), which is not this machine's
+    off_s = (1 if off[0] == "+" else -1) * (int(off[1:3]) * 3600 + int(off[4:6]) * 60)
+    if third == "offMorning":
+        expect(tm and tm["mode"] == "block" and time.strftime("%H:%M", time.gmtime(tm["until"] + off_s)) == morning and 60 < tm["until"] - time.time() <= 15 * 3600 + 60,
+               "Off until morning ends at %s on the box's clock (%s, %r)" % (morning, label, tm and time.ctime(tm["until"])))
+    else:
+        expect(label == "Off for 2 hours" and tm and tm["mode"] == "block" and abs(tm["until"] - (time.time() + 7200)) < 30,
+               "in the daytime the third key is a two-hour break (%s, %r)" % (label, tm))
+    expect(page.evaluate("() => document.activeElement && document.activeElement.id") == "heroBtn",
+           "the pressed key is gone while it is off: focus moves to the big key, not to the page")
     page.click("#heroBtn")
     settle(page)
 
@@ -179,6 +224,10 @@ with sync_playwright() as p:
     seeded["setup"] = {"done": True}
     state_group["comment"] = json.dumps(seeded)
     page.check("#bedOn")
+    settle(page)
+    expect(store.state()["schedule"]["enabled"], "the bedtime switch takes effect at once")
+    expect("every night" in page.inner_text("#bedSentence"), "and the sentence says when: %r" % page.inner_text("#bedSentence"))
+    page.click("#bedEdit summary")
     page.fill("#bedStart", "21:30")
     page.click("[data-act=saveBed]")
     settle(page)
@@ -190,10 +239,60 @@ with sync_playwright() as p:
     page.wait_for_selector(".tile")
     expect(page.input_value("#bedStart") == "21:30" and page.is_checked("#bedOn"), "bedtime saved and session kept")
 
+    # --- What Sinko did for you: the box's ledger (the disabled group pb-ledger, which only the box writes), worded for a parent
+    day = lambda back: time.strftime("%Y-%m-%d", time.gmtime(time.time() + off_s - back * 86400))
+    week = [13102, 14880, 12450, 16920, 15230, 11622, 14208]
+    ledger = {"v": 1, "at": int(time.time()) - 300, "today": day(0), "since": day(200), "keptSince": day(200), "adLists": 1,
+              "days": [{"d": day(6 - i), "ads": n, "apps": {"tiktok": 60 + i, "roblox": 30}, "offSec": 32400, "kept": 1 if i < 6 else None}
+                       for i, n in enumerate(week)],
+              "tot": {"ads": 3100000, "apps": {"tiktok": 12840, "roblox": 9115}, "offSec": 6854400, "nights": 199, "nightsKept": 190}}
+    store.groups.append({"id": next(store.ids), "name": "pb-ledger", "comment": json.dumps(ledger), "enabled": False})
+    page.evaluate("() => { try { localStorage.removeItem('pb.period'); localStorage.removeItem('pb.price'); } catch (e) {} }")
+    page.reload()
+    page.wait_for_selector(".tile")
+    saved = page.inner_text("#savedBody")
+    expect("98,412" in saved and "Less waiting for ads" in saved and "1 hr 22 min" in saved,
+           "this week: ads stopped, and about 50 ms of waiting for each (%r)" % saved[:160])
+    expect("1 GB" in saved and "TikTok tried to open" in saved and "6 of 6 nights" in saved, "data saved, app tries and bedtime nights")
+    expect(page.locator("#savedBody .bar").count() == 7 and page.locator("#savedBody .bar.is-today").count() == 1, "seven bars, today's marked")
+    page.click("[data-period=today]")
+    expect("14,208" in page.inner_text("#savedBody"), "Today shows today's row")
+    page.click("[data-period=since]")
+    expect("3,100,000" in page.inner_text("#savedBody") and "190 of 199 nights" in page.inner_text("#savedBody"), "Since shows the running totals")
+    page.reload()
+    page.wait_for_selector(".tile")
+    expect(page.get_attribute("[data-period=since]", "aria-pressed") == "true", "the chosen period is remembered on this phone")
+    expect("at your price" not in page.inner_text("#savedBody"), "no money without a price the parent typed")
+    page.click("#priceBtn")
+    page.locator("#priceDialog[open]").wait_for()
+    page.fill("#priceValue", "0")
+    page.click("[data-act=priceSave]")
+    expect("above 0" in page.inner_text("#priceErr"), "a price of 0 is refused")
+    page.fill("#priceValue", "0.5")
+    page.fill("#priceCurrency", "BHD")
+    page.press("#priceValue", "Enter")
+    page.locator("#priceDialog[open]").wait_for(state="detached")
+    page.click("[data-period=week]")
+    money = page.inner_text("#savedBody")
+    expect("\u20660.492 BHD\u2069 at your price" in money, "with a price, the data saved is also said in money, kept in one piece for Arabic: %r" % money[:200])
+    shot(page, "05b-saved.png")
+    store.groups[:] = [g for g in store.groups if g["name"] != "pb-ledger"]
+
+    # --- the live picture lives behind "See it live", over the page, and Escape (or Back) brings the page back
+    page.click("#liveOpen")
+    page.locator("#liveView:not([hidden])").wait_for()
+    expect(page.is_visible("#live #stage"), "the live picture opens with its drawing")
+    expect(page.evaluate("() => document.activeElement && document.activeElement.id") == "liveViewTitle", "focus moves to its title")
+    expect(page.evaluate("() => document.getElementById('cols').inert === true"), "the page behind it cannot be reached meanwhile")
+    page.keyboard.press("Escape")
+    page.locator("#liveView[hidden]").wait_for(state="attached")
+    expect(page.evaluate("() => document.activeElement && document.activeElement.id") == "liveOpen", "closing returns focus to the button that opened it")
+
     page.click(".topbar [data-act=lang]")
     expect(page.get_attribute("html", "dir") == "rtl", "Arabic switches to right-to-left")
-    expect(page.inner_text("#heroTitle") == "الأطفال متصلون بالإنترنت", "Arabic hero text")
+    expect(page.inner_text("#heroTitle") == "إنترنت الأطفال يعمل", "Arabic hero text")
     shot(page, "07-arabic.png", full=True)
+    page.click("#bedEdit summary")
     page.click("#bedDays label >> nth=0")
     page.click(".topbar [data-act=lang]")
 

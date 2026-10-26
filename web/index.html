@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#0F766E">
+<meta name="theme-color" content="#E9E7E1" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#161614" media="(prefers-color-scheme: dark)">
 <meta name="robots" content="noindex">
 <meta name="generator" content="sinko">
 <!-- The installer (install.sh) replaces the version placeholder, here and in the six addresses below, with the release's version. Pi-hole's
@@ -49,6 +50,8 @@
   <symbol id="i-up" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 16.5v-8.6M8.2 11.6 12 7.9l3.8 3.7" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-external" viewBox="0 0 24 24"><path d="M13.5 5H19v5.5M19 5l-8 8M17 14.5V18a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="10" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="m9.5 6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5.5M11 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
 </svg>
 
 <main id="login" class="login" hidden>
@@ -144,24 +147,48 @@
     </div>
   </header>
 
-  <div class="cols">
+  <div class="cols" id="cols">
   <div class="col-main">
-  <section class="hero" id="hero" aria-live="polite">
-    <p class="hero-kicker" id="heroKicker"></p>
-    <h1 class="hero-title" id="heroTitle"></h1>
-    <p class="hero-clock" id="heroClock" hidden></p>
-    <p class="hero-sub" id="heroSub"></p>
-    <div class="hero-actions">
-      <button type="button" class="btn btn-hero" id="heroBtn" data-act="hero"></button>
+  <!-- The control panel: the one thing the page is for. The state is a sentence, the big key does the opposite. Timers and
+       bedtime say when they end. See renderHero in app.js. -->
+  <section class="ctl" id="hero" aria-labelledby="heroTitle">
+    <p class="ctl-kicker"><span class="ctl-dot" aria-hidden="true"></span><span id="heroKicker"></span></p>
+    <div class="ctl-state" aria-live="polite">
+      <h1 class="ctl-title" id="heroTitle"></h1>
+      <p class="ctl-sub" id="heroSub"></p>
+    </div>
+    <p class="ctl-clock" id="heroClock" role="timer" aria-live="off" hidden></p>
+    <div class="ctl-keys">
+      <button type="button" class="key key-big" id="heroBtn" data-act="hero"></button>
+      <div class="ctl-for" id="heroFor">
+        <button type="button" class="key" data-act="offFor" data-minutes="30" id="off30"></button>
+        <button type="button" class="key" data-act="offFor" data-minutes="60" id="off60"></button>
+        <button type="button" class="key" data-act="offMorning" id="offMorning"></button>
+        <button type="button" class="link ctl-other" data-act="timer" data-mode="block" data-i18n="offOther">Another length</button>
+      </div>
     </div>
   </section>
 
   <p class="banner" id="banner" role="status" hidden></p>
   <button type="button" class="update-banner" id="updateBanner" data-act="box" hidden></button>
 
+  <section class="block modes-block" aria-labelledby="modesTitle">
+    <h2 id="modesTitle" class="sr-only" data-i18n="modes">Quick modes</h2>
+    <div class="modes">
+      <button type="button" class="mode key" data-act="homework">
+        <span class="mode-name" data-i18n="homework">Homework</span>
+        <span class="mode-desc" data-i18n="homeworkDesc">Games, video and social media blocked</span>
+      </button>
+      <button type="button" class="mode key" data-act="timer" data-mode="free">
+        <span class="mode-name" data-i18n="freeTime">Free time</span>
+        <span class="mode-desc" data-i18n="freeTimeDesc">Everything allowed for a while</span>
+      </button>
+    </div>
+  </section>
+
   <!-- The setup list: shown until it is dismissed or every step is done (see renderSetup in app.js). -->
   <section class="block setup" id="setup" aria-labelledby="setupTitle" hidden>
-    <div class="setup-card">
+    <div class="setup-card panel">
       <div class="setup-head">
         <h2 id="setupTitle" data-i18n="setupTitle">Get started</h2>
         <p class="setup-progress" id="setupProgress"></p>
@@ -171,7 +198,102 @@
     </div>
   </section>
 
-  <!-- The live picture: how the home's requests flow through the family box. Built and animated by pb-picture.js. -->
+  <!-- What Sinko did for you: the box's own daily ledger (the pb-ledger group, see renderSaved in app.js and
+       docs/maintainers/architecture.md). -->
+  <section class="block panel saved" id="saved" aria-labelledby="savedTitle">
+    <div class="block-head">
+      <h2 id="savedTitle" data-i18n="savedTitle">What Sinko did for you</h2>
+      <span class="saved-at" id="savedAt"></span>
+    </div>
+    <div class="seg seg-wide" role="group" aria-labelledby="savedTitle" id="savedPeriods">
+      <button type="button" data-act="period" data-period="today" aria-pressed="false" data-i18n="periodToday">Today</button>
+      <button type="button" data-act="period" data-period="week" aria-pressed="true" data-i18n="periodWeek">This week</button>
+      <button type="button" data-act="period" data-period="since" aria-pressed="false" id="periodSince"></button>
+    </div>
+    <div class="saved-body" id="savedBody"></div>
+    <details class="saved-how" id="savedHow">
+      <summary data-i18n="savedHowTitle">How we count</summary>
+      <ul class="saved-how-list" id="savedHowList"></ul>
+    </details>
+    <div class="saved-foot">
+      <button type="button" class="link" data-act="price" id="priceBtn"></button>
+      <button type="button" class="link" data-act="liveOpen" id="liveOpen"><span data-i18n="liveOpen">See it live</span><svg class="flip" aria-hidden="true"><use href="#i-next"/></svg></button>
+    </div>
+  </section>
+  </div>
+
+  <div class="col-side">
+  <section class="block panel apps" aria-labelledby="svcTitle">
+    <div class="block-head">
+      <h2 id="svcTitle" data-i18n="apps">Apps and sites</h2>
+      <div class="block-head-actions">
+        <button type="button" class="link" data-act="allowAll" data-i18n="allowAll">Allow all</button>
+        <button type="button" class="link" data-act="blockAll" data-i18n="blockAll">Block all</button>
+      </div>
+    </div>
+    <p class="muted small" id="svcNote" data-i18n="svcNote">Choose Allow or Block for each app. Apps that are already open can take a few minutes to stop.</p>
+    <div id="services"></div>
+  </section>
+
+  <div class="col-more">
+  <section class="block panel" aria-labelledby="devTitle">
+    <div class="block-head">
+      <h2 id="devTitle" data-i18n="devices">Children's devices</h2>
+      <button type="button" class="link" data-act="openAdd"><svg aria-hidden="true"><use href="#i-plus"/></svg><span data-i18n="addDevice">Add device</span></button>
+    </div>
+    <ul class="devices" id="devices"></ul>
+  </section>
+
+  <section class="block panel bed" aria-labelledby="bedTitle">
+    <div class="block-head">
+      <h2 id="bedTitle" data-i18n="bedtime">Bedtime</h2>
+      <label class="switch">
+        <input type="checkbox" id="bedOn">
+        <span class="switch-ui" aria-hidden="true"></span>
+        <span class="sr-only" data-i18n="bedtimeOn">Turn on bedtime</span>
+      </label>
+    </div>
+    <p class="bed-sentence" id="bedSentence"></p>
+    <details class="bed-edit" id="bedEdit">
+      <summary data-i18n="bedChange">Change times and nights</summary>
+      <div id="bedFields" class="bed-fields">
+      <div class="bed-grid">
+        <label class="field"><span data-i18n="from">Off at</span><input type="time" id="bedStart" required></label>
+        <label class="field"><span data-i18n="until">On at</span><input type="time" id="bedEnd" required></label>
+      </div>
+      <fieldset class="days" id="bedDays">
+        <legend class="small muted" data-i18n="nights">Nights</legend>
+      </fieldset>
+      </div>
+      <button type="button" class="btn btn-primary" data-act="saveBed" data-i18n="saveBedtime">Save bedtime</button>
+    </details>
+  </section>
+
+  <details class="help" id="help">
+    <summary data-i18n="helpTitle">Setup help</summary>
+    <p id="helpBody"></p>
+  </details>
+
+  <footer class="foot">
+    <span class="foot-links">
+      <button type="button" class="link" data-act="liveOpen" data-i18n="liveOpen">See it live</button>
+      <button type="button" class="link" data-act="box" data-i18n="boxButton">My box</button>
+      <a href="/admin/" data-i18n="advanced">Advanced settings</a>
+    </span>
+    <span id="version" dir="ltr"></span>
+  </footer>
+  </div>
+  </div>
+  </div>
+
+  <!-- The live picture: how the home's requests flow through the family box. It lives behind "See it live" so the main page
+       stays calm; a plain full-screen layer, not a <dialog>, so the picture keeps running while it is open (pb-picture.js
+       pauses for any open dialog). Built and animated by pb-picture.js once it is first opened. -->
+  <div class="live-view" id="liveView" hidden>
+    <div class="live-view-bar">
+      <button type="button" class="key key-small" data-act="liveClose" id="liveBack"><svg class="flip" aria-hidden="true"><use href="#i-back"/></svg><span data-i18n="back">Back</span></button>
+      <h2 class="live-view-title" id="liveViewTitle" tabindex="-1" data-i18n="liveViewTitle">Live picture</h2>
+    </div>
   <section class="block live" id="live" aria-labelledby="liveTitle" hidden>
     <div class="live-card">
       <div class="live-head">
@@ -238,86 +360,6 @@
       </div>
     </div>
   </section>
-
-  </div>
-
-  <div class="col-side">
-  <section class="block" aria-labelledby="modesTitle">
-    <h2 id="modesTitle" data-i18n="modes">Quick modes</h2>
-    <div class="modes">
-      <button type="button" class="mode" data-act="homework">
-        <svg><use href="#i-book"/></svg>
-        <span class="mode-name" data-i18n="homework">Homework</span>
-        <span class="mode-desc" data-i18n="homeworkDesc">Games, video and social media blocked</span>
-      </button>
-      <button type="button" class="mode" data-act="timer" data-mode="free">
-        <svg><use href="#i-play"/></svg>
-        <span class="mode-name" data-i18n="freeTime">Free time</span>
-        <span class="mode-desc" data-i18n="freeTimeDesc">Everything allowed for a while</span>
-      </button>
-      <button type="button" class="mode" data-act="timer" data-mode="block">
-        <svg><use href="#i-stop"/></svg>
-        <span class="mode-name" data-i18n="breakTime">Offline break</span>
-        <span class="mode-desc" data-i18n="breakTimeDesc">Internet off for a while</span>
-      </button>
-    </div>
-  </section>
-
-  <section class="block" aria-labelledby="svcTitle">
-    <div class="block-head">
-      <h2 id="svcTitle" data-i18n="apps">Apps and sites</h2>
-      <div class="block-head-actions">
-        <button type="button" class="link" data-act="allowAll" data-i18n="allowAll">Allow all</button>
-        <button type="button" class="link" data-act="blockAll" data-i18n="blockAll">Block all</button>
-      </div>
-    </div>
-    <p class="muted small" id="svcNote" data-i18n="svcNote">Tap to block or allow. Apps that are already open can take a few minutes to stop.</p>
-    <div id="services"></div>
-  </section>
-
-  <section class="block" aria-labelledby="devTitle">
-    <div class="block-head">
-      <h2 id="devTitle" data-i18n="devices">Children's devices</h2>
-      <button type="button" class="btn btn-small" data-act="openAdd"><svg><use href="#i-plus"/></svg><span data-i18n="addDevice">Add device</span></button>
-    </div>
-    <ul class="devices" id="devices"></ul>
-  </section>
-
-  <section class="block" aria-labelledby="bedTitle">
-    <div class="block-head">
-      <h2 id="bedTitle" data-i18n="bedtime">Bedtime</h2>
-      <label class="switch">
-        <input type="checkbox" id="bedOn">
-        <span class="switch-ui" aria-hidden="true"></span>
-        <span class="sr-only" data-i18n="bedtimeOn">Turn on bedtime</span>
-      </label>
-    </div>
-    <p class="muted small" data-i18n="bedtimeDesc">Internet turns off for children's devices on these nights, and back on in the morning.</p>
-    <div id="bedFields" class="bed-fields">
-    <div class="bed-grid">
-      <label class="field"><span data-i18n="from">Off at</span><input type="time" id="bedStart" required></label>
-      <label class="field"><span data-i18n="until">On at</span><input type="time" id="bedEnd" required></label>
-    </div>
-    <fieldset class="days" id="bedDays">
-      <legend class="small muted" data-i18n="nights">Nights</legend>
-    </fieldset>
-    </div>
-    <button type="button" class="btn btn-primary" data-act="saveBed" data-i18n="saveBedtime">Save bedtime</button>
-  </section>
-
-  <details class="help" id="help">
-    <summary data-i18n="helpTitle">Setup help</summary>
-    <p id="helpBody"></p>
-  </details>
-
-  <footer class="foot">
-    <span class="foot-links">
-      <button type="button" class="link" data-act="box" data-i18n="boxButton">My box</button>
-      <a href="/admin/" data-i18n="advanced">Advanced settings</a>
-    </span>
-    <span id="version" dir="ltr"></span>
-  </footer>
-  </div>
   </div>
 </div>
 
@@ -370,6 +412,29 @@
     <div class="row-end">
       <button type="submit" value="no" class="btn" data-i18n="cancel">Cancel</button>
       <button type="submit" value="yes" class="btn btn-danger" id="confirmYes"></button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="priceDialog" class="sheet sheet-small" aria-labelledby="priceTitle">
+  <form method="dialog" class="sheet-body" id="priceForm" novalidate>
+    <div class="sheet-head">
+      <h2 id="priceTitle" data-i18n="priceTitle">Your price for data</h2>
+      <button type="submit" value="cancel" class="icon-btn" formnovalidate><svg aria-hidden="true"><use href="#i-close"/></svg><span class="sr-only" data-i18n="close">Close</span></button>
+    </div>
+    <p class="muted" data-i18n="priceLead">Type what 1 GB of data costs you. It stays on this phone and only changes how the savings are shown.</p>
+    <div class="price-grid">
+      <label class="field"><span data-i18n="priceLabel">Price for 1 GB</span>
+        <input type="text" id="priceValue" inputmode="decimal" autocomplete="off" maxlength="12">
+      </label>
+      <label class="field"><span data-i18n="currencyLabel">Currency</span>
+        <input type="text" id="priceCurrency" autocomplete="off" maxlength="6" placeholder="BHD">
+      </label>
+    </div>
+    <p class="form-error" id="priceErr" role="alert"></p>
+    <div class="row-end">
+      <button type="button" class="btn" data-act="priceClear" data-i18n="priceClear">Remove price</button>
+      <button type="button" class="btn btn-primary" data-act="priceSave" data-i18n="priceSave">Save</button>
     </div>
   </form>
 </dialog>

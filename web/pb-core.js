@@ -383,6 +383,213 @@
     else done(true);
   };
 
+  // ------------------------------------------------------------------ the savings card ("What Sinko did for you")
+  // The box program keeps a small daily ledger and hands the page a copy in the description of the Pi-hole group
+  // "pb-ledger" (docs/maintainers/architecture.md, "Savings ledger"). It sits behind the parent password like every group;
+  // a file under /pb/ would not (every device at home can read those). Anyone with Pi-hole's admin page or a backup can
+  // write that description too, so it is read as strictly as the shared state: anything unexpected is dropped, never shown.
+  var WAIT_MS_PER_STOP = 50;          // the time one stopped ad or tracker costs: Brave's published, deliberately low estimate
+  var BYTES_PER_STOP = 10000;         // what one stopped ad or tracker would have downloaded: a deliberately low guess, 10 KB
+  var LEDGER_DAYS = 7;                // the box sends the last week, today included
+  var LEDGER_APPS = 8;                // at most this many apps per day and in the totals
+  var LEDGER_MAX = 1e12;              // a count above this is not a home's
+  var DAY_RE = /^(\d{4})-(\d\d)-(\d\d)$/;
+
+  function ledgerCount(x) { return isNum(x) && x >= 0 && x % 1 === 0 && x <= LEDGER_MAX ? x : null; }
+  /** 'YYYY-MM-DD' -> days since 1970 (UTC arithmetic: a day key has no time zone), or null when it is not a real date. */
+  function dayNumber(s) {
+    var m = typeof s === 'string' ? DAY_RE.exec(s) : null;
+    if (!m) return null;
+    var y = +m[1], mo = +m[2], d = +m[3], t = Date.UTC(y, mo - 1, d), back = new Date(t);
+    if (y < 2000 || back.getUTCFullYear() !== y || back.getUTCMonth() !== mo - 1 || back.getUTCDate() !== d) return null;
+    return Math.round(t / 86400000);
+  }
+  function dayKey(n) {
+    var d = new Date(n * 86400000), p = function (x) { return (x < 10 ? '0' : '') + x; };
+    return d.getUTCFullYear() + '-' + p(d.getUTCMonth() + 1) + '-' + p(d.getUTCDate());
+  }
+  /** { sid: count } keeping only the catalog's apps (`ids`) and real, positive counts; at most LEDGER_APPS, biggest first. */
+  function ledgerApps(raw, ids) {
+    var known = {}, list = [], out = {};
+    (ids || []).forEach(function (id) { known[id] = true; });
+    if (isDict(raw)) Object.keys(raw).forEach(function (k) {
+      var n = ledgerCount(raw[k]);
+      if (known[k] === true && n) list.push({ app: k, count: n });
+    });
+    list.sort(function (a, b) { return b.count - a.count || (a.app < b.app ? -1 : 1); });
+    list.slice(0, LEDGER_APPS).forEach(function (x) { out[x.app] = x.count; });
+    return out;
+  }
+  /**
+   * The pb-ledger group's description -> { at, today, since, keptSince, adLists, days: [{ d, ads, apps, offSec, kept }], tot }
+   * or null when it is missing or not version 1. `ids` are the catalog's app ids. Days come back oldest first, at most the
+   * last LEDGER_DAYS ending today, each once; a day the box sent nothing for stays absent (a gap, not a zero).
+   */
+  function parseLedger(raw, ids) {
+    var d = null;
+    try { d = typeof raw === 'string' && raw ? JSON.parse(raw) : null; } catch (e) { d = null; }
+    if (!isDict(d) || d.v !== 1 || !isNum(d.at) || d.at <= 0) return null;
+    var today = dayNumber(d.today);
+    if (today === null) return null;
+    var day = function (x) { return dayNumber(x) === null ? null : x; };
+    var seen = {}, days = [];
+    (d.days instanceof Array ? d.days : []).forEach(function (r) {
+      var n = isDict(r) ? dayNumber(r.d) : null;
+      if (n === null || n > today || n <= today - LEDGER_DAYS || seen[n]) return;
+      seen[n] = true;
+      days.push({ n: n, d: r.d, ads: ledgerCount(r.ads), apps: ledgerApps(r.apps, ids), offSec: ledgerCount(r.offSec),
+        kept: r.kept === 1 || r.kept === 0 ? r.kept : null });
+    });
+    days.sort(function (a, b) { return a.n - b.n; });
+    days.forEach(function (r) { delete r.n; });
+    var t = isDict(d.tot) ? d.tot : {};
+    var nights = ledgerCount(t.nights) || 0, kept = ledgerCount(t.nightsKept) || 0;
+    return {
+      at: d.at, today: d.today, since: day(d.since), keptSince: day(d.keptSince), adLists: ledgerCount(d.adLists),
+      days: days,
+      tot: { ads: ledgerCount(t.ads), apps: ledgerApps(t.apps, ids), offSec: ledgerCount(t.offSec), nights: nights,
+        nightsKept: Math.min(kept, nights) }
+    };
+  }
+  function addCount(a, b) { return a === null ? b : b === null ? a : a + b; }
+  /**
+   * What the card shows for one period of a parsed ledger: 'today', 'week' (the days the box sent, at most 7) or 'since'
+   * (the running totals). -> { ads, apps: [{ app, count }] biggest first, offSec, nights, nightsKept, waitSec, bytes,
+   * days }. A number the box does not know is null, never 0. `days` is how many days the week holds.
+   */
+  function savings(ledger, period) {
+    var out = { ads: null, apps: [], offSec: null, nights: 0, nightsKept: 0, waitSec: null, bytes: null, days: 0 };
+    if (!ledger) return out;
+    var apps = {}, rows;
+    if (period === 'since') {
+      out.ads = ledger.tot.ads; out.offSec = ledger.tot.offSec;
+      out.nights = ledger.tot.nights; out.nightsKept = ledger.tot.nightsKept;
+      apps = ledger.tot.apps;
+    } else {
+      rows = period === 'today' ? ledger.days.filter(function (r) { return r.d === ledger.today; }) : ledger.days;
+      rows.forEach(function (r) {
+        out.ads = addCount(out.ads, r.ads);
+        out.offSec = addCount(out.offSec, r.offSec);
+        Object.keys(r.apps).forEach(function (k) { apps[k] = (apps[k] || 0) + r.apps[k]; });
+        if (r.kept !== null) { out.nights++; out.nightsKept += r.kept; }
+      });
+      out.days = rows.length;
+    }
+    Object.keys(apps).forEach(function (k) { out.apps.push({ app: k, count: apps[k] }); });
+    out.apps.sort(function (a, b) { return b.count - a.count || (a.app < b.app ? -1 : 1); });
+    if (out.ads !== null) { out.waitSec = out.ads * WAIT_MS_PER_STOP / 1000; out.bytes = out.ads * BYTES_PER_STOP; }
+    return out;
+  }
+  /** The 7 days ending today, oldest first, for the bar chart: [{ d, ads (null = the box has nothing for it) }]. */
+  function ledgerWeek(ledger) {
+    var out = [], byDay = {}, today = ledger ? dayNumber(ledger.today) : null, i;
+    if (today === null) return out;
+    ledger.days.forEach(function (r) { byDay[r.d] = r; });
+    for (i = LEDGER_DAYS - 1; i >= 0; i--) {
+      var key = dayKey(today - i);
+      out.push({ d: key, ads: byDay[key] ? byDay[key].ads : null });
+    }
+    return out;
+  }
+  /** Weekday (0 = Sunday) of a day key, for labels; -1 when it is not one. */
+  function weekday(key) { var n = dayNumber(key); return n === null ? -1 : (n + 4) % 7; }
+  /**
+   * A length of time as the parts the page words: under an hour { m }, under ten hours { h, m }, then { h } rounded.
+   * Rounded to whole minutes; null in, null out.
+   */
+  function durationParts(sec) {
+    if (!isNum(sec) || sec < 0) return null;
+    var min = Math.round(sec / 60);
+    if (min < 60) return { m: min };
+    if (min < 600) return { h: Math.floor(min / 60), m: min % 60 };
+    return { h: Math.round(sec / 3600) };
+  }
+  /** Bytes as { value, unit: 'MB' | 'GB' | 'TB' } in decimal units: whole numbers, one decimal below 10. */
+  function sizeParts(bytes) {
+    if (!isNum(bytes) || bytes < 0) return null;
+    var units = [['TB', 1e12], ['GB', 1e9], ['MB', 1e6]], i, v;
+    for (i = 0; i < units.length; i++) if (bytes >= units[i][1] * 0.95 || i === units.length - 1) break;
+    v = bytes / units[i][1];
+    return { value: v < 10 ? Math.round(v * 10) / 10 : Math.round(v), unit: units[i][0] };
+  }
+  /** What `bytes` of data cost at the price the parent typed for one GB (decimal), or null without a usable price. */
+  function moneyFor(bytes, perGb) {
+    var p = typeof perGb === 'string' ? Number(perGb.replace(',', '.')) : perGb;
+    if (!isNum(bytes) || !isNum(p) || p <= 0 || p > 1e6) return null;
+    return bytes / 1e9 * p;
+  }
+  /** '+03:00' / '-05:30' / 'Z' -> minutes east of UTC, or null. */
+  function utcOffsetMinutes(s) {
+    if (s === 'Z') return 0;
+    var m = typeof s === 'string' ? /^([+-])(\d\d):?(\d\d)$/.exec(s) : null;
+    if (!m || +m[2] > 14 || +m[3] > 59) return null;
+    return (m[1] === '-' ? -1 : 1) * (+m[2] * 60 + +m[3]);
+  }
+  /**
+   * The next moment the box's wall clock shows `hhmm` (at least a minute away), as epoch seconds. `offsetMin` is the box's
+   * offset from UTC now; a change of summer time before then moves the answer by that hour, which a timer can live with.
+   */
+  function nextWallTime(nowSec, hhmm, offsetMin) {
+    if (!isNum(nowSec) || !validHHMM(hhmm) || !isNum(offsetMin)) return null;
+    var local = nowSec + offsetMin * 60;
+    var target = Math.floor(local / 86400) * 86400 + (+hhmm.slice(0, 2)) * 3600 + (+hhmm.slice(3)) * 60;
+    if (target <= local + 60) target += 86400;
+    return target - offsetMin * 60;
+  }
+
+  // ------------------------------------------------------------------ bedtime, as the box sees it
+  // The same rule as bin/sinko's in_schedule: days use JavaScript numbering (0 = Sunday), a window that crosses midnight belongs to
+  // the day it STARTS, start == end means never. The page needs it to say honestly when the internet comes back: the box ends a
+  // break that runs into bedtime only when bedtime ends, cuts free time short when bedtime starts, and turns the internet on when a
+  // bedtime window ends (bin/sinko, Controller.tick). `offsetMin` is the box's offset from UTC.
+  function minutesOf(hhmm) { return +hhmm.slice(0, 2) * 60 + +hhmm.slice(3); }
+  function usableSchedule(sc) {
+    return isDict(sc) && sc.enabled && sc.days instanceof Array && sc.days.length > 0 && validHHMM(sc.start) && validHHMM(sc.end) &&
+      sc.start !== sc.end;
+  }
+  /** Is it bedtime at `epochSec`? */
+  function inBedtime(sc, epochSec, offsetMin) {
+    if (!usableSchedule(sc) || !isNum(epochSec) || !isNum(offsetMin)) return false;
+    var local = epochSec + offsetMin * 60, day = Math.floor(local / 86400);
+    var minute = Math.floor((local - day * 86400) / 60), today = ((day + 4) % 7 + 7) % 7, yesterday = (today + 6) % 7;
+    var start = minutesOf(sc.start), end = minutesOf(sc.end);
+    if (start < end) return sc.days.indexOf(today) >= 0 && start <= minute && minute < end;
+    if (minute >= start) return sc.days.indexOf(today) >= 0;
+    return minute < end && sc.days.indexOf(yesterday) >= 0;
+  }
+  /** The bedtime windows [{ start, end }] (epoch seconds) that end after `fromSec`, soonest first, over the next week. */
+  function bedtimeWindows(sc, fromSec, offsetMin) {
+    var out = [];
+    if (!usableSchedule(sc) || !isNum(fromSec) || !isNum(offsetMin)) return out;
+    var start = minutesOf(sc.start), end = minutesOf(sc.end), off = offsetMin * 60;
+    var first = Math.floor((fromSec + off) / 86400) - 1, d;
+    for (d = first; d <= first + 8; d++) {
+      if (sc.days.indexOf(((d + 4) % 7 + 7) % 7) < 0) continue;
+      var s = d * 86400 + start * 60 - off, e = (end > start ? d : d + 1) * 86400 + end * 60 - off;
+      if (e > fromSec) out.push({ start: s, end: e });
+    }
+    return out;
+  }
+  /**
+   * When the children's internet really comes back, as the box will do it:
+   *   'break'  an offline break ending at `until`: if bedtime is on then, not before bedtime ends;
+   *   'free'   free time until `until`: if bedtime starts first, free time ends then (and the internet goes off);
+   *   'off'    switched off by hand: when the next bedtime window ends (or null: only when the parent turns it on).
+   * -> { at: epoch seconds or null, bedtime: true when bedtime decides it }.
+   */
+  function comesBack(kind, sc, nowSec, until, offsetMin) {
+    var w = bedtimeWindows(sc, nowSec, offsetMin), i;
+    if (kind === 'break') {
+      for (i = 0; i < w.length; i++) if (w[i].start <= until && until < w[i].end) return { at: w[i].end, bedtime: true };
+      return { at: until, bedtime: false };
+    }
+    if (kind === 'free') {
+      for (i = 0; i < w.length; i++) if (w[i].start > nowSec && w[i].start < until) return { at: w[i].start, bedtime: true };
+      return { at: until, bedtime: false };
+    }
+    return w.length ? { at: w[0].end, bedtime: true } : { at: null, bedtime: false };
+  }
+
   // ------------------------------------------------------------------ the shared state
   // The state lives in the description of the "pb-state" group and is written by TWO programs: this page and the scheduler
   // (bin/sinko). Both normalise it with the same rules, and a value one of them does not know is lost on its next write.
@@ -549,6 +756,9 @@
     parseState: parseState, defaultState: defaultState, editState: editState, learnedRules: learnedRules, regexZone: regexZone,
     classify: classify, isHiddenDomain: isHiddenDomain, isHiddenClient: isHiddenClient, baseDomain: baseDomain, appFor: appFor,
     formatCount: formatCount, percent: percent, topByApp: topByApp, hourly: hourly, deviceState: deviceState, Feed: Feed, priority: priority, Pacer: Pacer, Poller: Poller,
+    parseLedger: parseLedger, savings: savings, ledgerWeek: ledgerWeek, weekday: weekday, durationParts: durationParts, sizeParts: sizeParts,
+    moneyFor: moneyFor, utcOffsetMinutes: utcOffsetMinutes, nextWallTime: nextWallTime, WAIT_MS_PER_STOP: WAIT_MS_PER_STOP, BYTES_PER_STOP: BYTES_PER_STOP,
+    inBedtime: inBedtime, bedtimeWindows: bedtimeWindows, comesBack: comesBack,
     lerp: lerp, easeInOut: easeInOut, clamp01: clamp01, wire: wire, elbow: elbow, trace: trace, pointAt: pointAt,
   };
   root.PBCore = api;

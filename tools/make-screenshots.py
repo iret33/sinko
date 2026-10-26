@@ -4,14 +4,14 @@
     python3 tools/make-screenshots.py [--out DIR]          (needs: pip install playwright && playwright install chromium)
 
 Writes (into docs/img by default):
-    panel-en.png  panel-ar.png   the main page on a phone (390x844, 2x), English and Arabic (right to left)
-    desktop-en.png               the main page on a desktop (1280 wide, two columns)
-    live-en.png                  the live picture card
+    panel-en.png  panel-ar.png   the main page on a phone (390x844, 2x), English and Arabic (right to left): the control panel first
+    desktop-en.png               the main page on a desktop (1280 wide, three columns)
+    live-en.png                  the live picture card, as "See it live" opens it
     box-en.png    box-ar.png     the My box sheet
 
-Nothing here talks to a real box: tests/mock_pihole.py plays Pi-hole, with two children's devices, a day of traffic, two apps blocked,
-bedtime set, a newer Sinko on offer and the box reporting a healthy 3 days of uptime. The text on the pictures is the page's own;
-only the clock-dependent words ("just now", "3 hours ago") change from one run to the next.
+Nothing here talks to a real box: tests/mock_pihole.py plays Pi-hole, with two children's devices, a day of traffic, three apps blocked,
+bedtime set, a week of the box's savings ledger, a newer Sinko on offer and the box reporting a healthy 3 days of uptime. The text on
+the pictures is the page's own; only the clock-dependent words ("just now", "3 hours ago") change from one run to the next.
 """
 import argparse
 import importlib.machinery
@@ -41,6 +41,9 @@ loader.exec_module(pb)
 # shows the address the page was opened at, and a README picture must not show a loopback number "for your router").
 HOME_ADDRESS = "192.168.1.50"
 HOME_URL = "http://%s/" % HOME_ADDRESS
+with open(os.path.join(ROOT, "VERSION"), encoding="utf-8") as _f:
+    _v = [int(x) for x in _f.read().strip().split(".")]
+DEMO_LATEST = "%d.%d.0" % (_v[0], _v[1] + 1)          # the next minor release: always newer than the Sinko on the demo box
 
 
 def demo_box():
@@ -57,13 +60,16 @@ def demo_box():
     for mac, name in (("AA:BB:CC:00:00:01", "Sara’s iPad"), ("AA:BB:CC:00:00:02", "Ali’s phone")):
         api.request("POST", "/api/clients", {"client": mac, "comment": name, "groups": pb.kid_groups(gid, catalog)})
     api.logout()
-    notes = "https://github.com/iret33/sinko/releases/tag/v3.1.0"
+    # The update on offer must be newer than this Sinko, or the pictures say "up to date" where the README says "a newer Sinko is ready".
+    notes = "https://github.com/iret33/sinko/releases/tag/v%s" % DEMO_LATEST
     store.edit_state(lambda st: st.update({
         "schedule": {"enabled": True, "start": "21:30", "end": "06:30", "days": [0, 1, 2, 3, 4]},
-        "update": {"latest": "3.1.0", "notes": notes, "checked": int(time.time()) - 3 * 3600, "auto": False, "status": "idle"},
+        "update": {"latest": DEMO_LATEST, "notes": notes, "checked": int(time.time()) - 3 * 3600, "auto": False, "status": "idle"},
         "telemetry": {"on": True}, "community": {"online": 1234, "at": int(time.time())},
         "setup": {"done": True}, "learn": {"on": True}, "terms": {"agreed": 1}}))
     mock_pihole.seed_history(store)
+    if hasattr(mock_pihole, "seed_ledger"):
+        mock_pihole.seed_ledger(store)              # "What Sinko did for you": a believable week, as the box program would publish it
     mock_pihole.start_live(store)
     return httpd, store
 
@@ -81,12 +87,13 @@ def sign_in(browser, lang, **view):
     page.fill("#pw", mock_pihole.PASSWORD)
     page.press("#pw", "Enter")
     page.wait_for_selector(".tile")
-    page.locator("#live:not([hidden])").wait_for()
+    page.wait_for_selector("#savedBody .saved-msg, #savedBody .fig-value")
+    time.sleep(0.4)
     return ctx, page
 
 
 def settle(page):
-    """Let the live picture draw a few packets, so the pictures show it working."""
+    """Let the live picture (opened with "See it live") draw a few packets, so the picture shows it working."""
     end = time.time() + 8
     while time.time() < end:
         if page.locator(".pk:not([hidden])").count() >= 2:
@@ -119,16 +126,18 @@ try:
         browser = p.chromium.launch(proxy={"server": "per-context"})
         for lang in ("en", "ar"):
             ctx, page = sign_in(browser, lang, viewport={"width": 390, "height": 844})
-            settle(page)
             save(page, "panel-%s.png" % lang)
-            if lang == "en":
-                page.locator("#live .live-card").scroll_into_view_if_needed()
-                settle(page)
-                page.locator("#live .live-card").screenshot(path=os.path.join(args.out, "live-en.png"))
-                note(os.path.join(args.out, "live-en.png"))
             ctx.close()
-        ctx, page = sign_in(browser, "en", viewport={"width": 1280, "height": 900}, device_scale_factor=1)
+        # The live picture opens as a layer that scrolls on its own: in a phone-sized window, the part of the card below the fold would come
+        # out blank. A tall window shows the whole card at once.
+        ctx, page = sign_in(browser, "en", viewport={"width": 390, "height": 2600})
+        page.click("#liveOpen")
+        page.locator("#liveView:not([hidden])").wait_for()
         settle(page)
+        page.locator("#live .live-card").screenshot(path=os.path.join(args.out, "live-en.png"))
+        note(os.path.join(args.out, "live-en.png"))
+        ctx.close()
+        ctx, page = sign_in(browser, "en", viewport={"width": 1280, "height": 900}, device_scale_factor=1)
         save(page, "desktop-en.png")
         ctx.close()
         for lang in ("en", "ar"):

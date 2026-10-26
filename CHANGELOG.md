@@ -3,6 +3,41 @@
 All notable changes to Sinko. Versions follow [Semantic Versioning](https://semver.org); the newest release is at the top.
 Boxes learn about a release from this repository's GitHub releases, whose notes are the section of this file.
 
+## [3.3.0] - Unreleased
+
+### Changed
+- **A new look for the page, built around one button.** The page now looks like the control panel of a home appliance:
+  a calm warm grey, flat panels, keys you can see are keys, and one orange key at the top: **Turn internet off**. It
+  switches the internet off for the children's devices at once; the whole panel goes dark, and the key says **Turn it
+  back on**. The panel always says, in one sentence, whether the children's internet is on or off and when it comes back:
+  at the end of a break, when bedtime ends, or when you turn it back on. Light and dark, in English and Arabic.
+- **Off for a while, from the same panel.** Beside the big key: **Off for 30 min**, **Off for 1 hour** and, in the
+  evening and at night, **Off until** the morning (when your bedtime ends, or 7:00 without one); in the daytime that key
+  is **Off for 2 hours**. **Another length** sets any other length. The *Offline break* quick mode is gone: these keys
+  do the same. The quick modes left are *Homework* and *Free time*.
+- **Apps: Allow or Block, in words.** Each app has two keys, **Allow** and **Block**, instead of a tile that changed
+  colour. The blocked ones stand out down the list.
+- **Bedtime in one sentence.** "Off at 21:00, back on at 06:30, Sunday to Thursday." The switch takes effect at once;
+  the times and nights are under **Change times and nights**.
+- **The live picture moved behind See it live.** The animated picture of what the box checks and stops now opens over
+  the page, from **See it live** (in the new card and at the bottom of the page), so the page itself stays calm. The
+  phone's Back button closes it.
+
+### Added
+- **What Sinko did for you.** A new card on the page, for *Today*, *This week* and *since the box started counting*:
+  how much less you waited for ads, how much data that saved, how many ads and trackers the box stopped, how often each
+  blocked app tried to open, how many nights bedtime was kept, how long the children's internet was off, and a chart of
+  the ads stopped each day. **How we count** explains every number: about 50 ms of waiting and about 10 KB of data for
+  each ad or tracker stopped (low estimates, the first one Brave's published figure). Type what 1 GB of data costs you
+  and the card also says what the data saved was worth; that price stays on your phone.
+- **The box keeps a small daily summary for this card.** Counts only, no websites, apps' addresses or device names, kept
+  on the box (and in its backups) for as long as Sinko is installed, never sent anywhere. The privacy statement says
+  exactly what it holds.
+
+### Fixed
+- After saving a bedtime, later changes made elsewhere (another phone, a timer that ended) now show in the bedtime
+  fields again without reloading the page.
+
 ## [3.2.1] - 2026-10-26
 
 ### Added

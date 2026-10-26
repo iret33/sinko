@@ -880,11 +880,16 @@ class PageAndSchedulerTests(unittest.TestCase):
 
         def bedtime(on):
             main_page()
-            page.set_checked("#bedOn", on)
             if on:
+                # the times and nights sit behind "Change times and nights"; the switch saves at once with what the fields hold
+                if not page.evaluate("() => document.getElementById('bedEdit').open"):
+                    page.click("#bedEdit summary")
                 page.fill("#bedStart", bed[0])
                 page.fill("#bedEnd", bed[1])
-            page.click("[data-act=saveBed]")
+            if page.is_checked("#bedOn") != on:
+                page.set_checked("#bedOn", on)
+            elif on:
+                page.click("[data-act=saveBed]")
             stored(lambda s: s["schedule"]["enabled"], on, "bedtime %s" % ("on" if on else "off"))
             model["bed"] = on
 

@@ -67,9 +67,18 @@ def make_site(live=False, blocked=("youtube", "tiktok"), privacy=0, history=True
     return "http://127.0.0.1:%d/" % httpd.server_port, store
 
 
-def open_page(browser, url, **opts):
+def open_live(page):
+    """The live picture lives behind "See it live" (a full-screen layer over the page): open it and wait for the drawing."""
+    page.click("#liveOpen")
+    page.locator("#liveView:not([hidden])").wait_for()
+    page.locator("#live:not([hidden])").wait_for()
+
+
+def open_page(browser, url, init=None, **opts):
     ctx = browser.new_context(**dict(dict(viewport={"width": 390, "height": 844}, locale="en-GB"), **opts))
     page = ctx.new_page()
+    if init:
+        page.add_init_script(init)
     page.set_default_timeout(20000)
     page.on("console", lambda m: errors.append(m.text) if m.type == "error" and "401" not in m.text else None)
     page.on("pageerror", lambda e: errors.append(str(e)))
@@ -78,7 +87,7 @@ def open_page(browser, url, **opts):
     page.fill("#pw", "test")
     page.press("#pw", "Enter")
     page.wait_for_selector(".tile")
-    page.locator("#live:not([hidden])").wait_for()
+    open_live(page)
     return ctx, page
 
 
@@ -166,9 +175,9 @@ with sync_playwright() as p:
     expect(len(q_urls) >= 3 and all("from=" in u for u in q_urls[1:]), "reads after the first only ask for newer rows (%s)" % [u.split("?")[1] for u in q_urls[:3]])
     expect(not any("/api/history" in u or "top_domains" in u for u in reqs), "history and top lists are fetched only when the detail sheet opens")
 
-    # a dialog open: nothing is polled, nothing moves
-    page.click("[data-act=openAdd]")
-    page.locator("#addDialog[open]").wait_for()
+    # a dialog open over the picture: nothing is polled, nothing moves
+    page.click("[data-act=detail]")
+    page.locator("#liveSheet[open]").wait_for()
     before = len([u for u in reqs if "/api/queries" in u])
     time.sleep(9)
     after = len([u for u in reqs if "/api/queries" in u])
@@ -243,22 +252,21 @@ with sync_playwright() as p:
     expect(page.evaluate("() => document.activeElement && document.activeElement.id") == "tourBtn", "and puts focus back on the button that opened it")
     expect(page.locator(".node-dev .node-name").all_inner_texts() == ["Sara's iPad", "Ali's phone", "Everyone else"], "and the real devices come back")
 
-    # the picture can be folded away; the choice is remembered, and nothing is read while it is closed
+    # Back closes the live picture: nothing is read while it is closed, and nothing from then is replayed when it opens again
     reqs_b = []
     page.on("request", lambda r: reqs_b.append(r.url) if "/api/queries" in r.url else None)
-    page.click("#liveToggle")
-    expect(page.locator("#stage").is_hidden() and page.get_attribute("#liveToggle", "aria-expanded") == "false", "the toggle folds the picture away")
-    expect(page.locator("#statChecked").is_visible(), "the numbers stay")
-    expect(page.evaluate("() => localStorage.getItem('pb.live')") == "closed", "the choice is remembered")
+    page.click("#liveBack")
+    expect(page.locator("#liveView").is_hidden() and page.locator("#hero").is_visible(), "Back returns to the page")
+    expect(page.evaluate("() => document.activeElement && document.activeElement.id") == "liveOpen", "with focus on the button that opened it")
     time.sleep(1)
     n_before = len(reqs_b)
     store.add_query("www.youtube.com", "GRAVITY", KID1, "Sara-iPad")
     time.sleep(8)
-    expect(len(reqs_b) == n_before, "while folded the query log is not read (%d reads)" % (len(reqs_b) - n_before))
-    page.click("#liveToggle")
-    expect(page.locator("#stage").is_visible(), "unfolding shows it again")
+    expect(len(reqs_b) == n_before, "while it is closed the query log is not read (%d reads)" % (len(reqs_b) - n_before))
+    open_live(page)
+    expect(page.locator("#stage").is_visible(), "See it live shows it again")
     time.sleep(5.5)
-    expect(not [k for k in packets(page) if "YouTube" in k["text"]], "and nothing from while it was folded is replayed")
+    expect(not [k for k in packets(page) if "YouTube" in k["text"]], "and nothing from while it was closed is replayed")
 
     # detail sheet
     page.click("[data-act=detail]")
@@ -399,7 +407,8 @@ with sync_playwright() as p:
     apiw.put_group("pb-offline", "", True)
     apiw.logout()
     page.reload()
-    page.locator("#live:not([hidden])").wait_for()
+    page.wait_for_selector(".tile")
+    open_live(page)
     time.sleep(4.5)
     store.add_query("time.android.com", "REGEX", KID1, "Sara-iPad")
     time.sleep(6)
@@ -469,13 +478,15 @@ with sync_playwright() as p:
     url, store = make_site(live=False)
     ctx, page = open_page(browser, url)
     time.sleep(2)
+    page.click("#liveBack")                                 # the live picture covers the page: back to it, then sign out
     page.click(".topbar [data-act=logout]")
     page.locator("#login:not([hidden])").wait_for()
     errors_before = len(errors)
     page.fill("#pw", "test")
     page.press("#pw", "Enter")
     page.wait_for_selector(".tile")
-    page.locator("#live:not([hidden])").wait_for()
+    expect(page.locator("#liveView").is_hidden(), "signing out closed the live picture: the page opens on its control panel")
+    open_live(page)
     time.sleep(1.5)
     expect(page.locator("g.wire").count() == 11 and page.locator(".pk").count() == 8, "after signing out and in there is one set of wires and packets (%d wires, %d packets)" % (page.locator("g.wire").count(), page.locator(".pk").count()))
     expect(len(errors) == errors_before, "and no errors from the old stage's timers")
@@ -497,10 +508,14 @@ with sync_playwright() as p:
     page.locator(".node-box").click()
     expect("family box is a small computer" in page.inner_text("#liveCaption"), "tapping a node during the tour explains it: %r" % page.inner_text("#liveCaption"))
     page.click("#tourEnd")
-    page.click("#liveToggle")
-    expect(page.locator("#livePill").is_hidden(), "a folded card shows no 'live' pill")
+    expect(page.locator("#liveToggle").is_hidden(), "the picture has a view of its own now: there is nothing to fold")
     page.click("[data-act=stat][data-which=checked]")
-    expect(page.locator("#stage").is_visible() and "asked the box" in page.inner_text("#liveCaption"), "tapping a number while folded opens the card and explains it")
+    expect("asked the box" in page.inner_text("#liveCaption"), "tapping a number explains it")
+    ctx.close()
+    # a phone that folded the picture away in an older version still opens it unfolded behind "See it live"
+    ctx, page = open_page(browser, url, init="try { localStorage.setItem('pb.live', 'closed'); } catch (e) {}")
+    expect(page.locator("#stage").is_visible() and not page.evaluate("() => document.getElementById('live').classList.contains('is-collapsed')"),
+           "an old 'folded' choice does not hide the drawing")
     ctx.close()
 
     # ------------------------------------------------------------------ O: the feed stops: the pill and the screen-reader line say so
@@ -538,7 +553,9 @@ with sync_playwright() as p:
     ctx, page = open_page(browser, url, viewport={"width": 1280, "height": 900})
     time.sleep(6)
     box = page.evaluate("() => { const a = document.querySelector('.col-main').getBoundingClientRect(), b = document.querySelector('.col-side').getBoundingClientRect(); return [a.left, b.left, a.width]; }")
-    expect(box[1] > box[0] + box[2] - 1, "on a wide screen the picture and the controls sit side by side")
+    expect(box[1] > box[0] + box[2] - 1, "on a wide screen the page's columns sit side by side behind the picture")
+    live = page.evaluate("() => { const r = document.getElementById('live').getBoundingClientRect(); return [r.left, r.right, innerWidth]; }")
+    expect(live[1] - live[0] <= 660 and abs(live[0] - (live[2] - live[1])) <= 2, "and the picture opens over them, centred and no wider than a phone column: %s" % live)
     shot(page, "live-desktop.png")
     ctx.close()
 

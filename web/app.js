@@ -10,12 +10,16 @@
 
 (function () {
   // ------------------------------------------------------------------ config
-  var G = { kids: 'pb-kids', guard: 'pb-guard', offline: 'pb-offline', paused: 'pb-paused', state: 'pb-state' };
+  var G = { kids: 'pb-kids', guard: 'pb-guard', offline: 'pb-offline', paused: 'pb-paused', state: 'pb-state', ledger: 'pb-ledger' };
   var SVC = 'pb-svc-';
   var DEFAULT_GROUP = 0;
   var POLL_MS = 30000;
   var SID_KEY = 'pb.sid';
   var LANG_KEY = 'pb.lang';
+  var PERIOD_KEY = 'pb.period';      // the savings card's period on this phone: today | week | since
+  var PRICE_KEY = 'pb.price';        // what the parent pays for 1 GB, kept on this phone only: {"v": "0.5", "cur": "BHD"}
+  var MORNING = '07:00';             // "Off until morning" without a bedtime: the box's wall clock
+  var LEDGER_STALE_SEC = 6 * 3600;   // the box republishes at least every two hours; numbers older than this are said to be old
 
   // ------------------------------------------------------------------ strings
   var STR = {
@@ -26,12 +30,11 @@
       noConnection: 'Cannot reach the family box. Check that it is switched on and connected.',
       tooMany: 'Too many open sessions. Sign out on another device or wait 30 minutes.',
       modes: 'Quick modes', homework: 'Homework', homeworkDesc: 'Games, video and social media blocked',
-      freeTime: 'Free time', freeTimeDesc: 'Everything allowed for a while',
-      breakTime: 'Offline break', breakTimeDesc: 'Internet off for a while',
+      freeTime: 'Free time', freeTimeDesc: 'All apps allowed for a while',
       apps: 'Apps and sites', allowAll: 'Allow all', blockAll: 'Block all',
-      svcNote: 'Tap to block or allow. Apps that are already open can take a few minutes to stop.',
+      svcNote: 'Choose Allow or Block for each app. Apps that are already open can take a few minutes to stop.',
       svcLocked: 'A timer is running. End it to change apps.',
-      allowed: 'Allowed', blocked: 'Blocked',
+      allowed: 'Allowed', blocked: 'Blocked', allowBtn: 'Allow', blockBtn: 'Block',
       devices: "Children's devices", addDevice: 'Add device', noDevices: 'No devices yet. Add your child\u2019s phone or tablet so the rules apply to it.',
       pause: 'Pause', resume: 'Resume', remove: 'Remove', paused: 'Paused', thisDevice: 'This device',
       lastSeen: 'Last online {t}', neverSeen: 'Not seen yet',
@@ -50,9 +53,17 @@
       noPicker: 'No new devices seen yet. Connect the device to your Wi\u2011Fi, open any website on it, then try again.',
       deviceAdded: '{n} added', deviceRemoved: '{n} removed', devicePaused: '{n} paused', deviceResumed: '{n} resumed',
       confirmRemove: 'Stop applying the rules to {n}?',
-      heroOnKicker: 'Right now', heroOn: 'Children are online', heroOff: 'Children\u2019s internet is off',
+      heroOnKicker: 'Right now', heroOn: 'Children\u2019s internet is on', heroOff: 'Children\u2019s internet is off',
       heroFree: 'Free time', heroBreak: 'Offline break', heroBedtime: 'Bedtime',
-      turnOff: 'Turn internet off', turnOn: 'Turn internet on', endNow: 'End now',
+      turnOff: 'Turn internet off', turnOn: 'Turn it back on', endNow: 'End free time',
+      heroFreeTitle: 'Apps are open', heroOffYou: 'Until you turn it back on.', heroBackAt: 'Back on at {t}.',
+      heroBackAfterBed: 'Bedtime keeps it off until {t}.', heroFreeBedAt: 'Bedtime starts at {t} and ends it.',
+      heroOffOrBed: 'Until you turn it back on, or bedtime ends at {t}.', off120: 'Off for 2 hours',
+      heroRulesAt: 'Your rules come back at {t}.', off30: 'Off for 30 min', off60: 'Off for 1 hour', offUntil: 'Off until {t}',
+      offOther: 'Another length', offOn: 'Internet off until {t}',
+      bedChange: 'Change times and nights', bedSentence: 'Off at {s}, back on at {e}, {d}.', bedEveryNight: 'every night',
+      bedDaysRange: '{a} to {b}', bedSentenceOff: 'Bedtime is off. Switch it on to turn the internet off at night.',
+      bedtimeOffToast: 'Bedtime switched off',
       subBlocked: '{n} of {t} apps blocked.', subNone: 'No apps blocked.', subDevices: 'Rules apply to {n} devices.',
       subDevice1: 'Rules apply to 1 device.', subNoDevices: 'Add a device to start.',
       endsAt: 'Ends at {t}', bedUntil: 'Until {t}', bedEndsNote: 'Ends automatically at {t}.',
@@ -81,12 +92,11 @@
       noConnection: 'تعذّر الوصول إلى صندوق العائلة. تأكد أنه يعمل ومتصل بالشبكة.',
       tooMany: 'عدد الجلسات المفتوحة كبير. سجّل الخروج من جهاز آخر أو انتظر 30 دقيقة.',
       modes: 'أوضاع سريعة', homework: 'وقت الدراسة', homeworkDesc: 'حظر الألعاب والفيديو ومواقع التواصل',
-      freeTime: 'وقت حر', freeTimeDesc: 'السماح بكل شيء لفترة محددة',
-      breakTime: 'استراحة من الإنترنت', breakTimeDesc: 'إيقاف الإنترنت لفترة محددة',
+      freeTime: 'وقت حر', freeTimeDesc: 'السماح بكل التطبيقات لفترة محددة',
       apps: 'التطبيقات والمواقع', allowAll: 'السماح للكل', blockAll: 'حظر الكل',
-      svcNote: 'اضغط للحظر أو السماح. قد تستغرق التطبيقات المفتوحة بضع دقائق حتى تتوقف.',
+      svcNote: 'اختر «سماح» أو «حظر» لكل تطبيق. قد تستغرق التطبيقات المفتوحة بضع دقائق حتى تتوقف.',
       svcLocked: 'يوجد مؤقت يعمل الآن. أنهِه لتغيير التطبيقات.',
-      allowed: 'مسموح', blocked: 'محظور',
+      allowed: 'مسموح', blocked: 'محظور', allowBtn: 'سماح', blockBtn: 'حظر',
       devices: 'أجهزة الأطفال', addDevice: 'إضافة جهاز', noDevices: 'لا توجد أجهزة بعد. أضف هاتف طفلك أو جهازه اللوحي لتُطبَّق عليه القواعد.',
       pause: 'إيقاف مؤقت', resume: 'استئناف', remove: 'إزالة', paused: 'متوقف مؤقتًا', thisDevice: 'هذا الجهاز',
       lastSeen: 'آخر اتصال {t}', neverSeen: 'لم يتصل بعد',
@@ -104,9 +114,17 @@
       noPicker: 'لم تظهر أجهزة جديدة بعد. وصّل الجهاز بشبكة Wi‑Fi وافتح أي موقع عليه، ثم حاول مجددًا.',
       deviceAdded: 'تمت إضافة {n}', deviceRemoved: 'تمت إزالة {n}', devicePaused: 'تم إيقاف {n} مؤقتًا', deviceResumed: 'تم استئناف {n}',
       confirmRemove: 'إيقاف تطبيق القواعد على {n}؟',
-      heroOnKicker: 'الآن', heroOn: 'الأطفال متصلون بالإنترنت', heroOff: 'الإنترنت متوقف عن الأطفال',
+      heroOnKicker: 'الآن', heroOn: 'إنترنت الأطفال يعمل', heroOff: 'إنترنت الأطفال متوقف',
       heroFree: 'وقت حر', heroBreak: 'استراحة من الإنترنت', heroBedtime: 'وقت النوم',
-      turnOff: 'إيقاف الإنترنت', turnOn: 'تشغيل الإنترنت', endNow: 'إنهاء الآن',
+      turnOff: 'أوقف الإنترنت', turnOn: 'أعد تشغيله', endNow: 'إنهاء الوقت الحر',
+      heroFreeTitle: 'التطبيقات مفتوحة', heroOffYou: 'حتى تعيد تشغيله.', heroBackAt: 'يعود الساعة {t}.',
+      heroBackAfterBed: 'يُبقيه وقت النوم متوقفًا حتى الساعة {t}.', heroFreeBedAt: 'يبدأ وقت النوم الساعة {t} وينهيه.',
+      heroOffOrBed: 'حتى تعيد تشغيله، أو ينتهي وقت النوم الساعة {t}.', off120: 'إيقاف ساعتين',
+      heroRulesAt: 'تعود قواعدك الساعة {t}.', off30: 'إيقاف 30 دقيقة', off60: 'إيقاف ساعة', offUntil: 'إيقاف حتى {t}',
+      offOther: 'مدة أخرى', offOn: 'الإنترنت متوقف حتى {t}',
+      bedChange: 'تغيير الأوقات والليالي', bedSentence: 'يتوقف الساعة {s} ويعود الساعة {e}، {d}.', bedEveryNight: 'كل ليلة',
+      bedDaysRange: 'من {a} إلى {b}', bedSentenceOff: 'وقت النوم غير مفعّل. فعّله ليتوقف الإنترنت في الليل.',
+      bedtimeOffToast: 'تم إيقاف وقت النوم',
       subBlocked: '{n} من {t} تطبيقات محظورة.', subNone: 'لا توجد تطبيقات محظورة.', subDevices: 'القواعد مطبّقة على {n} أجهزة.',
       subDevice1: 'القواعد مطبّقة على جهاز واحد.', subNoDevices: 'أضف جهازًا للبدء.',
       endsAt: 'ينتهي الساعة {t}', bedUntil: 'حتى الساعة {t}', bedEndsNote: 'ينتهي تلقائيًا الساعة {t}.',
@@ -142,7 +160,7 @@
       lvBlockOff: 'Blocking is switched off', lvBlockOffSub: 'Nothing is being stopped. Turn blocking on again in Advanced settings, at the bottom of the page.',
       lvExamplePhone: 'Example phone', lvExExample: 'This is only an example phone, to show how the box works.', lvExAdd: 'Add your child\u2019s phone or tablet so the rules apply to it.',
       lvHide: 'Hide the picture', lvShow: 'Show the picture',
-      lvCheckOver: '{n} may not follow the rules', lvCheckOverSub: 'Another rule on the box overrides this device. See “Children’s devices” below to fix it.',
+      lvCheckOver: '{n} may not follow the rules', lvCheckOverSub: 'Another rule on the box overrides this device. Close the live picture and see “Children’s devices” to fix it.',
       lvCheckAway: '{n} is not using the box', lvCheckAwaySub: 'It has not asked the box anything in 24 hours. It may be on mobile data or another Wi‑Fi.',
       lvCheckMany: '{n} devices need a look', lvCheckManySub: 'Some devices may not be following the rules. Tap one in the picture to see why.',
       lvOff: 'Internet is off for children', lvOffSub: 'Everything they ask for is stopped.',
@@ -164,13 +182,13 @@
       lvExNet: 'Apps and websites live on the internet. The box only looks up addresses there. After a yes, the device goes to the app by itself, so videos and messages never pass through the box.',
       lvExRest: 'Everyone else at home: your phone, the TV, the computer. They use the box too, with basic filtering only (ads and unsafe sites).',
       lvExAllHome: 'Your privacy setting hides which device asked, so all activity is drawn together.',
-      lvExMore: '{n} more devices. See them all under “Children’s devices” below.',
+      lvExMore: '{n} more devices. Close the live picture to see them all under “Children’s devices”.',
       lvEx_unknown: 'The rules are set for {n}. The box cannot tell when it was last online.',
       lvEx_active: '{n} used the internet in the last few minutes. The rules apply.',
       lvEx_quiet: '{n} has not asked the box anything for a while. If it is away from home Wi‑Fi, the rules cannot apply.',
       lvEx_paused: '{n} is paused. Everything it asks for is stopped until you resume it.',
       lvEx_offline: 'The internet is off for children, so {n} cannot open anything.',
-      lvEx_overridden: 'Another rule on the box overrides the rules for {n}, so it may not follow the rules. See the device below to fix it.',
+      lvEx_overridden: 'Another rule on the box overrides the rules for {n}, so it may not follow the rules. Close the live picture and see the device under “Children’s devices” to fix it.',
       lvEx_unreachable: '{n} has not asked the box anything in 24 hours. It may be on mobile data, a VPN or another Wi‑Fi, where the rules cannot work.',
       lvExChecked: 'Every time a phone, tablet, TV or computer at home asked the box where to find an app or website, over the last 24 hours. Your own devices count too.',
       lvExStopped: 'How many of those were stopped: blocked apps, bedtime, paused devices, and ads or unsafe sites from the box’s block lists.',
@@ -216,7 +234,7 @@
       lvBlockOff: 'الحظر متوقف', lvBlockOffSub: 'لا يتم إيقاف أي شيء. شغّل الحظر من «إعدادات متقدمة» أسفل الصفحة.',
       lvExamplePhone: 'هاتف مثال', lvExExample: 'هذا هاتف مثال فقط لشرح طريقة عمل الصندوق.', lvExAdd: 'أضف هاتف طفلك أو جهازه اللوحي لتُطبَّق عليه القواعد.',
       lvHide: 'إخفاء الرسم', lvShow: 'إظهار الرسم',
-      lvCheckOver: 'قد لا يلتزم {n} بالقواعد', lvCheckOverSub: 'توجد قاعدة أخرى في الصندوق تتجاوز قواعد هذا الجهاز. راجع «أجهزة الأطفال» في الأسفل لمعرفة الحل.',
+      lvCheckOver: 'قد لا يلتزم {n} بالقواعد', lvCheckOverSub: 'توجد قاعدة أخرى في الصندوق تتجاوز قواعد هذا الجهاز. أغلق الصورة المباشرة وراجع «أجهزة الأطفال» لمعرفة الحل.',
       lvCheckAway: 'لا يستخدم {n} صندوق العائلة', lvCheckAwaySub: 'لم يسأل الجهاز عن شيء منذ 24 ساعة. ربما يستخدم بيانات الجوال أو شبكة Wi‑Fi أخرى.',
       lvCheckMany: 'أجهزة تحتاج إلى نظرة: {n}', lvCheckManySub: 'قد لا تلتزم بعض الأجهزة بالقواعد. اضغط على أحدها في الرسم لمعرفة السبب.',
       lvOff: 'الإنترنت متوقف عن الأطفال', lvOffSub: 'كل ما يطلبونه يتم إيقافه.',
@@ -238,13 +256,13 @@
       lvExNet: 'التطبيقات والمواقع موجودة على الإنترنت. لا يبحث الصندوق هناك إلا عن العناوين. وبعد «نعم» يتوجه الجهاز إلى التطبيق بنفسه، فلا يمرّ الفيديو أو الرسائل عبر الصندوق.',
       lvExRest: 'باقي من في البيت: هاتفك والتلفزيون والحاسوب. يستخدمون الصندوق أيضًا، مع تصفية أساسية فقط للإعلانات والمواقع غير الآمنة.',
       lvExAllHome: 'إعداد الخصوصية يخفي أي جهاز سأل، لذلك يُرسم كل النشاط معًا.',
-      lvExMore: 'أجهزة أخرى: {n}. شاهدها كلها تحت «أجهزة الأطفال» في الأسفل.',
+      lvExMore: 'أجهزة أخرى: {n}. أغلق الصورة المباشرة لتشاهدها كلها تحت «أجهزة الأطفال».',
       lvEx_unknown: 'القواعد مضبوطة على {n}. لا يستطيع الصندوق معرفة آخر وقت اتصل فيه.',
       lvEx_active: 'استخدم {n} الإنترنت خلال الدقائق الماضية. القواعد مطبّقة.',
       lvEx_quiet: '{n} لم يسأل الصندوق عن شيء منذ فترة. إذا كان بعيدًا عن شبكة Wi‑Fi المنزل فلا يمكن تطبيق القواعد عليه.',
       lvEx_paused: '{n} متوقف مؤقتًا. يُمنع كل شيء حتى تستأنفه.',
       lvEx_offline: 'الإنترنت متوقف عن الأطفال، لذلك لا يستطيع {n} فتح أي شيء.',
-      lvEx_overridden: 'توجد قاعدة أخرى في الصندوق تتجاوز قواعد {n}، لذلك قد لا يلتزم بالقواعد. راجع الجهاز في الأسفل لمعرفة الحل.',
+      lvEx_overridden: 'توجد قاعدة أخرى في الصندوق تتجاوز قواعد {n}، لذلك قد لا يلتزم بالقواعد. أغلق الصورة المباشرة وراجع الجهاز تحت «أجهزة الأطفال» لمعرفة الحل.',
       lvEx_unreachable: 'لم يسأل {n} صندوق العائلة عن شيء منذ 24 ساعة. ربما يستخدم بيانات الجوال أو VPN أو شبكة Wi‑Fi أخرى، حيث لا تعمل القواعد.',
       lvExChecked: 'كل مرة سأل فيها هاتف أو جهاز لوحي أو تلفزيون أو حاسوب في البيت صندوق العائلة عن مكان تطبيق أو موقع، خلال آخر 24 ساعة. وتُحسب أجهزتك أيضًا.',
       lvExStopped: 'كم منها تم إيقافه: التطبيقات المحظورة ووقت النوم والأجهزة المتوقفة مؤقتًا، والإعلانات والمواقع غير الآمنة الموجودة في قوائم الحظر.',
@@ -345,6 +363,71 @@
   };
   Object.keys(FIRST_STR.en).forEach(function (k) { STR.en[k] = FIRST_STR.en[k]; });
   Object.keys(FIRST_STR.ar).forEach(function (k) { STR.ar[k] = FIRST_STR.ar[k]; });
+
+  // ------------------------------------------------------------------ strings for "What Sinko did for you", the price sheet and the live view
+  // tests/test_copy.py checks both languages and the plain-words rule. Every estimate says "about": the box counts stops, not seconds.
+  var SAVE_STR = {
+    en: {
+      savedTitle: 'What Sinko did for you', periodToday: 'Today', periodWeek: 'This week', periodSince: 'Since {d}', periodAll: 'All time',
+      savedWait: 'Less waiting for ads', savedData: 'Data saved', savedAbout: 'about',
+      savedMoney: '≈ {v} at your price', savedPrice: 'Show it in money', savedPriceChange: 'Change your price',
+      savedAds: 'Ads and trackers stopped', savedAppTried: '{app} tried to open', savedTimes: '{n} times', savedTimesOne: 'once',
+      savedTimesTwo: 'twice', savedTimesFew: '{n} times', savedTodayNotYet: 'Today’s numbers are not in yet.',
+      savedNights: 'Internet off at bedtime', savedNightsOf: '{k} of {n} nights', savedNightsOfOne: '{k} of 1 night',
+      savedNightsOfTwo: '{k} of 2 nights', savedNightsOfFew: '{k} of {n} nights', savedTonight: 'tonight at {t}',
+      savedOff: 'Children’s internet off', savedDevices: 'Devices looked after',
+      savedChart: 'Ads stopped each day, this week', savedChartToday: 'Today', savedChartDay: '{d}: {n} stopped', savedChartNone: '{d}: not counted',
+      savedChartAria: 'Ads stopped each day for the last seven days. {list}',
+      savedAt: 'Updated {t}', savedUnknown: 'not known', savedNoTries: 'No blocked app tried to open.',
+      savedWaiting: 'The box has not shared its numbers yet. They appear within the hour.',
+      savedStale: 'These numbers are from {t}. The box has not updated them since.',
+      savedNoAds: 'This box has no ad list, so it does not stop ads for the whole home. Your app rules still work.',
+      savedFrom: 'Counted from {d}, when the box started keeping this.',
+      savedHowTitle: 'How we count',
+      savedHow1: 'Every number here comes from the box’s own records. They stay on the box (and in its backups) and are never sent to the project.',
+      savedHow2: 'A stop is one time the box said no. Ads and trackers are what the box’s ad lists stopped, on every device at home. A phone often asks again, so this counts stops, not ads someone would have seen.',
+      savedHow3: 'Less waiting is about 50 ms for each ad or tracker stopped (the estimate the Brave browser publishes). Data saved is about 10 KB for each, a deliberately low guess.',
+      savedHow4: 'An app that tried to open: one opening makes several tries, and some apps keep trying in the background.',
+      savedHow5: 'Children’s internet off counts every minute it was off for the children’s devices: bedtime, breaks and when you switched it off. A bedtime night counts as kept when the internet stayed off for practically all of it.',
+      savedHow6: 'Devices looked after are the children’s devices on the list now. The money figure uses the price you typed, which stays on this phone.',
+      sizeMB: '{v} MB', sizeGB: '{v} GB', sizeTB: '{v} TB',
+      priceTitle: 'Your price for data', priceLabel: 'Price for 1 GB', currencyLabel: 'Currency', priceSave: 'Save', priceClear: 'Remove price',
+      priceLead: 'Type what 1 GB of data costs you. It stays on this phone and only changes how the savings are shown.',
+      priceBad: 'Enter a number above 0.', priceSaved: 'Price saved', priceCleared: 'Price removed',
+      liveOpen: 'See it live', liveViewTitle: 'Live picture', back: 'Back'
+    },
+    ar: {
+      savedTitle: 'ما فعله سينكو لك', periodToday: 'اليوم', periodWeek: 'هذا الأسبوع', periodSince: 'منذ {d}', periodAll: 'كل الوقت',
+      savedWait: 'انتظار أقل للإعلانات', savedData: 'بيانات وفّرتها', savedAbout: 'تقريبًا',
+      savedMoney: '≈ {v} بسعرك', savedPrice: 'اعرضها بالمال', savedPriceChange: 'غيّر سعرك',
+      savedAds: 'إعلانات ومتتبعات أُوقفت', savedAppTried: 'حاول {app} الفتح', savedTimes: '{n} مرة', savedTimesOne: 'مرة واحدة',
+      savedTimesTwo: 'مرتين', savedTimesFew: '{n} مرات', savedTodayNotYet: 'لم تصل أرقام اليوم بعد.',
+      savedNights: 'إيقاف الإنترنت وقت النوم', savedNightsOf: '{k} من {n} ليلة', savedNightsOfOne: '{k} من ليلة واحدة',
+      savedNightsOfTwo: '{k} من ليلتين', savedNightsOfFew: '{k} من {n} ليالٍ', savedTonight: 'الليلة الساعة {t}',
+      savedOff: 'توقف إنترنت الأطفال', savedDevices: 'أجهزة يرعاها الصندوق',
+      savedChart: 'الإعلانات الموقوفة كل يوم هذا الأسبوع', savedChartToday: 'اليوم', savedChartDay: '{d}: أُوقف {n}', savedChartNone: '{d}: لم يُحسب',
+      savedChartAria: 'الإعلانات الموقوفة كل يوم في الأيام السبعة الأخيرة. {list}',
+      savedAt: 'آخر تحديث {t}', savedUnknown: 'غير معروف', savedNoTries: 'لم يحاول أي تطبيق محظور الفتح.',
+      savedWaiting: 'لم يشارك الصندوق أرقامه بعد. تظهر خلال ساعة.',
+      savedStale: 'هذه الأرقام من {t}. لم يحدّثها الصندوق منذ ذلك الوقت.',
+      savedNoAds: 'لا توجد على هذا الصندوق قائمة إعلانات، لذلك لا يوقف الإعلانات عن كل البيت. قواعد التطبيقات ما زالت تعمل.',
+      savedFrom: 'محسوبة منذ {d}، حين بدأ الصندوق حفظ هذا.',
+      savedHowTitle: 'كيف نحسب',
+      savedHow1: 'كل رقم هنا يأتي من سجلات الصندوق نفسه. تبقى على الصندوق (وفي نسخه الاحتياطية) ولا تُرسَل إلى المشروع أبدًا.',
+      savedHow2: 'الإيقاف هو مرة قال فيها الصندوق «لا». الإعلانات والمتتبعات هي ما أوقفته قوائم الإعلانات في الصندوق، على كل أجهزة البيت. كثيرًا ما يعيد الهاتف السؤال، لذلك يَعدّ هذا الرقم مرات الإيقاف، لا الإعلانات التي كان أحد سيراها.',
+      savedHow3: 'الانتظار الأقل نحو 50 جزءًا من الألف من الثانية لكل إعلان أو متتبع أُوقف (التقدير الذي ينشره متصفح Brave). والبيانات نحو 10 كيلوبايت لكل واحد، وهو تقدير منخفض عمدًا.',
+      savedHow4: 'التطبيق الذي حاول الفتح: فتحه مرة واحدة يعني عدة محاولات، وبعض التطبيقات تواصل المحاولة في الخلفية.',
+      savedHow5: 'توقف إنترنت الأطفال يَعدّ كل دقيقة كان فيها الإنترنت متوقفًا عن أجهزة الأطفال: وقت النوم والاستراحات وحين أوقفته أنت. وتُحسب ليلة وقت النوم محفوظة عندما يبقى الإنترنت متوقفًا طوالها تقريبًا.',
+      savedHow6: 'الأجهزة التي يرعاها الصندوق هي أجهزة الأطفال الموجودة في القائمة الآن. ويستخدم رقم المال السعر الذي كتبته، ويبقى على هذا الهاتف.',
+      sizeMB: '{v} ميغابايت', sizeGB: '{v} غيغابايت', sizeTB: '{v} تيرابايت',
+      priceTitle: 'سعر البيانات عندك', priceLabel: 'سعر 1 غيغابايت', currencyLabel: 'العملة', priceSave: 'حفظ', priceClear: 'حذف السعر',
+      priceLead: 'اكتب كم تدفع مقابل 1 غيغابايت من البيانات. يبقى السعر على هذا الهاتف، ولا يغيّر إلا طريقة عرض التوفير.',
+      priceBad: 'أدخل رقمًا أكبر من 0.', priceSaved: 'تم حفظ السعر', priceCleared: 'تم حذف السعر',
+      liveOpen: 'شاهد ما يحدث الآن', liveViewTitle: 'الصورة المباشرة', back: 'رجوع'
+    }
+  };
+  Object.keys(SAVE_STR.en).forEach(function (k) { STR.en[k] = SAVE_STR.en[k]; });
+  Object.keys(SAVE_STR.ar).forEach(function (k) { STR.ar[k] = SAVE_STR.ar[k]; });
   // The My box sheet's strings (pb-box.js is loaded before this file).
   if (window.PBBox) {
     Object.keys(PBBox.strings.en).forEach(function (k) { STR.en[k] = PBBox.strings.en[k]; });
@@ -526,6 +609,7 @@
     stopPolling();
     if (window.PBBox) PBBox.reset();
     if (window.PBPicture) { PBPicture.stop(); picInited = false; }
+    closeLive(); liveOpened = false;
     showLogin(typeof note === 'string' ? note : '');
   }
   function showLogin(note) {
@@ -807,7 +891,9 @@
         groups: byName, services: services, kids: kids, clients: r[1].clients || [],
         devices: r[2].devices || [], myIp: r[3].remote_addr || '', byIp: devicesByIp,
         offline: !!byName[G.offline].enabled, state: parseState(byName[G.state].comment),
-        learned: PBCore.learnedRules(r[7].domains)
+        learned: PBCore.learnedRules(r[7].domains),
+        // What the box counted for the savings card: its own ledger, a disabled group only the box writes (null until it has one).
+        ledger: PBCore.parseLedger(byName[G.ledger] ? byName[G.ledger].comment : '', catalog.services.map(function (s) { return s.id; }))
       };
       render();
     });
@@ -863,10 +949,10 @@
   }
   function timerActive() { return !!(M && M.state.timer); }
 
-  function toggleService(id) {
+  // Allow | Block on an app's row: choosing what it already is changes nothing.
+  function setService(id, want) {
     var s = M.services.filter(function (x) { return x.meta.id === id; })[0];
-    if (!s || timerActive()) return;
-    var want = !s.blocked;
+    if (!s || timerActive() || s.blocked === want) return;
     run(function () { return putGroup(s.group, want).then(function () { s.blocked = want; }); },
       t(want ? 'nowBlocked' : 'nowAllowed', { n: svcName(s.meta) }));
   }
@@ -882,6 +968,7 @@
     }, t('homeworkOn'));
   }
   function heroAction() {
+    if (timerActive() && M.state.timer.mode === 'block') return endBreak();
     if (timerActive()) return endTimer();
     if (!M.kids.length && !M.offline) return openAdd();
     var want = !M.offline;
@@ -905,18 +992,50 @@
     var minutes = typed > 0 ? typed : timerMinutes;
     if (!(minutes >= 5 && minutes <= 720)) { toast(t('enterMinutes'), true); return; }
     closeDialog('timerDialog');
-    var mode = timerMode;
+    beginTimer(timerMode, function () { return Math.round(serverNowSec()) + minutes * 60; }, t(timerMode === 'free' ? 'freeOn' : 'breakOn'));
+  }
+  // One timer at a time: a running one is ended first (its rules come back), and the new one remembers the rules as they are then.
+  // `until` is asked for only then, on the box's clock (epoch seconds); the box ends the timer even with this page closed.
+  function beginTimer(mode, until, okMsg) {
     run(function () {
       return endTimerIfAny().then(function () {
         var snap = snapshot();
         var rules = mode === 'free' ? applyRules({}, false) : applyRules(snap.services, true);
         return rules.then(function () {
-          return writeState(function (st) {
-            st.timer = { mode: mode, until: Math.round(serverNowSec()) + minutes * 60, snapshot: snap };
-          });
+          return writeState(function (st) { st.timer = { mode: mode, until: until(), snapshot: snap }; });
         });
       });
-    }, t(mode === 'free' ? 'freeOn' : 'breakOn'));
+    }, okMsg);
+  }
+  // The control panel's "Off for 30 min / 1 hour / until morning": an offline break, offered only while the internet is on and no
+  // timer runs (a break started while already off would bring "off" back at its end).
+  function offFor(minutes) {
+    if (!M.kids.length || M.offline || timerActive()) return;
+    var end = Math.round(serverNowSec()) + minutes * 60;
+    beginTimer('block', function () { return end; }, t('offOn', { t: fmtBoxTime(end) }));
+  }
+  function offUntilMorning() {
+    if (!M.kids.length || M.offline || timerActive()) return;
+    var end = morningUntil();
+    if (!end) return;
+    beginTimer('block', function () { return end; }, t('offOn', { t: fmtBoxTime(end) }));
+  }
+  // Morning is when bedtime ends (the parent chose it), else a fixed hour, on the box's wall clock like bedtime itself.
+  function morningUntil() {
+    var sc = M.state.schedule;
+    return PBCore.nextWallTime(Math.round(serverNowSec()), sc.enabled && sc.days.length ? sc.end : MORNING, boxOffsetMin());
+  }
+  // The box's offset from UTC (box.json), else this phone's: the two are the same in nearly every home.
+  function boxOffsetMin() {
+    var o = boxInfo ? PBCore.utcOffsetMinutes(boxInfo.utcOffset) : null;
+    return o === null ? -new Date().getTimezoneOffset() : o;
+  }
+  // A moment (epoch seconds) as the box's wall clock shows it, so it matches the bedtime times; the phone's clock when the box's zone is unknown.
+  function fmtBoxTime(epoch) {
+    var o = boxInfo ? PBCore.utcOffsetMinutes(boxInfo.utcOffset) : null;
+    if (o === null) return fmtTime(new Date(epoch * 1000));
+    try { return new Date((epoch + o * 60) * 1000).toLocaleTimeString(locale(), { timeZone: 'UTC', hour: 'numeric', minute: '2-digit' }); }
+    catch (e) { return fmtTime(new Date(epoch * 1000)); }
   }
   // Restore the rules saved when the timer started, then clear it.
   function restoreTimer() {
@@ -929,6 +1048,10 @@
   }
   function endTimerIfAny() { return timerActive() ? restoreTimer() : Promise.resolve(); }
   function endTimer() { run(restoreTimer, t('timerEnded')); }
+  // "Turn it back on" during a break means on: the break ends (its rules come back) and the internet is switched on, also in bedtime.
+  function endBreak() {
+    run(function () { return restoreTimer().then(function () { return applyRules(currentMap(), false); }); }, t('internetOn'));
+  }
 
   function togglePause(client) {
     var k = M.kids.filter(function (x) { return x.row.client === client; })[0]; if (!k) return;
@@ -1045,17 +1168,28 @@
     });
   }
 
-  function saveBedtime() {
+  // Saves the times, the nights and the switch together. Returns false (and says why) when they cannot be saved.
+  function saveBedtime(okMsg) {
     var start = $('bedStart').value, end = $('bedEnd').value;
     var days = Array.prototype.filter.call(document.querySelectorAll('#bedDays input'), function (i) { return i.checked; })
       .map(function (i) { return +i.value; });
     var enabled = $('bedOn').checked;
-    if (!/^\d\d:\d\d$/.test(start) || !/^\d\d:\d\d$/.test(end)) return;
-    if (enabled && start === end) { toast(t('sameTimes'), true); return; }
-    if (enabled && !days.length) { toast(t('pickNight'), true); return; }
+    if (!/^\d\d:\d\d$/.test(start) || !/^\d\d:\d\d$/.test(end)) return false;
+    if (enabled && start === end) { toast(t('sameTimes'), true); return false; }
+    if (enabled && !days.length) { toast(t('pickNight'), true); return false; }
+    bedDirty = false;                         // what is in the fields is what is being saved: the next render may repaint them
     run(function () {
       return writeState(function (st) { st.schedule = { enabled: enabled, start: start, end: end, days: days }; });
-    }, t('bedtimeSaved'));
+    }, okMsg || t('bedtimeSaved'));
+    return true;
+  }
+  // The switch takes effect at once, with the times and nights in the fields; if those cannot be saved it goes back and the fields open.
+  function bedSwitch() {
+    var on = $('bedOn').checked;
+    syncBedOn();
+    if (!saveBedtime(t(on ? 'bedtimeSaved' : 'bedtimeOffToast'))) {
+      $('bedOn').checked = !on; syncBedOn(); $('bedEdit').open = true;
+    }
   }
 
   // ------------------------------------------------------------------ render
@@ -1134,6 +1268,7 @@
     renderHero();
     renderUpdateBanner();
     renderSetup();
+    renderSaved();
     renderServices();
     renderDevices();
     renderBedtime(false);
@@ -1145,6 +1280,192 @@
       b.classList.toggle('mode-on', !!(tm && m === tm.mode));
     });
     renderPicture();
+  }
+
+  // ---- What Sinko did for you: the box's ledger (M.ledger, parsed by PBCore.parseLedger), worded for a parent
+  var period = (function () { var p = safeGet(localStorage, PERIOD_KEY); return p === 'today' || p === 'since' ? p : 'week'; })();
+  function setPeriod(p) {
+    if (p !== 'today' && p !== 'week' && p !== 'since') return;
+    period = p; safeSet(localStorage, PERIOD_KEY, p);
+    renderSaved();
+  }
+  function readPrice() {
+    var raw = safeGet(localStorage, PRICE_KEY), p = null;
+    try { p = raw ? JSON.parse(raw) : null; } catch (e) { p = null; }
+    if (!p || typeof p.v !== 'string' || PBCore.moneyFor(1e9, p.v) === null) return null;
+    return { v: p.v, cur: typeof p.cur === 'string' ? p.cur.slice(0, 6) : '' };
+  }
+  // Hours and minutes through Intl, which knows each language's plurals (in Arabic: ساعة, ساعتان, 5 ساعات, 55 ساعة).
+  function unitText(n, unit, short) {
+    try { return new Intl.NumberFormat(locale(), { style: 'unit', unit: unit, unitDisplay: short ? 'short' : 'long' }).format(n); } catch (e) { return n + ' ' + unit; }
+  }
+  // `big`: the card's large figure, where English says "1 hr 22 min"; Arabic keeps the words (its short forms are single letters).
+  function durText(sec, big) {
+    var d = PBCore.durationParts(sec), short = !!big && lang === 'en';
+    if (!d) return t('savedUnknown');
+    var parts = [];
+    if (d.h !== undefined) parts.push(unitText(d.h, 'hour', short));
+    if (d.m !== undefined && (d.m || d.h === undefined)) parts.push(unitText(d.m, 'minute', short));
+    try { return new Intl.ListFormat(locale(), { style: 'narrow', type: 'unit' }).format(parts); } catch (e) { return parts.join(' '); }
+  }
+  // A string with a counted noun: `key` + One / Two / Few when the language has that form for n (Arabic has all three), else `key`.
+  function tn(key, n, vars) {
+    var cat = 'other', form = { one: 'One', two: 'Two', few: 'Few' };
+    try { cat = new Intl.PluralRules(lang === 'ar' ? 'ar' : 'en').select(n); } catch (e) { cat = n === 1 ? 'one' : 'other'; }
+    return t(form[cat] && STR.en[key + form[cat]] !== undefined ? key + form[cat] : key, vars);
+  }
+  function sizeText(bytes) {
+    var z = PBCore.sizeParts(bytes);
+    if (!z) return t('savedUnknown');
+    var v;
+    try { v = new Intl.NumberFormat(locale(), { maximumFractionDigits: 1 }).format(z.value); } catch (e) { v = String(z.value); }
+    return t('size' + z.unit, { v: v });
+  }
+  function moneyText(amount, cur) {
+    var digits = amount < 1 ? 3 : amount < 100 ? 2 : 0, v;
+    try { v = new Intl.NumberFormat(locale(), { maximumFractionDigits: digits }).format(amount); } catch (e) { v = amount.toFixed(digits); }
+    // isolated, so "0.49 BHD" keeps its order inside an Arabic sentence
+    return '\u2066' + (cur ? v + ' ' + cur : v) + '\u2069';
+  }
+  // 'YYYY-MM-DD' as "2 March" (with the year when it is not this year's).
+  function fmtDay(key, short) {
+    var m = /^(\d{4})-(\d\d)-(\d\d)$/.exec(key || ''), now = new Date(serverNowSec() * 1000);
+    if (!m) return '';
+    var opts = { timeZone: 'UTC', day: 'numeric', month: short ? 'short' : 'long' };
+    if (+m[1] !== now.getFullYear()) opts.year = 'numeric';
+    try { return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).toLocaleDateString(locale(), opts); } catch (e) { return key; }
+  }
+  var howLang = '';
+  function renderSaved() {
+    var L = M.ledger, body = $('savedBody'), fmt = function (n) { return PBCore.formatCount(n, locale()); };
+    Array.prototype.forEach.call(document.querySelectorAll('#savedPeriods [data-period]'), function (b) {
+      b.setAttribute('aria-pressed', b.getAttribute('data-period') === period ? 'true' : 'false');
+    });
+    $('periodSince').textContent = L && L.since ? t('periodSince', { d: fmtDay(L.since, true) }) : t('periodAll');
+    var price = readPrice();
+    $('priceBtn').textContent = t(price ? 'savedPriceChange' : 'savedPrice');
+    if (howLang !== lang) {
+      howLang = lang;
+      var how = $('savedHowList'); how.textContent = '';
+      ['savedHow1', 'savedHow2', 'savedHow3', 'savedHow4', 'savedHow5', 'savedHow6'].forEach(function (k) { how.appendChild(el('li', { text: t(k) })); });
+    }
+    body.textContent = '';
+    $('savedAt').textContent = L ? t('savedAt', { t: fmtBoxTime(L.at) }) : '';
+    if (!L) { body.appendChild(el('p', { class: 'saved-msg', text: t('savedWaiting') })); return; }
+    if (serverNowSec() - L.at > LEDGER_STALE_SEC) {
+      body.appendChild(el('p', { class: 'saved-msg', text: t('savedStale', { t: fmtDay(L.today) + ' ' + fmtBoxTime(L.at) }) }));
+    }
+    // "Today" is the box's own date; a ledger that has not turned the day yet has no row for it.
+    var boxToday = new Date((serverNowSec() + boxOffsetMin() * 60) * 1000).toISOString().slice(0, 10);
+    if (period === 'today' && L.today !== boxToday) {
+      body.appendChild(el('p', { class: 'saved-msg', text: t('savedTodayNotYet') }));
+      return;
+    }
+    var v = PBCore.savings(L, period);
+    var noAds = L.adLists === 0;
+    if (noAds) body.appendChild(el('p', { class: 'saved-msg', text: t('savedNoAds') }));
+    else {
+      var money = price ? PBCore.moneyFor(v.bytes, price.v) : null;
+      body.appendChild(el('div', { class: 'saved-figs' }, [
+        el('div', { class: 'fig' }, [el('span', { class: 'fig-label', text: t('savedWait') }),
+          el('span', { class: 'fig-value', text: durText(v.waitSec, true) }), el('span', { class: 'fig-note', text: t('savedAbout') })]),
+        el('div', { class: 'fig' }, [el('span', { class: 'fig-label', text: t('savedData') }),
+          el('span', { class: 'fig-value', text: sizeText(v.bytes) }),
+          el('span', { class: 'fig-note', text: money === null ? t('savedAbout') : t('savedMoney', { v: moneyText(money, price.cur) }) })])
+      ]));
+    }
+    var rows = [];
+    var row = function (label, value) {
+      rows.push(el('li', { class: 'saved-row' }, [el('span', { text: label }), el('span', { class: 'saved-row-value', text: value })]));
+    };
+    if (!noAds) row(t('savedAds'), v.ads === null ? t('savedUnknown') : fmt(v.ads));
+    var names = {};
+    M.services.forEach(function (x) { names[x.meta.id] = svcName(x.meta); });
+    v.apps.slice(0, 3).forEach(function (a) { row(t('savedAppTried', { app: names[a.app] || a.app }), tn('savedTimes', a.count, { n: fmt(a.count) })); });
+    var sc = M.state.schedule;
+    if (v.nights) row(t('savedNights'), tn('savedNightsOf', v.nights, { k: fmt(v.nightsKept), n: fmt(v.nights) }));
+    else if (period === 'today' && sc.enabled && sc.days.indexOf(new Date((serverNowSec() + boxOffsetMin() * 60) * 1000).getUTCDay()) >= 0) {
+      row(t('savedNights'), t('savedTonight', { t: fmtHHMM(sc.start) }));
+    }
+    if (v.offSec !== null) row(t('savedOff'), durText(v.offSec));
+    row(t('savedDevices'), fmt(M.kids.length));
+    body.appendChild(el('ul', { class: 'saved-rows' }, rows));
+    if (!v.apps.length && M.services.some(function (x) { return x.blocked; })) body.appendChild(el('p', { class: 'saved-note', text: t('savedNoTries') }));
+    if (period === 'since' && L.keptSince && L.keptSince !== L.since && (v.nights || v.offSec !== null)) {
+      body.appendChild(el('p', { class: 'saved-note', text: t('savedFrom', { d: fmtDay(L.keptSince) }) }));
+    }
+    if (!noAds) body.appendChild(savedChart(L, boxToday));
+  }
+  // Ads stopped on each of the last seven days: one quiet hue, today in ink; a day the box has nothing for is a flat line, not a zero.
+  function savedChart(L, boxToday) {
+    var week = PBCore.ledgerWeek(L), max = 1, fmt = function (n) { return PBCore.formatCount(n, locale()); }, words = [];
+    week.forEach(function (d) { if (d.ads !== null) max = Math.max(max, d.ads); });
+    var bars = el('div', { class: 'bars', role: 'img' });
+    week.forEach(function (d, i) {
+      var today = d.d === boxToday, label = today ? t('savedChartToday') : t('daysLong')[PBCore.weekday(d.d)];
+      var text = d.ads === null ? t('savedChartNone', { d: label }) : t('savedChartDay', { d: label, n: fmt(d.ads) });
+      words.push(text);
+      var b = el('span', { class: 'bar' + (today ? ' is-today' : '') + (d.ads === null ? ' is-gap' : ''), title: text });
+      if (d.ads !== null) b.style.height = Math.max(2, Math.round(100 * d.ads / max)) + '%';
+      bars.appendChild(b);
+    });
+    bars.setAttribute('aria-label', t('savedChartAria', { list: words.join('; ') }));
+    var first = week[0], last = week[week.length - 1];
+    return el('figure', { class: 'chart' }, [
+      el('figcaption', { text: t('savedChart') }), bars,
+      el('div', { class: 'bars-axis', 'aria-hidden': 'true' }, [el('span', { text: t('days')[PBCore.weekday(first.d)] }),
+        el('span', { text: (last.d === boxToday ? t('savedChartToday') : t('days')[PBCore.weekday(last.d)]) + (last.ads === null ? '' : ' \u00b7 ' + fmt(last.ads)) })])
+    ]);
+  }
+  function openPrice() {
+    var p = readPrice();
+    $('priceValue').value = p ? p.v : '';
+    $('priceCurrency').value = p ? p.cur : '';
+    $('priceErr').textContent = '';
+    openDialog('priceDialog');
+  }
+  function savePrice() {
+    var v = $('priceValue').value.trim(), cur = $('priceCurrency').value.trim().slice(0, 6);
+    if (PBCore.moneyFor(1e9, v) === null) { $('priceErr').textContent = t('priceBad'); return; }
+    safeSet(localStorage, PRICE_KEY, JSON.stringify({ v: v, cur: cur }));
+    closeDialog('priceDialog'); toast(t('priceSaved'));
+    if (M) renderSaved();
+  }
+  function clearPrice() {
+    safeSet(localStorage, PRICE_KEY, null);
+    closeDialog('priceDialog'); toast(t('priceCleared'));
+    if (M) renderSaved();
+  }
+
+  // ---- the live picture: a full-screen layer over the page, opened from "See it live"
+  var liveOpened = false, liveOpener = null;
+  function setBehindLive(on) {
+    ['cols'].forEach(function (id) { if (on) $(id).setAttribute('inert', ''); else $(id).removeAttribute('inert'); });
+    var bar = document.querySelector('#app > .topbar');
+    if (on) bar.setAttribute('inert', ''); else bar.removeAttribute('inert');
+  }
+  // The phone's Back button (and an installed app's) closes the live picture instead of leaving the page, which would sign the parent out.
+  var liveHistory = false;
+  window.addEventListener('popstate', function () { if (liveHistory) { liveHistory = false; closeLive(true); } });
+  function openLive(from) {
+    liveOpener = from || null;
+    if (!liveHistory && window.history && history.pushState) { try { history.pushState({ pbLive: 1 }, ''); liveHistory = true; } catch (e) { liveHistory = false; } }
+    // The picture used to fold away on the main page; behind its own button it always opens unfolded.
+    if (!liveOpened) safeSet(localStorage, 'pb.live', null);
+    liveOpened = true;
+    $('liveView').hidden = false;
+    setBehindLive(true);
+    $('liveView').scrollTop = 0;
+    renderPicture();
+    $('liveViewTitle').focus({ preventScroll: true });
+  }
+  function closeLive(fromHistory) {
+    if ($('liveView').hidden) return;
+    if (!fromHistory && liveHistory) { liveHistory = false; try { history.back(); } catch (e) { /* the entry stays: harmless */ } }
+    $('liveView').hidden = true;
+    setBehindLive(false);
+    if (liveOpener && liveOpener.focus) liveOpener.focus({ preventScroll: true });
+    liveOpener = null;
   }
 
   // The live picture (pb-picture.js) gets a plain description of the family: it never touches M or the API rules.
@@ -1166,13 +1487,14 @@
     };
   }
   function renderPicture() {
-    if (!window.PBPicture || !window.PBCore || !window.PBLive) return;
+    if (!liveOpened || !window.PBPicture || !window.PBCore || !window.PBLive) return;     // nothing runs until the parent asks to see it
     if (!picInited) {
       picInited = true;
       var picEnv = {
         call: call, t: t, locale: locale(), serverNow: serverNowSec,
         openSheet: function () { openDialog('liveSheet'); },
         goDevices: function () {
+          closeLive();
           var d = $('devices');
           if (d && d.scrollIntoView) d.scrollIntoView({ behavior: window.PBLive.reducedMotion() ? 'auto' : 'smooth', block: 'center' });
         }
@@ -1183,38 +1505,61 @@
     PBPicture.update(picModel());
   }
 
+  // Text and classes are set only when they change: the panel's sentence is a live region, and a poll must not re-announce it.
+  function setText(id, text) { var n = $(id); if (n.textContent !== text) n.textContent = text; }
   function renderHero() {
-    var hero = $('hero'), tm = M.state.timer;
+    var hero = $('hero'), tm = M.state.timer, sc = M.state.schedule, now = Math.round(serverNowSec()), off = boxOffsetMin();
     var blocked = M.services.filter(function (s) { return s.blocked; }).length;
     var total = M.services.length;
     var n = M.kids.length;
     var devicesLine = n === 0 ? t('subNoDevices') : (n === 1 ? t('subDevice1') : t('subDevices', { n: n }));
     var appsLine = blocked ? t('subBlocked', { n: blocked, t: total }) : t('subNone');
-    hero.classList.remove('hero-off', 'hero-free', 'hero-block');
-    var kicker, title, sub, btn;
-    if (tm) {
-      var ends = new Date(tm.until * 1000);
-      hero.classList.add(tm.mode === 'free' ? 'hero-free' : 'hero-block');
-      kicker = t(tm.mode === 'free' ? 'heroFree' : 'heroBreak');
-      title = t('endsAt', { t: fmtTime(ends) });
-      sub = devicesLine;
-      btn = t('endNow');
+    var isOff = false, solo = true, key = 'key key-big', kicker, title, sub, btn, back;
+    // What the panel says about "when" is what the box will do (PBCore.comesBack mirrors bin/sinko's Controller.tick).
+    if (tm && tm.mode === 'free') {
+      back = PBCore.comesBack('free', sc, now, tm.until, off);
+      kicker = t('heroFree'); title = t('heroFreeTitle'); btn = t('endNow');
+      sub = back.bedtime ? t('heroFreeBedAt', { t: fmtBoxTime(back.at) }) : t('heroRulesAt', { t: fmtBoxTime(tm.until) });
+    } else if (tm) {
+      isOff = true;
+      back = PBCore.comesBack('break', sc, now, tm.until, off);
+      kicker = t('heroBreak'); title = t('heroOff'); btn = t('turnOn');
+      sub = back.bedtime ? t('heroBackAfterBed', { t: fmtBoxTime(back.at) }) : t('heroBackAt', { t: fmtBoxTime(tm.until) });
     } else if (M.offline) {
-      hero.classList.add('hero-off');
+      isOff = true;
       kicker = M.state.scheduleActive ? t('heroBedtime') : t('heroOnKicker');
       title = t('heroOff');
-      sub = M.state.scheduleActive ? t('bedEndsNote', { t: fmtHHMM(M.state.schedule.end) }) + ' ' + devicesLine : devicesLine;
+      if (M.state.scheduleActive) sub = t('bedEndsNote', { t: fmtHHMM(sc.end) });
+      else {
+        back = PBCore.comesBack('off', sc, now, null, off);
+        sub = back.at ? t('heroOffOrBed', { t: fmtBoxTime(back.at) }) : t('heroOffYou');
+      }
+      sub += ' ' + devicesLine;
       btn = t('turnOn');
     } else {
-      kicker = t('heroOnKicker');
-      title = t('heroOn');
-      sub = appsLine + ' ' + devicesLine;
-      btn = n ? t('turnOff') : t('addDevice');
+      kicker = t('heroOnKicker'); title = t('heroOn'); sub = appsLine + ' ' + devicesLine;
+      if (n) { btn = t('turnOff'); key += ' key-off'; solo = false; } else btn = t('addDevice');
     }
-    $('heroKicker').textContent = kicker;
-    $('heroTitle').textContent = title;
-    $('heroSub').textContent = sub;
-    $('heroBtn').textContent = btn;
+    var focusInFor = $('heroFor').contains(document.activeElement);
+    hero.classList.toggle('is-off', isOff);
+    hero.classList.toggle('is-solo', solo);
+    setText('heroKicker', kicker);
+    setText('heroTitle', title);
+    setText('heroSub', sub);
+    setText('heroBtn', btn);
+    if ($('heroBtn').className !== key) $('heroBtn').className = key;
+    $('heroFor').hidden = solo;
+    if (solo && focusInFor) $('heroBtn').focus();        // the key that was pressed is gone: keep the parent's place
+    if (!solo) {
+      setText('off30', t('off30'));
+      setText('off60', t('off60'));
+      // In the evening and at night the third key turns it off until the morning; in the daytime that would be most of a day.
+      var morning = morningUntil(), third = $('offMorning');
+      var evening = morning && morning - now <= 15 * 3600;
+      third.setAttribute('data-act', evening ? 'offMorning' : 'offFor');
+      if (evening) third.removeAttribute('data-minutes'); else third.setAttribute('data-minutes', '120');
+      setText('offMorning', evening ? t('offUntil', { t: fmtBoxTime(morning) }) : t('off120'));
+    }
     $('heroClock').hidden = !tm;
     tickClock();
   }
@@ -1230,27 +1575,40 @@
     upd(); tickTimer = setInterval(upd, 1000);
   }
 
+  // The lists are rebuilt on every poll: put keyboard focus back on the same key afterwards, or it falls to the page.
+  function focusKey() {
+    var a = document.activeElement, row = a && a.closest ? a.closest('[data-id],[data-client]') : null;
+    if (!a || !row || !(a.getAttribute('data-act'))) return null;
+    return '[data-' + (row.hasAttribute('data-id') ? 'id' : 'client') + '="' + (row.getAttribute('data-id') || row.getAttribute('data-client')).replace(/"/g, '') +
+      '"]' + (a === row ? '' : ' [data-act="' + a.getAttribute('data-act') + '"]' + (a.getAttribute('data-want') ? '[data-want="' + a.getAttribute('data-want') + '"]' : ''));
+  }
+  function refocus(root, sel) {
+    if (!sel) return;
+    var n = root.querySelector(sel) || (root.matches && root.parentNode.querySelector(sel));
+    if (n && !n.disabled) n.focus({ preventScroll: true });
+  }
   function renderServices() {
-    var root = $('services'); root.textContent = '';
+    var root = $('services'), keep = root.contains(document.activeElement) ? focusKey() : null; root.textContent = '';
     var locked = timerActive();
     $('svcNote').textContent = locked ? t('svcLocked') : t('svcNote');
     Array.prototype.forEach.call(document.querySelectorAll('[data-act=allowAll],[data-act=blockAll]'), function (b) { b.disabled = locked; });
     catalog.categories.forEach(function (cat) {
       var items = M.services.filter(function (s) { return s.meta.category === cat.id; });
       if (!items.length) return;
-      var grid = el('div', { class: 'tiles' });
+      var list = el('ul', { class: 'app-list' });
       items.forEach(function (s) {
         var name = svcName(s.meta);
         var badge = el('span', { class: 'tile-badge', 'aria-hidden': 'true', text: monogram(s.meta.name) });
         badge.style.setProperty('--brand', s.meta.color || '#667');
-        grid.appendChild(el('button', {
-          type: 'button', class: 'tile' + (s.blocked ? ' tile-blocked' : ''), 'data-act': 'svc', 'data-id': s.meta.id,
-          'aria-pressed': s.blocked ? 'true' : 'false', disabled: locked,
-          'aria-label': name + ', ' + t(s.blocked ? 'blocked' : 'allowed')
-        }, [badge, el('span', { class: 'tile-name', text: name }),
-          el('span', { class: 'tile-state', text: t(s.blocked ? 'blocked' : 'allowed') })]));
+        // Two plain words instead of one switch: "on" would not say whether the app or the block is on.
+        var seg = el('div', { class: 'seg', role: 'group', 'aria-label': name }, [
+          el('button', { type: 'button', 'data-act': 'svcSet', 'data-want': 'allow', 'aria-pressed': s.blocked ? 'false' : 'true', disabled: locked, text: t('allowBtn') }),
+          el('button', { type: 'button', 'data-act': 'svcSet', 'data-want': 'block', 'aria-pressed': s.blocked ? 'true' : 'false', disabled: locked, text: t('blockBtn') })
+        ]);
+        list.appendChild(el('li', { class: 'tile' + (s.blocked ? ' tile-blocked' : ''), 'data-id': s.meta.id },
+          [badge, el('span', { class: 'tile-name', text: name }), seg]));
       });
-      root.appendChild(el('div', { class: 'cat' }, [el('h3', { text: cat[lang] || cat.en }), grid]));
+      root.appendChild(el('div', { class: 'cat' }, [el('h3', { text: cat[lang] || cat.en }), list]));
     });
     // What the box learned for these apps (My box, "New addresses of blocked apps"): one line, only when there is something.
     var counts = {};
@@ -1261,6 +1619,7 @@
       root.appendChild(el('p', { class: 'muted small learned-note', id: 'learnedNote' }, [el('span', { text: t('boxLearnSummary', { apps: listText(apps) }) }), ' ',
         el('button', { type: 'button', class: 'link', 'data-act': 'learned', text: t('boxLearnSee') })]));
     }
+    refocus(root, keep);
   }
   function listText(items) {
     try { return new Intl.ListFormat(locale(), { style: 'long', type: 'conjunction' }).format(items); } catch (e) { return items.join(', '); }
@@ -1271,7 +1630,7 @@
   }
 
   function renderDevices() {
-    var ul = $('devices'); ul.textContent = '';
+    var ul = $('devices'), keep = ul.contains(document.activeElement) ? focusKey() : null; ul.textContent = '';
     if (!M.kids.length) { ul.appendChild(el('li', { class: 'empty', text: t('noDevices') })); return; }
     M.kids.forEach(function (k) {
       var ips = k.dev ? (k.dev.ips || []).map(function (i) { return i.ip; }) : [];
@@ -1287,13 +1646,14 @@
             text: t('shadowed', { r: k.shadow.map(function (x) { return x.client; }).join(', ') }) }) : null
         ]),
         el('span', { class: 'device-actions' }, [
-          el('button', { type: 'button', class: 'btn btn-small', 'data-act': 'pause', 'data-client': k.row.client },
+          el('button', { type: 'button', class: 'btn', 'data-act': 'pause', 'data-client': k.row.client },
             [icon(k.paused ? 'i-play' : 'i-pause'), el('span', { text: t(k.paused ? 'resume' : 'pause') })]),
           el('button', { type: 'button', class: 'icon-btn', 'data-act': 'remove', 'data-client': k.row.client,
             'aria-label': t('remove') + ' ' + k.name }, [icon('i-close')])
         ])
       ]));
     });
+    refocus(ul, keep);
   }
 
   var bedDirty = false;
@@ -1312,8 +1672,19 @@
     }
     bedDirty = false;
     syncBedOn();
+    $('bedSentence').textContent = sc.enabled && sc.days.length
+      ? t('bedSentence', { s: fmtHHMM(sc.start), e: fmtHHMM(sc.end), d: nightsText(sc.days) }) : t('bedSentenceOff');
   }
   function syncBedOn() { $('bedFields').classList.toggle('is-off', !$('bedOn').checked); }
+  // "every night", "Sunday to Thursday" (one run of nights, also across Saturday to Sunday), or a list.
+  function nightsText(days) {
+    var names = t('daysLong'), has = {}, starts = [];
+    if (days.length === 7) return t('bedEveryNight');
+    days.forEach(function (d) { has[d] = true; });
+    days.forEach(function (d) { if (!has[(d + 6) % 7]) starts.push(d); });
+    if (days.length >= 3 && starts.length === 1) return t('bedDaysRange', { a: names[starts[0]], b: names[(starts[0] + days.length - 1) % 7] });
+    return listText(days.slice().sort(function (a, b) { return a - b; }).map(function (d) { return names[d]; }));
+  }
 
   function applyLang() {
     var html = document.documentElement;
@@ -1356,7 +1727,15 @@
       case 'homework': homework(); break;
       case 'timer': openTimer(n.getAttribute('data-mode')); break;
       case 'startTimer': startTimer(); break;
-      case 'svc': toggleService(n.getAttribute('data-id')); break;
+      case 'svcSet': setService(n.closest('[data-id]').getAttribute('data-id'), n.getAttribute('data-want') === 'block'); break;
+      case 'offFor': offFor(+n.getAttribute('data-minutes')); break;
+      case 'offMorning': offUntilMorning(); break;
+      case 'period': setPeriod(n.getAttribute('data-period')); break;
+      case 'price': openPrice(); break;
+      case 'priceSave': savePrice(); break;
+      case 'priceClear': clearPrice(); break;
+      case 'liveOpen': openLive(n); break;
+      case 'liveClose': closeLive(); break;
       case 'allowAll': setAll(false); break;
       case 'blockAll': setAll(true); break;
       case 'openAdd': openAdd(); break;
@@ -1464,13 +1843,22 @@
     $('loginForm').addEventListener('submit', login);
     $('claimForm').addEventListener('submit', claim);
     $('termsForm').addEventListener('submit', agreeTerms);
-    ['bedOn', 'bedStart', 'bedEnd', 'bedDays'].forEach(function (id) {
+    ['bedStart', 'bedEnd', 'bedDays'].forEach(function (id) {
       $(id).addEventListener('change', function () { bedDirty = true; syncBedOn(); });
     });
-    ['timerForm', 'addForm'].forEach(function (id) {
+    $('bedOn').addEventListener('change', bedSwitch);
+    ['timerForm', 'addForm', 'priceForm'].forEach(function (id) {
       $(id).addEventListener('submit', function (ev) {
         if (!ev.submitter || ev.submitter.value !== 'cancel') ev.preventDefault();
       });
+    });
+    // Enter in a price field saves it (the form's first submit button is the close button, which Enter would otherwise press).
+    $('priceForm').addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter' && ev.target.tagName === 'INPUT') { ev.preventDefault(); savePrice(); }
+    });
+    // Escape closes the live picture, as it closes a sheet (a sheet open on top of it closes first, by itself).
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape' && !$('liveView').hidden && !document.querySelector('dialog[open]')) closeLive();
     });
     document.addEventListener('visibilitychange', function () {
       if (document.visibilityState === 'visible' && !$('app').hidden && !busy) load().catch(function () {}).then(checkStaleLater);
