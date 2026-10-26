@@ -17,7 +17,7 @@ Boxes learn about a release from this repository's GitHub releases, whose notes 
   do the same. The quick modes left are *Homework* and *Free time*.
 - **Apps: Allow or Block, in words.** Each app has two keys, **Allow** and **Block**, instead of a tile that changed
   colour. The blocked ones stand out down the list.
-- **Bedtime in one sentence.** "Off at 21:00, back on at 06:30, Sunday to Thursday." The switch takes effect at once;
+- **Bedtime in one sentence.** "Off at 21:00, back on at 6:30, Sunday to Thursday." The switch takes effect at once;
   the times and nights are under **Change times and nights**.
 - **The live picture moved behind See it live.** The animated picture of what the box checks and stops now opens over
   the page, from **See it live** (in the new card and at the bottom of the page), so the page itself stays calm. The
@@ -30,9 +30,9 @@ Boxes learn about a release from this repository's GitHub releases, whose notes 
   the ads stopped each day. **How we count** explains every number: about 50 ms of waiting and about 10 KB of data for
   each ad or tracker stopped (low estimates, the first one Brave's published figure). Type what 1 GB of data costs you
   and the card also says what the data saved was worth; that price stays on your phone.
-- **The box keeps a small daily summary for this card.** Counts only, no websites, apps' addresses or device names, kept
-  on the box (and in its backups) for as long as Sinko is installed, never sent anywhere. The privacy statement says
-  exactly what it holds.
+- **The box keeps a small daily summary for this card.** Counts only (by app for the blocked apps): no websites,
+  addresses or device names. It is kept on the box (and in its backups) for as long as Sinko is installed and never sent
+  anywhere. The privacy statement says exactly what it holds.
 
 ### Fixed
 - After saving a bedtime, later changes made elsewhere (another phone, a timer that ended) now show in the bedtime

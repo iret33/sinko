@@ -181,7 +181,7 @@
       </button>
       <button type="button" class="mode key" data-act="timer" data-mode="free">
         <span class="mode-name" data-i18n="freeTime">Free time</span>
-        <span class="mode-desc" data-i18n="freeTimeDesc">Everything allowed for a while</span>
+        <span class="mode-desc" data-i18n="freeTimeDesc">All apps allowed for a while</span>
       </button>
     </div>
   </section>
@@ -207,7 +207,7 @@
     </div>
     <div class="seg seg-wide" role="group" aria-labelledby="savedTitle" id="savedPeriods">
       <button type="button" data-act="period" data-period="today" aria-pressed="false" data-i18n="periodToday">Today</button>
-      <button type="button" data-act="period" data-period="week" aria-pressed="true" data-i18n="periodWeek">This week</button>
+      <button type="button" data-act="period" data-period="week" aria-pressed="true" data-i18n="periodWeek">Last 7 days</button>
       <button type="button" data-act="period" data-period="since" aria-pressed="false" id="periodSince"></button>
     </div>
     <div class="saved-body" id="savedBody"></div>
@@ -289,10 +289,11 @@
   <!-- The live picture: how the home's requests flow through the family box. It lives behind "See it live" so the main page
        stays calm; a plain full-screen layer, not a <dialog>, so the picture keeps running while it is open (pb-picture.js
        pauses for any open dialog). Built and animated by pb-picture.js once it is first opened. -->
-  <div class="live-view" id="liveView" hidden>
+  <div class="live-view" id="liveView" role="region" aria-labelledby="liveViewTitle" hidden>
     <div class="live-view-bar">
-      <button type="button" class="key key-small" data-act="liveClose" id="liveBack"><svg class="flip" aria-hidden="true"><use href="#i-back"/></svg><span data-i18n="back">Back</span></button>
+      <!-- the title comes first, so focus lands on it and Tab goes to Back next; CSS puts Back on the start side -->
       <h2 class="live-view-title" id="liveViewTitle" tabindex="-1" data-i18n="liveViewTitle">Live picture</h2>
+      <button type="button" class="key key-small" data-act="liveClose" id="liveBack"><svg class="flip" aria-hidden="true"><use href="#i-back"/></svg><span data-i18n="back">Back</span></button>
     </div>
   <section class="block live" id="live" aria-labelledby="liveTitle" hidden>
     <div class="live-card">
@@ -389,7 +390,7 @@
       <h2 id="addTitle" data-i18n="addDevice">Add device</h2>
       <button type="submit" value="cancel" class="icon-btn" formnovalidate><svg><use href="#i-close"/></svg><span class="sr-only" data-i18n="close">Close</span></button>
     </div>
-    <p class="muted small" data-i18n="addHint">Pick your child's phone, tablet or console. Devices appear here after they have used the internet at home.</p>
+    <p class="muted small" data-i18n="addHint">Pick your child’s phone, tablet or console. Devices appear here after they have used the internet at home.</p>
     <ul class="picker" id="picker"></ul>
     <details class="manual">
       <summary data-i18n="manual">Enter address by hand</summary>
@@ -402,7 +403,7 @@
     </label>
     <p class="form-error" id="addErr" role="alert"></p>
     <button type="button" class="btn btn-primary btn-wide" data-act="addDevice" data-i18n="add">Add</button>
-    <p class="muted small" data-i18n="macTip">Tip: on the child's device, turn off “Private Wi‑Fi address” for your home network so it keeps the same address.</p>
+    <p class="muted small" data-i18n="macTip">Tip: on the child’s device, turn off “Private Wi‑Fi address” for your home network so it keeps the same address.</p>
   </form>
 </dialog>
 

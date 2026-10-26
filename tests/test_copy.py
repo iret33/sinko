@@ -190,6 +190,20 @@ class FirstRunCopy(Copy, unittest.TestCase):
         self.assertRegex(en["terms2"], r"(?i)not a lock")
 
 
+class IndexFallbacks(unittest.TestCase):
+    """index.html carries English text inside every data-i18n element, shown before the script runs: it must be the table's own."""
+    def test_every_fallback_is_the_english_in_its_table(self):
+        tables = {}
+        for get in (pbstrings.app_strings, pbstrings.first_strings, pbstrings.save_strings, pbstrings.box_strings, pbstrings.live_strings):
+            tables.update(get()["en"])
+        checked = 0
+        for key, text in re.findall(r'data-i18n="(\w+)">([^<]*)<', INDEX):
+            if key in tables and isinstance(tables[key], str):
+                self.assertEqual(text.replace("&amp;", "&"), tables[key], key)
+                checked += 1
+        self.assertGreater(checked, 40)
+
+
 class ControlPanelCopy(unittest.TestCase):
     """The main table (STR) holds the control panel's sentences: they must not promise more than the box does."""
     def test_free_time_does_not_say_everything_is_allowed(self):

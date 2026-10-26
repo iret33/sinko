@@ -445,6 +445,15 @@ test('moneyFor: only with a price the parent typed', () => {
   assert.equal(C.moneyFor(null, 1), null);
 });
 
+test('parseAmount: any keypad, any decimal mark', () => {
+  const cases = [['0.5', 0.5], ['0,5', 0.5], ['٠٫٥', 0.5], ['۰٫۵', 0.5], ['0٫5', 0.5], ['١', 1], ['1٫5', 1.5], ['1,000', 1000], ['10,000', 10000],
+    ['1.000,5', 1000.5], ['1,000.5', 1000.5], ['1٬000', 1000], [' 2 ', 2], ['0,125', 0.125], ['2,5', 2.5], ['1,2,3', 123], ['abc', null], ['', null],
+    ['-1', null], ['1e3', null], [3, 3], [null, null]];
+  for (const [input, want] of cases) assert.equal(C.parseAmount(input), want, JSON.stringify(input));
+  assert.equal(C.moneyFor(2e9, '٠٫٥'), 1, 'an Arabic-Indic price works');
+  assert.equal(C.moneyFor(1e9, '1,000'), 1000, 'a thousands comma is not a decimal mark');
+});
+
 test('nextWallTime: the next time the box clock shows HH:MM', () => {
   const at = (iso) => Date.parse(iso) / 1000;
   // The box is in Bahrain (+03:00). 21:40 there; morning is 06:30 the next day.

@@ -512,9 +512,33 @@
     v = bytes / units[i][1];
     return { value: v < 10 ? Math.round(v * 10) / 10 : Math.round(v), unit: units[i][0] };
   }
+  /**
+   * An amount as a parent types it, on any keypad: Arabic-Indic or Persian digits, the Arabic decimal mark (٫), spaces or
+   * grouping marks, a comma or a point. A single comma followed by exactly three digits (and not after a lone 0) groups
+   * thousands ("1,000"); otherwise it is the decimal mark ("0,5"). When both a comma and a point appear, the last one is
+   * the decimal mark. -> a number, or null when it is not one.
+   */
+  function parseAmount(s) {
+    if (isNum(s)) return s;
+    if (typeof s !== 'string') return null;
+    var t = s.replace(/[\u0660-\u0669]/g, function (d) { return String(d.charCodeAt(0) - 0x0660); })
+      .replace(/[\u06F0-\u06F9]/g, function (d) { return String(d.charCodeAt(0) - 0x06F0); })
+      .replace(/\u066B/g, '.')
+      .replace(/[\u066C\u00A0\u202F\u2009\u200E\u200F\u061C\s']/g, '');
+    var comma = t.lastIndexOf(','), point = t.lastIndexOf('.');
+    if (comma >= 0 && point >= 0) {
+      var dec = comma > point ? ',' : '.';
+      t = t.split(dec === ',' ? '.' : ',').join('');
+      if (dec === ',') t = t.replace(',', '.');
+    } else if (comma >= 0) {
+      var parts = t.split(',');
+      t = parts.length > 2 || (parts[1].length === 3 && parts[0] !== '0' && parts[0] !== '') ? parts.join('') : parts.join('.');
+    }
+    return /^\d+(\.\d+)?$/.test(t) ? Number(t) : null;
+  }
   /** What `bytes` of data cost at the price the parent typed for one GB (decimal), or null without a usable price. */
   function moneyFor(bytes, perGb) {
-    var p = typeof perGb === 'string' ? Number(perGb.replace(',', '.')) : perGb;
+    var p = parseAmount(perGb);
     if (!isNum(bytes) || !isNum(p) || p <= 0 || p > 1e6) return null;
     return bytes / 1e9 * p;
   }
@@ -757,7 +781,7 @@
     classify: classify, isHiddenDomain: isHiddenDomain, isHiddenClient: isHiddenClient, baseDomain: baseDomain, appFor: appFor,
     formatCount: formatCount, percent: percent, topByApp: topByApp, hourly: hourly, deviceState: deviceState, Feed: Feed, priority: priority, Pacer: Pacer, Poller: Poller,
     parseLedger: parseLedger, savings: savings, ledgerWeek: ledgerWeek, weekday: weekday, durationParts: durationParts, sizeParts: sizeParts,
-    moneyFor: moneyFor, utcOffsetMinutes: utcOffsetMinutes, nextWallTime: nextWallTime, WAIT_MS_PER_STOP: WAIT_MS_PER_STOP, BYTES_PER_STOP: BYTES_PER_STOP,
+    moneyFor: moneyFor, parseAmount: parseAmount, utcOffsetMinutes: utcOffsetMinutes, nextWallTime: nextWallTime, WAIT_MS_PER_STOP: WAIT_MS_PER_STOP, BYTES_PER_STOP: BYTES_PER_STOP,
     inBedtime: inBedtime, bedtimeWindows: bedtimeWindows, comesBack: comesBack,
     lerp: lerp, easeInOut: easeInOut, clamp01: clamp01, wire: wire, elbow: elbow, trace: trace, pointAt: pointAt,
   };

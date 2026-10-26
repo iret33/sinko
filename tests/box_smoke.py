@@ -1759,6 +1759,18 @@ def part_contrast(browser):
             contrast(page, ["#hero"], tag + " the control panel with the internet off", 3)
             page.click("#heroBtn")
             page.wait_for_selector("#hero:not(.is-off)")
+            page.click("#off30")                                     # an offline break: the dark panel with its countdown
+            page.wait_for_selector("#hero.is-off #heroClock:not([hidden])")
+            contrast(page, ["#hero"], tag + " the control panel during an offline break", 4)
+            page.click("#heroBtn")
+            page.wait_for_selector("#hero:not(.is-off)")
+            page.click("[data-act=timer][data-mode=free]")           # free time: the light panel with its countdown
+            page.click("#timerChips .chip >> nth=1")
+            page.click("[data-act=startTimer]")
+            page.wait_for_selector("#hero:not(.is-off) #heroClock:not([hidden])")
+            contrast(page, ["#hero", "#services"], tag + " the control panel and the locked apps during free time", 4)
+            page.click("#heroBtn")
+            page.wait_for_selector("#heroClock[hidden]", state="attached")
             shot(page, "contrast-main-%s-%s.png" % (scheme, lang), full=True)
             store.edit_state(lambda st: st["update"].update({"status": "failed", "to": "3.3.0", "latest": "3.3.0", "at": int(time.time()), "error": "x", "rolledBack": False}))
             page.evaluate("() => document.dispatchEvent(new Event('visibilitychange'))")

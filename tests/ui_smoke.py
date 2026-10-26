@@ -274,7 +274,8 @@ with sync_playwright() as p:
     page.locator("#priceDialog[open]").wait_for(state="detached")
     page.click("[data-period=week]")
     money = page.inner_text("#savedBody")
-    expect("\u20660.492 BHD\u2069 at your price" in money, "with a price, the data saved is also said in money, kept in one piece for Arabic: %r" % money[:200])
+    expect("\u20660.492\u2069 \u2068BHD\u2069 at your price" in money,
+           "with a price, the data saved is also said in money, the number and the currency each isolated for Arabic: %r" % money[:200])
     shot(page, "05b-saved.png")
     store.groups[:] = [g for g in store.groups if g["name"] != "pb-ledger"]
 
@@ -287,6 +288,12 @@ with sync_playwright() as p:
     page.keyboard.press("Escape")
     page.locator("#liveView[hidden]").wait_for(state="attached")
     expect(page.evaluate("() => document.activeElement && document.activeElement.id") == "liveOpen", "closing returns focus to the button that opened it")
+    page.click("#liveOpen")
+    page.locator("#liveView:not([hidden])").wait_for()
+    page.go_back()
+    page.locator("#liveView[hidden]").wait_for(state="attached")
+    expect(page.is_visible("#hero") and not page.evaluate("() => document.getElementById('cols').inert"),
+           "the phone's Back button closes it too, and leaves the page where it was")
 
     page.click(".topbar [data-act=lang]")
     expect(page.get_attribute("html", "dir") == "rtl", "Arabic switches to right-to-left")
@@ -389,6 +396,102 @@ with sync_playwright() as p:
     expect(clock.startswith("59:") or clock.startswith("1:00:"), "and its countdown shows about an hour, not three (%s)" % clock)
     skew.click("#heroBtn")
     skew.close()
+
+    # --- the panel's words at set moments on the box's clock (its Date header is moved; the box's zone is box.json's, +03:00)
+    import calendar
+    off = store.box_info["utcOffset"]
+    off_s = (1 if off[0] == "+" else -1) * (int(off[1:3]) * 3600 + int(off[4:6]) * 60)
+    offline_group = next(g for g in store.groups if g["name"] == "pb-offline")
+
+    def at_box(hhmm, weekday=None, schedule=None):
+        """A fresh page with the box's clock at hhmm today (or on the next `weekday`, 0 = Sunday), bedtime `schedule`, nothing running."""
+        day = time.gmtime(time.time() + off_s)
+        base = calendar.timegm((day.tm_year, day.tm_mon, day.tm_mday, int(hhmm[:2]), int(hhmm[3:]), 0)) - off_s
+        if weekday is not None:
+            base += ((weekday - (day.tm_wday + 1) % 7) % 7) * 86400
+        store.clock_skew = base - time.time()
+        sc = schedule or {"enabled": False, "start": "21:00", "end": "07:00", "days": [0, 1, 2, 3, 4, 5, 6]}
+        store.edit_state(lambda st: st.update(timer=None, schedule=sc, scheduleActive=False))
+        offline_group["enabled"] = False
+        pg = browser.new_page(viewport={"width": 390, "height": 844}, locale="en-GB", timezone_id="Asia/Bahrain")
+        pg.on("pageerror", lambda e: errors.append(str(e)))
+        pg.goto(args.url)
+        pg.fill("#pw", "test")
+        pg.press("#pw", "Enter")
+        pg.wait_for_selector(".tile")
+        return pg, base
+
+    def box_time(pg, epoch):
+        return pg.evaluate("e => new Date(e * 1000).toLocaleTimeString('en-GB', { timeZone: 'UTC', hour: 'numeric', minute: '2-digit' })", epoch + off_s)
+
+    pg, now_box = at_box("21:00")
+    expect(pg.inner_text("#offMorning") == "Off until %s" % box_time(pg, now_box + 10 * 3600) and pg.get_attribute("#offMorning", "data-act") == "offMorning",
+           "at 9 in the evening the third key is 'Off until 07:00' (%s)" % pg.inner_text("#offMorning"))
+    pg.click("#offMorning")
+    settle(pg)
+    tm = store.state()["timer"]
+    expect(tm and abs(tm["until"] - (now_box + 10 * 3600)) < 60, "and it ends at 07:00 on the box (%r)" % tm)
+    expect(pg.inner_text("#heroSub") == "Back on at %s." % box_time(pg, now_box + 10 * 3600), "the panel says so: %r" % pg.inner_text("#heroSub"))
+    clock = pg.inner_text("#heroClock")
+    expect(clock.startswith("10:00:") or clock.startswith("9:59:"), "and counts down the ten hours (%s)" % clock)
+    pg.close()
+
+    pg, now_box = at_box("10:00")
+    expect(pg.inner_text("#offMorning") == "Off for 2 hours" and pg.get_attribute("#offMorning", "data-act") == "offFor",
+           "at 10 in the morning the third key is 'Off for 2 hours' (%s)" % pg.inner_text("#offMorning"))
+    pg.close()
+
+    nightly = {"enabled": True, "start": "21:30", "end": "06:30", "days": [0, 1, 2, 3, 4, 5, 6]}
+    pg, now_box = at_box("21:15", schedule=nightly)
+    expect(pg.inner_text("#bedSentence") == "Off at 21:30, back on at 6:30, every night.", "the bedtime sentence: %r" % pg.inner_text("#bedSentence"))
+    expect(pg.inner_text("#offMorning") == "Off until 6:30", "with bedtime on, the morning is when bedtime ends (%s)" % pg.inner_text("#offMorning"))
+    pg.click("#off30")
+    settle(pg)
+    expect(pg.inner_text("#heroSub") == "Bedtime keeps it off until 6:30." and pg.is_hidden("#heroClock"),
+           "a break that ends in bedtime says bedtime keeps it off, with no countdown to a moment nothing happens (%r)" % pg.inner_text("#heroSub"))
+    pg.click("#heroBtn")
+    settle(pg)
+    pg.close()
+
+    pg, now_box = at_box("20:00", schedule=nightly)
+    pg.click("[data-act=timer][data-mode=free]")
+    pg.click("#timerChips [data-minutes='120']")
+    pg.click("[data-act=startTimer]")
+    settle(pg)
+    clock = pg.inner_text("#heroClock")
+    expect(pg.inner_text("#heroSub") == "Bedtime starts at 21:30 and ends it." and (clock.startswith("1:30:") or clock.startswith("1:29:")),
+           "two hours of free time from 20:00 end when bedtime starts, and the countdown agrees (%r, %s)" % (pg.inner_text("#heroSub"), clock))
+    pg.click("#heroBtn")
+    settle(pg)
+    pg.close()
+
+    school = dict(nightly, days=[0, 1, 2, 3, 4])
+    pg, now_box = at_box("12:00", weekday=5, schedule=school)
+    expect(pg.inner_text("#bedSentence") == "Off at 21:30, back on at 6:30, Sunday to Thursday.", "school nights: %r" % pg.inner_text("#bedSentence"))
+    pg.click("#heroBtn")
+    settle(pg)
+    expect(pg.inner_text("#heroSub").startswith("Until you turn it back on, or bedtime ends on Monday at 6:30."),
+           "turned off on a Friday, the next bedtime to end is Monday's, and the day is named (%r)" % pg.inner_text("#heroSub"))
+    pg.click("#heroBtn")
+    settle(pg)
+    pg.close()
+    pg, now_box = at_box("12:00", weekday=0, schedule=school)
+    pg.click("#heroBtn")
+    settle(pg)
+    expect(pg.inner_text("#heroSub").startswith("Until you turn it back on, or bedtime ends at 6:30."),
+           "on a Sunday it is tonight's bedtime, and no day is named (%r)" % pg.inner_text("#heroSub"))
+    pg.click("#heroBtn")
+    settle(pg)
+    pg.close()
+
+    # the bedtime switch with no night picked: nothing is saved, the switch goes back and the fields open to show why
+    pg, now_box = at_box("12:00", schedule={"enabled": False, "start": "21:30", "end": "06:30", "days": []})
+    pg.click("#bedOn")
+    expect("Pick at least one night" in pg.inner_text("#toast") and not pg.is_checked("#bedOn") and pg.get_attribute("#bedEdit", "open") is not None,
+           "switching bedtime on with no night picked is refused, and the fields open")
+    expect(store.state()["schedule"]["enabled"] is False, "and nothing was saved")
+    pg.close()
+    store.clock_skew = 0
 
     dark = browser.new_page(viewport={"width": 1280, "height": 900}, color_scheme="dark")
     dark.goto(args.url)

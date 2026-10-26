@@ -740,8 +740,8 @@
     var axis = node('div', 'hours-axis');                    // what the bars mean: two colours, and which end is "now"
     axis.appendChild(node('span', '', t('lvEarlier')));
     var key = node('span', 'hours-key');
-    key.appendChild(node('i', 'key key-total')); key.appendChild(node('span', '', t('lvChecked')));
-    key.appendChild(node('i', 'key key-blocked')); key.appendChild(node('span', '', t('lvStopped')));
+    key.appendChild(node('i', 'hours-swatch')); key.appendChild(node('span', '', t('lvChecked')));
+    key.appendChild(node('i', 'hours-swatch is-blocked')); key.appendChild(node('span', '', t('lvStopped')));
     axis.appendChild(key);
     axis.appendChild(node('span', '', t('lvNowShort')));
     sec.appendChild(axis);

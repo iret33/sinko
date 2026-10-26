@@ -648,10 +648,6 @@ class TheChecklistHasTheItemsOnlyARealBoxCanAnswer(unittest.TestCase):
             self.assertIn(needle, text)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TheSavingsEstimatesAreTheOnesThePageUses(unittest.TestCase):
     """The README and how-it-works quote the two estimates behind "What Sinko did for you": they must be the page's own constants."""
 
@@ -664,3 +660,7 @@ class TheSavingsEstimatesAreTheOnesThePageUses(unittest.TestCase):
             self.assertIn("%d ms" % ms, text, path)
             self.assertIn("%d KB" % kb, text, path)
             self.assertNotRegex(text, r"\b(?!%d\b)\d+ ms\b(?=[^.]*(stop|ad|tracker))" % ms, "%s quotes another figure for the waiting" % path)
+
+
+if __name__ == "__main__":
+    unittest.main()
