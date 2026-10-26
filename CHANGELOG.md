@@ -3,6 +3,20 @@
 All notable changes to Sinko. Versions follow [Semantic Versioning](https://semver.org); the newest release is at the top.
 Boxes learn about a release from this repository's GitHub releases, whose notes are the section of this file.
 
+## [3.2.0] - Unreleased
+
+### Added
+- **Terms of use at first set-up.** After you choose the parent password (or the first time you sign in after this update),
+  the page shows short terms of use, in English and Arabic, before it opens. **I agree, continue** accepts them. The full
+  text is in [`docs/terms.md`](docs/terms.md), linked from that screen and from *My box*, *About*.
+
+### Changed
+- **Learning new addresses of blocked apps and the anonymous counter now start switched on.** Both are choices on the
+  terms screen, already switched on; switch either off there before you agree, or at any time later in *My box*. The
+  counter still sends nothing until you have answered, starts switched off on a box where you already said no to it, and
+  is not offered at all on a box that has no counter address. The setup list no longer asks about the counter.
+- The installer's counter question now suggests yes (`[Y/n]`).
+
 ## [3.1.0] - 2026-10-14
 
 ### Added

@@ -85,7 +85,7 @@ class Box:
     Everything is released by the test case's cleanups. `tick()` is one or more passes of the real scheduler loop.
     """
 
-    def __init__(self, case, offer=None, counter=False, setup_done=True, kids=True, ready=True):
+    def __init__(self, case, offer=None, counter=False, setup_done=True, kids=True, ready=True, terms=True):
         self.case = case
         self.stack = contextlib.ExitStack()
         case.addCleanup(self.close)
@@ -148,6 +148,8 @@ class Box:
         api.logout()
         if setup_done:
             self.store.edit_state(lambda st: st.setdefault("setup", {}).update({"done": True}))
+        if terms:
+            self.store.agree_terms()                     # the terms screen was answered (its two choices left as they were)
 
         # --- what the scheduler wrote to the state, what the fakes were asked to do
         self.sched_writes = []
@@ -632,16 +634,26 @@ class PageAndSchedulerTests(unittest.TestCase):
         self.finish(box, parent)
 
     # ----------------------------------------------------------------------------------------------------------------
-    # (4) the counter question
+    # (4) the counter question, on the terms screen
     # ----------------------------------------------------------------------------------------------------------------
-    def test_the_counter_question_yes_then_no_ends_with_the_counter_forgetting_the_id(self):
-        box = Box(self, counter=True, setup_done=False)
+    def sign_in_to_terms(self, box):
+        page = self.open(box, sign_in=False)
+        page.wait_for_selector("#login:not([hidden])")
+        page.fill("#pw", mock_pihole.PASSWORD)
+        page.press("#pw", "Enter")
+        page.wait_for_selector("#terms:not([hidden])")
+        return page
+
+    def test_the_counter_starts_on_with_the_terms_then_no_ends_with_the_counter_forgetting_the_id(self):
+        box = Box(self, counter=True, setup_done=False, terms=False)
         counter = box.counter
         self.assertIs(box.box_json()["counter"], True, "the box's own writer says a counter address is set")
-        page = self.open(box)
-        page.wait_for_selector("#setup:not([hidden])")
-        self.assertEqual(page.locator("#setupList [data-item=counter]").count(), 1, "the checklist asks the counter question")
-        page.click("[data-act=counterYes]")
+        page = self.sign_in_to_terms(box)
+        self.assertTrue(page.is_visible("#termsCounterRow") and page.is_checked("#termsCounter"), "the terms offer the counter, switched on")
+        box.tick(2, advance=301)
+        self.assertEqual((box.state()["telemetry"], counter.requests), ({"on": None}, []), "nothing is sent while the terms wait for an answer")
+        page.click("#termsBtn")
+        page.wait_for_selector(".tile")
         self.assertTrue(self.wait(lambda: box.store.state()["telemetry"] == {"on": True}), "the answer is stored")
         self.assertEqual(counter.requests, [], "nothing has been sent")
         box.tick(2, advance=301)                         # the first ping is five minutes after the start
@@ -682,13 +694,16 @@ class PageAndSchedulerTests(unittest.TestCase):
         self.finish(box, page)
 
     def test_the_counter_is_not_offered_when_box_json_says_there_is_no_counter(self):
-        box = Box(self, setup_done=False, kids=False)    # no counter address anywhere
+        box = Box(self, setup_done=False, kids=False, terms=False)    # no counter address anywhere
         self.assertIs(box.box_json()["counter"], False, "the box's own writer says so")
-        page = self.open(box)
+        page = self.sign_in_to_terms(box)
+        self.assertTrue(page.is_hidden("#termsCounterRow"), "the terms do not offer the counter")
+        page.click("#termsBtn")
         page.wait_for_selector("#setup:not([hidden])")
+        self.assertTrue(self.wait(lambda: box.store.state()["terms"] == {"agreed": 1}), "the terms are agreed to")
+        self.assertEqual(box.store.state()["telemetry"], {"on": None}, "and the counter is left undecided")
         items = page.evaluate("() => [...document.querySelectorAll('#setupList .setup-item')].map(i => i.dataset.item)")
         self.assertEqual(items, ["pw", "router", "child"], "the checklist has no counter question")
-        self.assertNotIn(T("en", "setupCounterText"), page.inner_text("#setup"))
         self.open_box(page)
         self.assertEqual((page.locator("#boxCounterCard").count(), page.is_hidden("#boxCounterCard")), (1, True), "and My box has no counter card")
         self.assertNotIn(T("en", "boxCounterLead"), self.box_text(page))

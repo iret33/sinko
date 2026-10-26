@@ -63,7 +63,8 @@ asks a small box in your house "where is this app?" first, and the box says yes 
 - set a **Bedtime** that turns the internet off at night and back on in the morning;
 - watch **the live picture**: what the box is checking and stopping, in words a parent can follow;
 - let the box **learn new addresses** of the apps you block: a small AI model on the box spots an app you blocked trying a
-  new address, and blocks that too (optional, off until you switch it on in **My box**, where you can allow any of them again);
+  new address, and blocks that too (optional: it starts switched on when you agree to the terms at first set-up, and you
+  can switch it off there or in **My box**, where you can also allow any of them again);
 - look after the box from the same page (**My box**): update it, see its health, change the password, back up, restart.
 
 Timers and bedtime run on the box itself, so they keep working after you close the page. Nothing needs a computer
@@ -131,8 +132,10 @@ or to anyone else. There is no account and no tracking. Three things you should 
   project never receives them. You can choose another service in Pi-hole's settings.
 - To look for a new version, to update and to refresh its block lists, the box asks **GitHub**, which sees the box's
   internet address (as any website you visit does). Nothing about your family is in those requests.
-- An optional **anonymous counter** (how many Sinko boxes are online) is **off until you say yes**; it sends a random number,
-  the version and the kind of board, and nothing else. Switching it off makes the box ask the counter to forget it.
+- An optional **anonymous counter** (how many Sinko boxes are online) **sends nothing until you answer**. It is one of the
+  two choices on the [terms of use](docs/terms.md) the page shows at first set-up, where it starts switched on; it sends a
+  random number, the version and the kind of board, and nothing else. Switching it off (there, or any time in **My box**)
+  makes the box ask the counter to forget it.
 
 The whole statement, in English and Arabic, with exactly what is sent and when: [`docs/privacy.md`](docs/privacy.md).
 
@@ -156,6 +159,7 @@ Use it together with Screen Time (iPhone) or Family Link (Android). More in the 
 | [`docs/troubleshooting.md`](docs/troubleshooting.md) | An app still works? Cannot open the page? Forgot the password? |
 | [`docs/faq.md`](docs/faq.md) | Questions and answers |
 | [`docs/privacy.md`](docs/privacy.md) | What is sent, where, and how to turn it off (English and Arabic) |
+| [`docs/terms.md`](docs/terms.md) | The terms of use a parent agrees to at first set-up, with its two choices (English and Arabic) |
 | [`docs/how-it-works.md`](docs/how-it-works.md) | Pi-hole groups, the live picture, the block lists, files on the box |
 | [`docs/product-image.md`](docs/product-image.md), [`docs/selling.md`](docs/selling.md) | Making and selling ready-made boxes |
 | [`docs/hardware-test-checklist.md`](docs/hardware-test-checklist.md) | What to test on a real box before a release or a sale |

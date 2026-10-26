@@ -38,7 +38,7 @@ go on if they differ. Then it:
    takes the password as an argument: for a moment it is in that program's arguments, which any user on the box can read
    in the process list. On a box that other people log in to, change the password afterwards on the page instead
    (*My box*, *Change password*, which does not go through a command line). If this copy of Sinko has a counter address, the
-   installer also asks once whether to count the box in the anonymous number of Sinko boxes online (default *no*; see
+   installer also asks once whether to count the box in the anonymous number of Sinko boxes online (default *yes*; see
    [`privacy.md`](privacy.md)); without a counter address it says nothing about it;
 3. installs the parent page at `http://<box-ip>/` (the Pi-hole admin stays at `/admin/`) and, through Avahi,
    `http://<hostname>.local/` so phones can find it by name;
@@ -72,7 +72,7 @@ Pass these as environment variables after `sudo`, for example
 | `SINKO_SRC` | – | A folder with an already extracted release: nothing is downloaded (offline installs, image builds, tests) |
 | `SINKO_RELEASE_BASE`, `SINKO_RELEASE_API` | GitHub's | Where releases and the "latest release" answer come from; **https only** (a mirror of your own) |
 | `SINKO_LISTS_BASE` | this project's `lists/` on GitHub | Where Pi-hole downloads the app block lists |
-| `SINKO_TELEMETRY` | ask (default *no*) | `1` = count this box in the anonymous number of Sinko boxes online, `0` = no. The question is asked only when this copy of Sinko has a counter address; not asked and not set: the page asks later (and shows nothing when there is no counter address). What is sent: [`privacy.md`](privacy.md) |
+| `SINKO_TELEMETRY` | ask (default *yes*) | `1` = count this box in the anonymous number of Sinko boxes online, `0` = no. The question is asked only when this copy of Sinko has a counter address; not asked and not set: the page asks with the terms of use at first sign-in, where it starts switched on (and shows nothing when there is no counter address). What is sent: [`privacy.md`](privacy.md) |
 | `SINKO_MDNS` | on | `0` = do not install Avahi (the box then has no `.local` name) |
 | `SINKO_OS_UPDATES` | on | `0` = do not set up automatic Debian **security** updates (the box never restarts by itself for them). An `unattended-upgrades` that is already installed is left exactly as it is, switched on or off |
 | `SINKO_NONINTERACTIVE` | – | `1` = never prompt |

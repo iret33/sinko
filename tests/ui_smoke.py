@@ -78,7 +78,22 @@ with sync_playwright() as p:
 
     page.fill("#pw", "test")
     page.click("#loginBtn")
+    # The first sign-in shows the terms of use, with both choices switched on, before the page itself.
+    page.wait_for_selector("#terms:not([hidden])")
+    expect(page.is_hidden("#app"), "the page waits until the terms are agreed to")
+    expect(page.is_checked("#termsLearn") and page.is_visible("#termsCounterRow") and page.is_checked("#termsCounter"),
+           "both choices start switched on (this box has a counter address)")
+    expect(store.state().get("telemetry", {}).get("on") is None and store.state().get("learn", {}).get("on") is not True,
+           "nothing is decided, and nothing learned or sent, before the parent agrees")
+    page.locator("#termsLinkTerms:not([hidden])").wait_for()
+    expect(page.get_attribute("#termsLinkTerms", "href").endswith("/docs/terms.md")
+           and page.get_attribute("#termsLinkPrivacy", "href").endswith("/docs/privacy.md"), "it links to the full terms and the privacy statement")
+    shot(page, "01b-terms.png", full=True)
+    page.click("#termsBtn")
     page.wait_for_selector("#app:not([hidden])")
+    agreed = store.state()
+    expect({k: agreed.get(k) for k in ("terms", "learn", "telemetry")} == {"terms": {"agreed": 1}, "learn": {"on": True}, "telemetry": {"on": True}},
+           "agreeing records the terms and both choices: %r" % {k: agreed.get(k) for k in ("terms", "learn", "telemetry")})
     page.wait_for_selector(".tile")
     expect(page.inner_text("#heroTitle") == "Children are online", "hero shows online state")
     expect(page.locator(".tile").count() == 19, "19 service tiles")
@@ -169,8 +184,8 @@ with sync_playwright() as p:
     settle(page)
     kept = json.loads(state_group["comment"])
     expect(kept["schedule"]["start"] == "21:30" and kept["schedule"]["enabled"], "the bedtime itself was saved")
-    expect(all(kept[k] == seeded[k] for k in ("update", "telemetry", "community", "setup")),
-           "saving bedtime keeps every field the scheduler wrote (update, counter answer, community, setup)")
+    expect(all(kept[k] == seeded[k] for k in ("update", "telemetry", "community", "setup", "learn", "terms")),
+           "saving bedtime keeps every field the scheduler wrote (update, counter answer, community, setup, learning, terms)")
     page.reload()
     page.wait_for_selector(".tile")
     expect(page.input_value("#bedStart") == "21:30" and page.is_checked("#bedOn"), "bedtime saved and session kept")
@@ -282,6 +297,41 @@ with sync_playwright() as p:
     dark.press("#pw", "Enter")
     dark.wait_for_selector(".tile")
     shot(dark, "08-desktop-dark.png", full=True)
+    dark.close()
+
+    # --- the terms on a box where the parent already said no to the counter, in Arabic, and on an older box with no counter address
+    store.edit_state(lambda st: st.update(terms={"agreed": 0}, telemetry={"on": False}, learn={"on": False}))
+    ar = browser.new_page(viewport={"width": 390, "height": 844}, locale="ar-BH")
+    ar.goto(args.url)
+    ar.fill("#pw", "test")
+    ar.press("#pw", "Enter")
+    ar.wait_for_selector("#terms:not([hidden])")
+    expect(ar.get_attribute("html", "dir") == "rtl" and ar.inner_text("#termsTitle") == "قبل أن تبدأ", "the terms are in Arabic, right to left")
+    expect(ar.is_checked("#termsLearn") and not ar.is_checked("#termsCounter"),
+           "learning starts switched on, the counter stays off where the parent already said no")
+    shot(ar, "01c-terms-ar.png", full=True)
+    ar.click("#termsLearn")
+    ar.click("#termsBtn")
+    ar.wait_for_selector(".tile")
+    after = store.state()
+    expect({k: after.get(k) for k in ("terms", "learn", "telemetry")} == {"terms": {"agreed": 1}, "learn": {"on": False}, "telemetry": {"on": False}},
+           "a choice switched off before agreeing is recorded as off: %r" % {k: after.get(k) for k in ("terms", "learn", "telemetry")})
+    ar.reload()
+    ar.wait_for_selector(".tile")
+    expect(ar.is_hidden("#terms"), "once agreed, the terms are not asked again")
+    ar.close()
+    store.edit_state(lambda st: st.update(terms={"agreed": 0}, telemetry={"on": None}))
+    store.box_info = None
+    old = browser.new_page(viewport={"width": 390, "height": 844})
+    old.goto(args.url)
+    old.fill("#pw", "test")
+    old.press("#pw", "Enter")
+    old.wait_for_selector("#terms:not([hidden])")
+    expect(old.is_hidden("#termsCounterRow"), "a box that does not say it has a counter address does not offer the counter")
+    old.click("#termsBtn")
+    old.wait_for_selector(".tile")
+    expect(store.state().get("telemetry") == {"on": None}, "and agreeing leaves the counter undecided")
+    old.close()
     browser.close()
 
 expect(not errors, "no console errors %s" % (errors or ""))

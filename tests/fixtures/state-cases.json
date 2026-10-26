@@ -49,6 +49,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -100,6 +103,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -151,6 +157,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -209,6 +218,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -260,6 +272,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -311,6 +326,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -362,6 +380,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -413,6 +434,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -464,6 +488,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -515,6 +542,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -566,6 +596,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -617,6 +650,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -668,6 +704,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -719,6 +758,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -770,6 +812,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -821,6 +866,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -872,6 +920,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -923,6 +974,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -974,6 +1028,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -1025,6 +1082,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -1079,6 +1139,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -1133,6 +1196,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -1184,6 +1250,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -1235,6 +1304,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -1286,6 +1358,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -1337,6 +1412,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -1388,6 +1466,9 @@
     },
     "learn": {
      "on": true
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -1439,6 +1520,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -1490,6 +1574,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -1541,6 +1628,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -1592,6 +1682,603 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
+    }
+   }
+  },
+  {
+   "name": "terms agreed to version 1",
+   "input": "{\"terms\": {\"agreed\": 1}}",
+   "expected": {
+    "v": 1,
+    "timer": null,
+    "schedule": {
+     "enabled": false,
+     "start": "21:00",
+     "end": "06:00",
+     "days": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+     ]
+    },
+    "scheduleActive": false,
+    "update": {
+     "auto": false,
+     "request": null,
+     "checkRequest": null,
+     "latest": null,
+     "notes": null,
+     "checked": 0,
+     "status": "idle",
+     "from": null,
+     "to": null,
+     "at": 0,
+     "error": null,
+     "rolledBack": null
+    },
+    "power": {
+     "request": null,
+     "action": null
+    },
+    "telemetry": {
+     "on": null
+    },
+    "community": null,
+    "setup": {
+     "done": false
+    },
+    "learn": {
+     "on": false
+    },
+    "terms": {
+     "agreed": 1
+    }
+   }
+  },
+  {
+   "name": "terms: the highest version there can be is kept",
+   "input": "{\"terms\": {\"agreed\": 9999}}",
+   "expected": {
+    "v": 1,
+    "timer": null,
+    "schedule": {
+     "enabled": false,
+     "start": "21:00",
+     "end": "06:00",
+     "days": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+     ]
+    },
+    "scheduleActive": false,
+    "update": {
+     "auto": false,
+     "request": null,
+     "checkRequest": null,
+     "latest": null,
+     "notes": null,
+     "checked": 0,
+     "status": "idle",
+     "from": null,
+     "to": null,
+     "at": 0,
+     "error": null,
+     "rolledBack": null
+    },
+    "power": {
+     "request": null,
+     "action": null
+    },
+    "telemetry": {
+     "on": null
+    },
+    "community": null,
+    "setup": {
+     "done": false
+    },
+    "learn": {
+     "on": false
+    },
+    "terms": {
+     "agreed": 9999
+    }
+   }
+  },
+  {
+   "name": "terms: a whole float counts as that version",
+   "input": "{\"terms\": {\"agreed\": 2.0}}",
+   "expected": {
+    "v": 1,
+    "timer": null,
+    "schedule": {
+     "enabled": false,
+     "start": "21:00",
+     "end": "06:00",
+     "days": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+     ]
+    },
+    "scheduleActive": false,
+    "update": {
+     "auto": false,
+     "request": null,
+     "checkRequest": null,
+     "latest": null,
+     "notes": null,
+     "checked": 0,
+     "status": "idle",
+     "from": null,
+     "to": null,
+     "at": 0,
+     "error": null,
+     "rolledBack": null
+    },
+    "power": {
+     "request": null,
+     "action": null
+    },
+    "telemetry": {
+     "on": null
+    },
+    "community": null,
+    "setup": {
+     "done": false
+    },
+    "learn": {
+     "on": false
+    },
+    "terms": {
+     "agreed": 2
+    }
+   }
+  },
+  {
+   "name": "terms: minus zero is 0",
+   "input": "{\"terms\": {\"agreed\": -0}}",
+   "expected": {
+    "v": 1,
+    "timer": null,
+    "schedule": {
+     "enabled": false,
+     "start": "21:00",
+     "end": "06:00",
+     "days": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+     ]
+    },
+    "scheduleActive": false,
+    "update": {
+     "auto": false,
+     "request": null,
+     "checkRequest": null,
+     "latest": null,
+     "notes": null,
+     "checked": 0,
+     "status": "idle",
+     "from": null,
+     "to": null,
+     "at": 0,
+     "error": null,
+     "rolledBack": null
+    },
+    "power": {
+     "request": null,
+     "action": null
+    },
+    "telemetry": {
+     "on": null
+    },
+    "community": null,
+    "setup": {
+     "done": false
+    },
+    "learn": {
+     "on": false
+    },
+    "terms": {
+     "agreed": 0
+    }
+   }
+  },
+  {
+   "name": "terms: true is not a version",
+   "input": "{\"terms\": {\"agreed\": true}}",
+   "expected": {
+    "v": 1,
+    "timer": null,
+    "schedule": {
+     "enabled": false,
+     "start": "21:00",
+     "end": "06:00",
+     "days": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+     ]
+    },
+    "scheduleActive": false,
+    "update": {
+     "auto": false,
+     "request": null,
+     "checkRequest": null,
+     "latest": null,
+     "notes": null,
+     "checked": 0,
+     "status": "idle",
+     "from": null,
+     "to": null,
+     "at": 0,
+     "error": null,
+     "rolledBack": null
+    },
+    "power": {
+     "request": null,
+     "action": null
+    },
+    "telemetry": {
+     "on": null
+    },
+    "community": null,
+    "setup": {
+     "done": false
+    },
+    "learn": {
+     "on": false
+    },
+    "terms": {
+     "agreed": 0
+    }
+   }
+  },
+  {
+   "name": "terms: text is not a version",
+   "input": "{\"terms\": {\"agreed\": \"1\"}}",
+   "expected": {
+    "v": 1,
+    "timer": null,
+    "schedule": {
+     "enabled": false,
+     "start": "21:00",
+     "end": "06:00",
+     "days": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+     ]
+    },
+    "scheduleActive": false,
+    "update": {
+     "auto": false,
+     "request": null,
+     "checkRequest": null,
+     "latest": null,
+     "notes": null,
+     "checked": 0,
+     "status": "idle",
+     "from": null,
+     "to": null,
+     "at": 0,
+     "error": null,
+     "rolledBack": null
+    },
+    "power": {
+     "request": null,
+     "action": null
+    },
+    "telemetry": {
+     "on": null
+    },
+    "community": null,
+    "setup": {
+     "done": false
+    },
+    "learn": {
+     "on": false
+    },
+    "terms": {
+     "agreed": 0
+    }
+   }
+  },
+  {
+   "name": "terms: a fraction is not a version",
+   "input": "{\"terms\": {\"agreed\": 1.5}}",
+   "expected": {
+    "v": 1,
+    "timer": null,
+    "schedule": {
+     "enabled": false,
+     "start": "21:00",
+     "end": "06:00",
+     "days": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+     ]
+    },
+    "scheduleActive": false,
+    "update": {
+     "auto": false,
+     "request": null,
+     "checkRequest": null,
+     "latest": null,
+     "notes": null,
+     "checked": 0,
+     "status": "idle",
+     "from": null,
+     "to": null,
+     "at": 0,
+     "error": null,
+     "rolledBack": null
+    },
+    "power": {
+     "request": null,
+     "action": null
+    },
+    "telemetry": {
+     "on": null
+    },
+    "community": null,
+    "setup": {
+     "done": false
+    },
+    "learn": {
+     "on": false
+    },
+    "terms": {
+     "agreed": 0
+    }
+   }
+  },
+  {
+   "name": "terms: a negative number is not a version",
+   "input": "{\"terms\": {\"agreed\": -1}}",
+   "expected": {
+    "v": 1,
+    "timer": null,
+    "schedule": {
+     "enabled": false,
+     "start": "21:00",
+     "end": "06:00",
+     "days": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+     ]
+    },
+    "scheduleActive": false,
+    "update": {
+     "auto": false,
+     "request": null,
+     "checkRequest": null,
+     "latest": null,
+     "notes": null,
+     "checked": 0,
+     "status": "idle",
+     "from": null,
+     "to": null,
+     "at": 0,
+     "error": null,
+     "rolledBack": null
+    },
+    "power": {
+     "request": null,
+     "action": null
+    },
+    "telemetry": {
+     "on": null
+    },
+    "community": null,
+    "setup": {
+     "done": false
+    },
+    "learn": {
+     "on": false
+    },
+    "terms": {
+     "agreed": 0
+    }
+   }
+  },
+  {
+   "name": "terms: more than 9999 is not a version",
+   "input": "{\"terms\": {\"agreed\": 10000}}",
+   "expected": {
+    "v": 1,
+    "timer": null,
+    "schedule": {
+     "enabled": false,
+     "start": "21:00",
+     "end": "06:00",
+     "days": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+     ]
+    },
+    "scheduleActive": false,
+    "update": {
+     "auto": false,
+     "request": null,
+     "checkRequest": null,
+     "latest": null,
+     "notes": null,
+     "checked": 0,
+     "status": "idle",
+     "from": null,
+     "to": null,
+     "at": 0,
+     "error": null,
+     "rolledBack": null
+    },
+    "power": {
+     "request": null,
+     "action": null
+    },
+    "telemetry": {
+     "on": null
+    },
+    "community": null,
+    "setup": {
+     "done": false
+    },
+    "learn": {
+     "on": false
+    },
+    "terms": {
+     "agreed": 0
+    }
+   }
+  },
+  {
+   "name": "terms: a list instead of an object is ignored",
+   "input": "{\"terms\": [1]}",
+   "expected": {
+    "v": 1,
+    "timer": null,
+    "schedule": {
+     "enabled": false,
+     "start": "21:00",
+     "end": "06:00",
+     "days": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+     ]
+    },
+    "scheduleActive": false,
+    "update": {
+     "auto": false,
+     "request": null,
+     "checkRequest": null,
+     "latest": null,
+     "notes": null,
+     "checked": 0,
+     "status": "idle",
+     "from": null,
+     "to": null,
+     "at": 0,
+     "error": null,
+     "rolledBack": null
+    },
+    "power": {
+     "request": null,
+     "action": null
+    },
+    "telemetry": {
+     "on": null
+    },
+    "community": null,
+    "setup": {
+     "done": false
+    },
+    "learn": {
+     "on": false
+    },
+    "terms": {
+     "agreed": 0
+    }
+   }
+  },
+  {
+   "name": "terms: a version of 400 digits is not a version",
+   "input": "{\"terms\": {\"agreed\": 1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000}}",
+   "expected": {
+    "v": 1,
+    "timer": null,
+    "schedule": {
+     "enabled": false,
+     "start": "21:00",
+     "end": "06:00",
+     "days": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+     ]
+    },
+    "scheduleActive": false,
+    "update": {
+     "auto": false,
+     "request": null,
+     "checkRequest": null,
+     "latest": null,
+     "notes": null,
+     "checked": 0,
+     "status": "idle",
+     "from": null,
+     "to": null,
+     "at": 0,
+     "error": null,
+     "rolledBack": null
+    },
+    "power": {
+     "request": null,
+     "action": null
+    },
+    "telemetry": {
+     "on": null
+    },
+    "community": null,
+    "setup": {
+     "done": false
+    },
+    "learn": {
+     "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -1643,6 +2330,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -1694,6 +2384,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -1745,6 +2438,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -1803,6 +2499,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -1861,6 +2560,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -1919,6 +2621,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -1986,6 +2691,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -2037,6 +2745,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -2088,6 +2799,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -2139,6 +2853,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -2186,6 +2903,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -2237,6 +2957,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -2288,6 +3011,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -2339,6 +3065,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -2390,6 +3119,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -2441,6 +3173,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -2492,6 +3227,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -2543,6 +3281,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -2594,6 +3335,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -2645,6 +3389,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -2696,6 +3443,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -2747,6 +3497,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -2798,6 +3551,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -2849,6 +3605,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -2900,6 +3659,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -2951,6 +3713,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -3002,6 +3767,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -3053,6 +3821,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -3104,6 +3875,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -3155,6 +3929,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -3206,6 +3983,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -3257,6 +4037,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -3308,6 +4091,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -3359,6 +4145,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -3410,6 +4199,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -3461,6 +4253,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -3512,6 +4307,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -3563,6 +4361,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -3614,6 +4415,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -3665,6 +4469,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -3716,6 +4523,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -3777,6 +4587,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   },
@@ -3823,6 +4636,9 @@
     },
     "learn": {
      "on": false
+    },
+    "terms": {
+     "agreed": 0
     }
    }
   }

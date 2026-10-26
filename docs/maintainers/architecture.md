@@ -16,10 +16,10 @@ Orange Pi Zero 3.
 | Installer | `install.sh` | root | idempotent: install, update and migrate |
 | Appliance tools | `tools/seal.sh`, `tools/firstboot.sh`, `systemd/sinko-firstboot.service` | root | prepare / personalise the ready-made image |
 | Release build | `tools/build-release.sh`, `.github/workflows/release.yml` | CI | produces the three release assets |
-| Counter service | `telemetry/` (Cloudflare Worker + D1) | Cloudflare | anonymous "boxes online" count, opt-in |
+| Counter service | `telemetry/` (Cloudflare Worker + D1) | Cloudflare | anonymous "boxes online" count, sent only after the parent's answer (the terms screen offers it switched on) |
 | Project site | `site/` → GitHub Pages | browser | landing page with live counters |
 | Host suggestions | `tools/suggest-hosts.py`, `.github/workflows/host-suggestions.yml` | maintainer / CI | a small AI model trained from `lists/` suggests hosts the lists miss, for a person to check ([`host-model.md`](host-model.md)) |
-| Host model and learner | `model/host-model.json` → `/opt/sinko/model/`, `Learner` in `bin/sinko` | root (inside the scheduler) | off until `learn.on`: blocks a new name of a blocked app when the model and the app's own behaviour agree (see *Learning new addresses*) |
+| Host model and learner | `model/host-model.json` → `/opt/sinko/model/`, `Learner` in `bin/sinko` | root (inside the scheduler) | runs while `learn.on` (the terms screen offers it switched on): blocks a new name of a blocked app when the model and the app's own behaviour agree (see *Learning new addresses*) |
 
 Pi-hole objects created by Sinko keep the **internal prefix `pb-`** (groups `pb-kids`, `pb-svc-<id>`, …; list
 comments `pb:<id>`). The prefix is historical and is not user-facing; do not rename it (it would orphan existing
@@ -93,9 +93,9 @@ Latest-release metadata: `https://api.github.com/repos/<slug>/releases/latest` (
   skips fetching (used by `sinko update`, tests and the image build). Always non-interactive when `SINKO_NONINTERACTIVE=1`.
 * Idempotent. Exit status ≠ 0 on failure, progress to stdout, full log in `/var/log/sinko-install.log` (the generated
   parent password never reaches the log).
-* `SINKO_TELEMETRY=1|0` records the install-time answer (interactive installs ask: default *no*, **and only when the program
+* `SINKO_TELEMETRY=1|0` records the install-time answer (interactive installs ask: default *yes*, **and only when the program
   says a counter address is configured** (`sinko box-info` → `"counter": true`); without one nothing is asked or saved;
-  non-interactive installs without the variable record nothing, so the page asks later).
+  non-interactive installs without the variable record nothing, so the page asks later, on the terms screen).
 * Free space: more than **1 GB** for a first installation, more than **200 MB** for an update, a rollback or a move from
   pihole-bahrain (the scheduler's unit or what pihole-bahrain left says which); the refusal exits with status 75 and changes
   nothing. `bin/sinko` asks for the same 200 MB (`MIN_FREE_BYTES`) before it starts the installer.
@@ -155,7 +155,8 @@ Read and written by the page **and** by the scheduler. Both normalise with `pars
   "telemetry": {"on": null},                    // null = not asked, true/false = the parent's answer (authoritative)
   "community": null,                            // scheduler: {"online": n, "at": epoch} after a successful ping
   "setup": {"done": false},                     // page: first-run checklist dismissed
-  "learn": {"on": false}                        // page or `sinko learn on|off`: learning new addresses of blocked apps
+  "learn": {"on": false},                       // page or `sinko learn on|off`: learning new addresses of blocked apps
+  "terms": {"agreed": 0}                        // page: the version of the terms of use the parent agreed to (0 = none, 0-9999)
 }
 ```
 
@@ -256,6 +257,19 @@ is the contract both readers run), shows them in *My box* (card `boxLearnCard`) 
 again** writes what `sinko learn forget` writes (`PUT /api/domains/deny/regex/<regex>`: the same rule, switched off,
 comment `pb-learned-no:<A> <day>`). Under the apps, one line counts what each app learned and opens that card.
 
+## Terms of use
+
+After the claim screen or a sign-in, and before the app, the page shows `#terms` while `terms.agreed` is below
+`TERMS_VERSION` in `web/app.js` (now 1; the text is the four points on the screen and [`docs/terms.md`](../terms.md), linked
+from it and from *About* through `links.json` `terms`). It carries two switches: `learn.on` and, only when `box.json` says
+`"counter": true`, `telemetry.on`. The first time (`terms.agreed == 0`) both start on, except the counter when
+`telemetry.on` is already `false`; on a later version they start as the state has them. **I agree, continue** writes
+`terms.agreed = TERMS_VERSION`, `learn.on` and (when shown) `telemetry.on` in one `writeState`, then opens the app. Neither
+the scheduler nor the CLI reads `terms`: the two switches keep their own fields as the only authority, so the counter still
+sends nothing while `telemetry.on` is `null`. A restore keeps the box's own `terms` (`keepBoxFields`), and a sealed image
+starts with the default state, so a buyer is asked. Raise `TERMS_VERSION` (and the version line in `docs/terms.md`) only
+for a change of the terms that a parent should see again.
+
 ## Power requests
 
 `power.action` `reboot` → `systemctl reboot`; `poweroff` → `systemctl poweroff`, executed after the marker is stored
@@ -271,10 +285,11 @@ the router hands out a new address (and after a ready-made unit is switched on i
 
 ## Optional anonymous counter ("boxes online")
 
-* Off until the parent says yes (`telemetry.on == true` in the state; a page card or the installer prompt asks;
-  `sinko telemetry on|off|status|payload|reset-id` mirrors it). Endpoint from `SINKO_TELEMETRY_URL` (https, or http to
+* Nothing is sent until the parent says yes (`telemetry.on == true` in the state). The terms screen at first sign-in asks,
+  with the switch on (off where `telemetry.on` is already `false`), and so does the installer prompt (default yes);
+  `sinko telemetry on|off|status|payload|reset-id` mirrors it. Endpoint from `SINKO_TELEMETRY_URL` (https, or http to
   loopback in tests); empty = not configured: nothing is ever sent, and `box.json` says `"counter": false`, so the page
-  hides the card and the checklist question. Switching off sends the forget request below.
+  hides the card and the choice on the terms screen. Switching off sends the forget request below.
 * Every 6 h ± 30 min (first one 5 minutes after start) in a background thread with a 10 s timeout:
   `POST {url}/v1/ping`, `Content-Type: application/json`, body ≤ 512 bytes:
   `{"id": "<32 lowercase hex>", "v": "3.0.0", "hw": "orangepi-zero3|raspberrypi|x86|other"}`.
@@ -299,7 +314,7 @@ the router hands out a new address (and after a ready-made unit is switched on i
   words outside the "how it works" sheet.
 * New in 3.0: **My box** sheet (update, health, network addresses, change password, backup/restore, restart/shut
   down, anonymous counter, about; since then also learning new addresses of blocked apps), **first-run claim** screen, **setup checklist** card, update banner when a newer
-  version exists.
+  version exists. Since then also the **terms screen** (see *Terms of use* below).
 * Pi-hole API calls used by the new features (from the FTL OpenAPI specs; copies in the maintainers' scratch notes,
   upstream: `pi-hole/FTL/src/api/docs/content/specs/*.yaml`):
   `GET /api/auth` (no `sid` + `session.valid` true ⇒ no password set ⇒ claim screen),

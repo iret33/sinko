@@ -115,7 +115,7 @@
       // learning new addresses of blocked apps
       boxLearnTitle: 'New addresses of blocked apps',
       boxLearnSwitch: 'Learn new addresses of apps I block',
-      boxLearnLead: 'Optional, and off until you switch it on. Apps keep adding new addresses, and the block lists cannot always keep up. When this is on, a small AI model on this box looks out for them: when a child\u2019s device has just been stopped from opening an app you blocked and then asks for a new address that belongs to that app, the box blocks that address too.',
+      boxLearnLead: 'Optional. It starts switched on when you agree to the terms of use, and you can switch it off here at any time. Apps keep adding new addresses, and the block lists cannot always keep up. When this is on, a small AI model on this box looks out for them: when a child\u2019s device has just been stopped from opening an app you blocked and then asks for a new address that belongs to that app, the box blocks that address too.',
       boxLearnLimits: 'At most 20 new addresses of an app a day. A learned address is blocked only while its app is blocked. What it learns is not sent anywhere.',
       boxLearnListTitle: 'Learned so far',
       boxLearnNone: 'Nothing learned yet.',
@@ -129,7 +129,7 @@
       // counter
       boxCounterTitle: 'Count this box',
       boxCounterSwitch: 'Count this box in the anonymous Sinko counter',
-      boxCounterLead: 'Optional. It lets the project show how many Sinko boxes are in use. It stays off until you switch it on.',
+      boxCounterLead: 'Optional. It lets the project show how many Sinko boxes are in use. Nothing is sent before you agree to the terms of use, and you can switch it off here at any time.',
       boxCounterSentTitle: 'What is sent, every few hours:',
       boxCounterSent1: 'A random code made on this box. It is not made from anything about you, your family or your devices.',
       boxCounterSent2: 'The Sinko version, for example 3.0.0.',
@@ -144,7 +144,7 @@
       // about
       boxAboutTitle: 'About', boxAboutVersion: 'Sinko {v}', boxAboutPihole: 'Pi-hole {v}', boxAboutLicence: 'Free software, licensed GPL-3.0-or-later.',
       boxAboutTrademark: 'Pi-hole is a trademark of Pi-hole LLC. Sinko is independent software that works with it.',
-      boxLinkHome: 'Project page', boxLinkIssues: 'Report a problem', boxLinkReleases: 'All versions', boxLinkPrivacy: 'Privacy',
+      boxLinkHome: 'Project page', boxLinkIssues: 'Report a problem', boxLinkReleases: 'All versions', boxLinkPrivacy: 'Privacy', boxLinkTerms: 'Terms of use',
       boxLinkLicense: 'Licence', boxLinkSupport: 'Get help', boxLinkBuy: 'Buy a ready-made box'
     },
     ar: {
@@ -228,7 +228,7 @@
       boxBackNote: 'أعاد الصندوق التشغيل. سجّل الدخول مجددًا.',
       boxLearnTitle: 'عناوين جديدة للتطبيقات المحظورة',
       boxLearnSwitch: 'تعلّم العناوين الجديدة للتطبيقات التي أحظرها',
-      boxLearnLead: 'اختياري، ويبقى متوقفًا حتى تشغّله. تضيف التطبيقات عناوين جديدة باستمرار، ولا تستطيع قوائم الحظر دائمًا أن تواكبها. وعند تشغيله يترقّب نموذج صغير من الذكاء الاصطناعي على هذا الصندوق هذه العناوين: إذا مُنع جهاز طفل للتو من فتح تطبيق حظرته، ثم طلب عنوانًا جديدًا يعود إلى ذلك التطبيق، حظر الصندوق هذا العنوان أيضًا.',
+      boxLearnLead: 'اختياري. يبدأ مشغّلًا عندما توافق على شروط الاستخدام، ويمكنك إيقافه من هنا في أي وقت. تضيف التطبيقات عناوين جديدة باستمرار، ولا تستطيع قوائم الحظر دائمًا أن تواكبها. وعند تشغيله يترقّب نموذج صغير من الذكاء الاصطناعي على هذا الصندوق هذه العناوين: إذا مُنع جهاز طفل للتو من فتح تطبيق حظرته، ثم طلب عنوانًا جديدًا يعود إلى ذلك التطبيق، حظر الصندوق هذا العنوان أيضًا.',
       boxLearnLimits: 'ما لا يزيد على 20 عنوانًا جديدًا لكل تطبيق في اليوم. ولا يُحظر العنوان الذي تعلّمه إلا ما دام تطبيقه محظورًا. وما يتعلّمه لا يُرسَل إلى أي مكان.',
       boxLearnListTitle: 'ما تعلّمه حتى الآن',
       boxLearnNone: 'لم يتعلّم شيئًا بعد.',
@@ -241,7 +241,7 @@
       boxLearnSee: 'اعرضها',
       boxCounterTitle: 'احتساب هذا الصندوق',
       boxCounterSwitch: 'احتساب هذا الصندوق في عدّاد سينكو دون ذكر هويتك',
-      boxCounterLead: 'اختياري. يساعد المشروع على إظهار عدد صناديق سينكو قيد الاستخدام. ويبقى متوقفًا حتى تشغّله.',
+      boxCounterLead: 'اختياري. يساعد المشروع على إظهار عدد صناديق سينكو قيد الاستخدام. ولا يُرسَل شيء قبل أن توافق على شروط الاستخدام، ويمكنك إيقافه من هنا في أي وقت.',
       boxCounterSentTitle: 'ما يُرسل كل بضع ساعات:',
       boxCounterSent1: 'رمز عشوائي يُنشأ على هذا الصندوق. لا يُشتق من أي شيء عنك أو عن عائلتك أو أجهزتك.',
       boxCounterSent2: 'رقم إصدار سينكو، مثل 3.0.0.',
@@ -254,7 +254,7 @@
       boxCounterOnToast: 'تم تشغيل العدّاد. شكرًا لك.', boxCounterOffToast: 'تم إيقاف العدّاد. سيطلب الصندوق من خدمة العدّاد أن تنسى هذا الصندوق.',
       boxAboutTitle: 'عن سينكو', boxAboutVersion: 'سينكو {v}', boxAboutPihole: 'محرّك الحجب Pi-hole {v}', boxAboutLicence: 'برنامج حر، مرخّص بموجب GPL-3.0-or-later.',
       boxAboutTrademark: 'Pi-hole علامة تجارية لشركة Pi-hole LLC. سينكو برنامج مستقل يعمل معه.',
-      boxLinkHome: 'صفحة المشروع', boxLinkIssues: 'الإبلاغ عن مشكلة', boxLinkReleases: 'كل الإصدارات', boxLinkPrivacy: 'الخصوصية',
+      boxLinkHome: 'صفحة المشروع', boxLinkIssues: 'الإبلاغ عن مشكلة', boxLinkReleases: 'كل الإصدارات', boxLinkPrivacy: 'الخصوصية', boxLinkTerms: 'شروط الاستخدام',
       boxLinkLicense: 'الترخيص', boxLinkSupport: 'احصل على مساعدة', boxLinkBuy: 'اشترِ صندوقًا جاهزًا'
     }
   };
@@ -560,14 +560,14 @@
 
   /**
    * After a restore the stored state is the BACKUP's (the "group" table holds it): its update request, a "running" status, a pending
-   * restart and an old counter answer would all come back to life. This returns the mutator that puts back what belongs to the box and
-   * not to the family's rules; the timer, bedtime and whether bedtime is on right now come from the backup, because they describe the
-   * rules that were just restored.
+   * restart, an old counter answer and an old agreement to the terms would all come back to life. This returns the mutator that puts back
+   * what belongs to the box and not to the family's rules; the timer, bedtime and whether bedtime is on right now come from the backup,
+   * because they describe the rules that were just restored.
    */
   function keepBoxFields(before) {
     return function (st) {
       st.update = before.update; st.power = before.power; st.telemetry = before.telemetry;
-      st.community = before.community; st.setup = before.setup;
+      st.community = before.community; st.setup = before.setup; st.terms = before.terms;
     };
   }
 
@@ -582,7 +582,7 @@
   /** Only https links from links.json are shown; anything else is dropped. */
   function safeLinks(raw) {
     var out = {};
-    ['home', 'issues', 'releases', 'privacy', 'license', 'support', 'buy'].forEach(function (k) {
+    ['home', 'issues', 'releases', 'privacy', 'terms', 'license', 'support', 'buy'].forEach(function (k) {
       var v = raw && typeof raw[k] === 'string' ? raw[k].trim() : '';
       if (/^https:\/\/[^\s"'<>]+$/.test(v)) out[k] = v;
     });
@@ -1096,7 +1096,7 @@
     if (pihole) ui.aboutPihole.textContent = t('boxAboutPihole', { v: iso(pihole) });
     var l = links || {};
     var items = [['home', 'boxLinkHome'], ['issues', 'boxLinkIssues'], ['releases', 'boxLinkReleases'], ['privacy', 'boxLinkPrivacy'],
-      ['license', 'boxLinkLicense'], ['support', 'boxLinkSupport'], ['buy', 'boxLinkBuy']].filter(function (i) { return l[i[0]]; });
+      ['terms', 'boxLinkTerms'], ['license', 'boxLinkLicense'], ['support', 'boxLinkSupport'], ['buy', 'boxLinkBuy']].filter(function (i) { return l[i[0]]; });
     var sig = items.map(function (i) { return l[i[0]]; }).join(',') + env.lang();
     if (ui.aboutSig === sig) return;
     ui.aboutSig = sig;

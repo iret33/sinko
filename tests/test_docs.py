@@ -10,7 +10,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Customer-facing and maintainer-facing text that this project's documentation owner writes.
 DOCS = [
-    "docs/faq.md", "docs/privacy.md", "docs/selling.md", "docs/troubleshooting.md", "docs/updating.md",
+    "docs/faq.md", "docs/privacy.md", "docs/terms.md", "docs/selling.md", "docs/troubleshooting.md", "docs/updating.md",
     "docs/product-image.md", "docs/quick-start-card.md", "docs/hardware-test-checklist.md",
     "docs/maintainers/releasing.md", "SECURITY.md", "CONTRIBUTING.md", "NOTICE", "COPYING.md", "TRADEMARK.md",
     "telemetry/README.md", "site/README.md", "site/strings.js", "site/index.html", ".github/ISSUE_TEMPLATE/bug_report.yml",

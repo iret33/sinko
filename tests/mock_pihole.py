@@ -295,6 +295,11 @@ class Store:
         with self.lock:
             go()
 
+    def agree_terms(self, version=1):
+        """What "I agree, continue" on the terms screen (web/app.js, TERMS_VERSION) leaves behind, for tests and demos of what comes
+        after it. The two choices on that screen are left as they are."""
+        self.edit_state(lambda st: st.update(terms={"agreed": version}))
+
 
 class SchedulerSim:
     """The scheduler's side of the request protocol, as docs/maintainers/architecture.md defines it ("Shared state").

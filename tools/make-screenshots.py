@@ -62,7 +62,7 @@ def demo_box():
         "schedule": {"enabled": True, "start": "21:30", "end": "06:30", "days": [0, 1, 2, 3, 4]},
         "update": {"latest": "3.1.0", "notes": notes, "checked": int(time.time()) - 3 * 3600, "auto": False, "status": "idle"},
         "telemetry": {"on": True}, "community": {"online": 1234, "at": int(time.time())},
-        "setup": {"done": True}}))
+        "setup": {"done": True}, "learn": {"on": True}, "terms": {"agreed": 1}}))
     mock_pihole.seed_history(store)
     mock_pihole.start_live(store)
     return httpd, store

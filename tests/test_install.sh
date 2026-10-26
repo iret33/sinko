@@ -437,7 +437,7 @@ echo "    ... the built-in address of the release counts (what releasing.md puts
 BUILTIN="$(src_copy builtin)"
 sed -i 's|^TELEMETRY_URL = .*|TELEMETRY_URL = "https://counter.example.org"|' "$BUILTIN/bin/sinko"
 env -u SINKO_NONINTERACTIVE SINKO_SRC="$BUILTIN" SINKO_TTY="$WORK/answer" bash "$BUILTIN/install.sh" >"$WORK/t6b.out" 2>&1 || { cat "$WORK/t6b.out"; fail "interactive run with a built-in counter address failed"; }
-grep -q "Count this box in the anonymous number of Sinko boxes online? \[y/N\]" "$WORK/t6b.out" || fail "the question was not asked although the release has a counter address built in"
+grep -q "Count this box in the anonymous number of Sinko boxes online? \[Y/n\]" "$WORK/t6b.out" || fail "the question was not asked although the release has a counter address built in"
 grep -q '^SINKO_TELEMETRY=1$' "$conf" || fail "the answer was not saved"
 grep -q '^SINKO_TELEMETRY_URL=' "$conf" && fail "the built-in address was copied into the settings (it must keep following the release)"
 echo "    ... but a built-in address the program would never use (not https) is no address"
@@ -446,11 +446,11 @@ sed -i 's|^TELEMETRY_URL = .*|TELEMETRY_URL = "http://counter.example.org"|' "$B
 env -u SINKO_NONINTERACTIVE SINKO_SRC="$BUILTIN" SINKO_TTY="$WORK/answer" bash "$BUILTIN/install.sh" >"$WORK/t6c.out" 2>&1 || fail "interactive run with an unusable built-in address failed"
 grep -q "Count this box" "$WORK/t6c.out" && fail "asked although the built-in address is not one the program would send to"
 grep -q '^SINKO_TELEMETRY=' "$conf" && fail "an answer was saved although nobody was asked"
-echo "    interactive: asked with a description and a pointer to docs/privacy.md; default is no"
+echo "    interactive: asked with a description and a pointer to docs/privacy.md; default is yes, and n is no"
 forget_answer
 echo y >"$WORK/answer"
 env -u SINKO_NONINTERACTIVE SINKO_TELEMETRY_URL=https://counter.example.org SINKO_TTY="$WORK/answer" bash "$REPO/install.sh" >"$WORK/t7.out" 2>&1 || { cat "$WORK/t7.out"; fail "interactive run failed"; }
-grep -q "Count this box in the anonymous number of Sinko boxes online? \[y/N\]" "$WORK/t7.out" || fail "the question was not asked"
+grep -q "Count this box in the anonymous number of Sinko boxes online? \[Y/n\]" "$WORK/t7.out" || fail "the question was not asked"
 grep -q "docs/privacy.md" "$WORK/t7.out" || fail "no pointer to docs/privacy.md"
 grep -q '^SINKO_TELEMETRY=1$' "$conf" || fail "the answer yes was not saved"
 env -u SINKO_NONINTERACTIVE SINKO_TTY="$WORK/answer" bash "$REPO/install.sh" >"$WORK/t8.out" 2>&1 || fail "second interactive run failed"
@@ -458,7 +458,11 @@ grep -q "Count this box" "$WORK/t8.out" && fail "asked again although the box wa
 forget_answer
 echo >"$WORK/answer"                                   # just Enter
 env -u SINKO_NONINTERACTIVE SINKO_TTY="$WORK/answer" bash "$REPO/install.sh" >"$WORK/t9.out" 2>&1 || fail "run answering with Enter failed"
-grep -q '^SINKO_TELEMETRY=0$' "$conf" || fail "Enter (the default) did not save no"
+grep -q '^SINKO_TELEMETRY=1$' "$conf" || fail "Enter (the default) did not save yes"
+forget_answer
+echo n >"$WORK/answer"
+env -u SINKO_NONINTERACTIVE SINKO_TTY="$WORK/answer" bash "$REPO/install.sh" >"$WORK/t9n.out" 2>&1 || fail "run answering n failed"
+grep -q '^SINKO_TELEMETRY=0$' "$conf" || fail "n did not save no"
 forget_answer
 : >"$WORK/answer"                                      # the terminal gives no answer at all (Ctrl-D)
 env -u SINKO_NONINTERACTIVE SINKO_TTY="$WORK/answer" bash "$REPO/install.sh" >"$WORK/t10.out" 2>&1 || fail "run without an answer failed"

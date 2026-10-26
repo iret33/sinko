@@ -283,7 +283,7 @@
   Object.keys(LIVE_STR.en).forEach(function (k) { STR.en[k] = LIVE_STR.en[k]; });
   Object.keys(LIVE_STR.ar).forEach(function (k) { STR.ar[k] = LIVE_STR.ar[k]; });
 
-  // ------------------------------------------------------------------ strings for the first run: claim screen, setup list, update banner
+  // ------------------------------------------------------------------ strings for the first run: claim screen, terms, setup list, update banner
   // (the My box sheet's own strings live in pb-box.js). tests/test_copy.py checks both languages and the plain-words rule.
   var FIRST_STR = {
     en: {
@@ -297,10 +297,20 @@
       setupPw: 'Parent password chosen',
       setupRouter: 'Router points to this box', setupRouterHow: 'No other device at home has used the box yet. See “Setup help” at the bottom of this page.', setupRouterBtn: 'Show setup help',
       setupChild: 'First child device added', setupChildHow: 'Add your child’s phone or tablet so the rules apply to it.',
-      setupCounterQ: 'Help count Sinko boxes?', setupCounterDone: 'Counter question answered',
-      setupCounterText: 'Optional. Every few hours the box sends a random code, the Sinko version and the kind of box. Nothing about your family. The counter adds the country and when it first and last heard from the box. Switch it off any time in My box: the box then asks the counter service to forget it.',
-      setupDone: 'done', setupTodo: 'not done yet',
-      setupYes: 'Yes', setupNotNow: 'Not now', setupLaterToast: 'Okay. You can change this in My box.', setupDoneToast: 'Everything is set up.',
+      setupDone: 'done', setupTodo: 'not done yet', setupDoneToast: 'Everything is set up.',
+      termsTitle: 'Before you start', termsLead: 'Please read the terms of use. Choosing \u201cI agree\u201d means you accept them.',
+      terms1: 'Sinko is free software (GPL-3.0-or-later). It comes as it is, without any warranty: the project is not responsible for what a child can still reach, or for any loss from using it.',
+      terms2: 'It is a strong everyday filter, not a lock. A phone on mobile data or with a VPN app does not use this box, and some apps can get around it. Use it together with Screen Time or Family Link.',
+      terms3: 'Use it only on your own home network, for devices you look after.',
+      terms4: 'Your children\u2019s names, devices and rules stay on this box and are never sent to the project. The privacy statement says exactly what is sent, and where.',
+      termsLinkTerms: 'Full terms of use', termsLinkPrivacy: 'Privacy statement',
+      termsChoices: 'Your choices',
+      termsLearn: 'Learn new addresses of apps I block',
+      termsLearnNote: 'A small AI model on this box spots new addresses of the apps you block, and blocks them too. What it learns stays on the box.',
+      termsCounter: 'Count this box in the anonymous Sinko counter',
+      termsCounterNote: 'Every few hours the box sends a random code, the Sinko version and the kind of box. Nothing about your family. The counter adds the country and when it first and last heard from the box. Switch it off any time in My box: the box then asks the counter service to forget it.',
+      termsChange: 'You can change your choices at any time in My box.',
+      termsAgree: 'I agree, continue', termsBusy: 'Saving\u2026', termsFail: 'Your answer could not be saved: {e}',
       updateReady: 'Sinko {v} is ready: open My box', updateRunning: 'Sinko is updating: open My box to follow it',
       updateFailed: 'The last update did not work: open My box'
     },
@@ -315,10 +325,20 @@
       setupPw: 'تم اختيار كلمة مرور الوالدين',
       setupRouter: 'الراوتر يوجّه الأجهزة إلى هذا الصندوق', setupRouterHow: 'لم يستخدم أي جهاز آخر في البيت الصندوق بعد. راجع «مساعدة في الإعداد» أسفل هذه الصفحة.', setupRouterBtn: 'عرض المساعدة',
       setupChild: 'إضافة أول جهاز لطفل', setupChildHow: 'أضف هاتف طفلك أو جهازه اللوحي لتُطبَّق عليه القواعد.',
-      setupCounterQ: 'هل تساعد في عدّ صناديق سينكو؟', setupCounterDone: 'تمت الإجابة عن سؤال العدّاد',
-      setupCounterText: 'اختياري. يرسل الصندوق كل بضع ساعات رمزًا عشوائيًا ورقم إصدار سينكو ونوع الصندوق. لا شيء عن عائلتك. ويضيف العدّاد الدولة ووقت أول رسالة وآخر رسالة من الصندوق. يمكنك إيقافه في أي وقت من «صندوقي»، وعندها يطلب الصندوق من خدمة العدّاد أن تنسى هذا الصندوق.',
-      setupDone: 'تم', setupTodo: 'لم يتم بعد',
-      setupYes: 'نعم', setupNotNow: 'ليس الآن', setupLaterToast: 'حسنًا. يمكنك تغيير ذلك من «صندوقي».', setupDoneToast: 'تم إعداد كل شيء.',
+      setupDone: 'تم', setupTodo: 'لم يتم بعد', setupDoneToast: 'تم إعداد كل شيء.',
+      termsTitle: 'قبل أن تبدأ', termsLead: 'يُرجى قراءة شروط الاستخدام. اختيارك «أوافق» يعني أنك تقبلها.',
+      terms1: 'سينكو برنامج حر (GPL-3.0-or-later). يُقدَّم كما هو، دون أي ضمان: المشروع غير مسؤول عمّا قد يبقى بإمكان الطفل الوصول إليه، ولا عن أي ضرر ينتج عن استخدامه.',
+      terms2: 'إنه فلتر يومي قوي، وليس قفلًا. الهاتف الذي يستخدم بيانات الجوال أو تطبيق VPN لا يمر عبر هذا الصندوق، وبعض التطبيقات تستطيع تجاوزه. استخدمه مع Screen Time أو Family Link.',
+      terms3: 'استخدمه على شبكة بيتك فقط، وللأجهزة التي ترعاها.',
+      terms4: 'أسماء أطفالك وأجهزتهم وقواعدك تبقى على هذا الصندوق، ولا تُرسَل إلى المشروع أبدًا. ويوضّح بيان الخصوصية بالضبط ما يُرسَل وإلى أين.',
+      termsLinkTerms: 'شروط الاستخدام كاملة', termsLinkPrivacy: 'بيان الخصوصية',
+      termsChoices: 'خياراتك',
+      termsLearn: 'تعلّم العناوين الجديدة للتطبيقات التي أحظرها',
+      termsLearnNote: 'يترقّب نموذج صغير من الذكاء الاصطناعي على هذا الصندوق العناوين الجديدة للتطبيقات التي تحظرها، ويحظرها أيضًا. وما يتعلّمه يبقى على الصندوق.',
+      termsCounter: 'احتساب هذا الصندوق في عدّاد سينكو دون ذكر هويتك',
+      termsCounterNote: 'يرسل الصندوق كل بضع ساعات رمزًا عشوائيًا ورقم إصدار سينكو ونوع الصندوق. لا شيء عن عائلتك. ويضيف العدّاد الدولة ووقت أول رسالة وآخر رسالة من الصندوق. يمكنك إيقافه في أي وقت من «صندوقي»، وعندها يطلب الصندوق من خدمة العدّاد أن تنسى هذا الصندوق.',
+      termsChange: 'يمكنك تغيير خياراتك في أي وقت من «صندوقي».',
+      termsAgree: 'أوافق، متابعة', termsBusy: 'جارٍ الحفظ…', termsFail: 'تعذّر حفظ إجابتك: {e}',
       updateReady: 'الإصدار {v} من سينكو جاهز: افتح صندوقي', updateRunning: 'يجري تحديث سينكو: افتح صندوقي للمتابعة',
       updateFailed: 'لم ينجح آخر تحديث: افتح صندوقي'
     }
@@ -509,12 +529,12 @@
     showLogin(typeof note === 'string' ? note : '');
   }
   function showLogin(note) {
-    $('app').hidden = true; $('claim').hidden = true; $('login').hidden = false;
+    $('app').hidden = true; $('claim').hidden = true; $('terms').hidden = true; $('login').hidden = false;
     var n = $('loginNote'); n.textContent = note || ''; n.hidden = !note;
     $('loginErr').textContent = '';
     setTimeout(function () { $('pw').focus(); }, 0);
   }
-  function showApp() { $('login').hidden = true; $('claim').hidden = true; $('app').hidden = false; }
+  function showApp() { $('login').hidden = true; $('claim').hidden = true; $('terms').hidden = true; $('app').hidden = false; }
 
   function probeAuth() {
     return call('GET', '/api/auth').then(function (j) {
@@ -541,7 +561,7 @@
       .catch(function () { return false; });
   }
   function showClaim() {
-    $('app').hidden = true; $('login').hidden = true; $('claim').hidden = false;
+    $('app').hidden = true; $('login').hidden = true; $('terms').hidden = true; $('claim').hidden = false;
     $('claimErr').textContent = '';
     setTimeout(function () { $('claimPw').focus(); }, 0);
   }
@@ -577,6 +597,48 @@
         if (saved) { $('claimPw').value = ''; $('claimPw2').value = ''; showLogin(t('claimSignIn')); return; }   // the password exists: only signing in failed
         err.textContent = t('claimFail', { e: e && e.message ? e.message : String(e) });
       });
+  }
+
+  // ------------------------------------------------------------------ first sign-in: the terms of use
+  // Shown after the password is chosen or the parent signs in, until the parent agrees to this version of the terms (terms.agreed in the
+  // shared state; raise TERMS_VERSION when the terms change and every box asks again, see docs/terms.md). The first time, both choices
+  // start switched on, except the counter where the parent already said no to it; after that they start as the parent left them. A box with
+  // no counter address (box.json) does not offer the counter at all, as My box does not. The counter sends nothing before an answer.
+  var TERMS_VERSION = 1;
+  function termsNeeded() { return !!M && M.state.terms.agreed < TERMS_VERSION; }
+  function showTerms() {
+    $('app').hidden = true; $('login').hidden = true; $('claim').hidden = true; $('terms').hidden = false;
+    $('termsErr').textContent = '';
+    var counter = !!(boxInfo && boxInfo.counter === true);
+    $('termsCounterRow').hidden = !counter;
+    var first = M.state.terms.agreed === 0;
+    $('termsLearn').checked = first || M.state.learn.on;
+    $('termsCounter').checked = counter && (first ? M.state.telemetry.on !== false : M.state.telemetry.on === true);
+    fetch('/pb/links.json', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        var l = PBBox.pure.safeLinks(j);
+        [['terms', 'termsLinkTerms'], ['privacy', 'termsLinkPrivacy']].forEach(function (i) {
+          var a = $(i[1]); a.hidden = !l[i[0]]; if (l[i[0]]) a.href = l[i[0]];
+        });
+      }).catch(function () { /* the terms are on the screen itself: the links only add the long versions */ });
+    setTimeout(function () { $('termsTitle').focus(); }, 0);
+  }
+  function agreeTerms(ev) {
+    ev.preventDefault();
+    var btn = $('termsBtn'), err = $('termsErr');
+    var learn = $('termsLearn').checked, counter = !$('termsCounterRow').hidden, count = counter && $('termsCounter').checked;
+    err.textContent = '';
+    btn.disabled = true; btn.textContent = t('termsBusy');
+    var finish = function () { btn.disabled = false; btn.textContent = t('termsAgree'); };
+    writeState(function (st) {
+      st.terms = { agreed: TERMS_VERSION };
+      st.learn = { on: learn };
+      if (counter) st.telemetry = { on: count };
+    }).then(function () { finish(); enterApp(); }, function (e) {
+      finish();
+      if (e && e.status === 401) return;                     // the session ended: the sign-in screen is up, and asks again after it
+      err.textContent = t('termsFail', { e: e && e.message ? e.message : String(e) });
+    });
   }
 
   function login(ev) {
@@ -1031,11 +1093,6 @@
       { id: 'router', done: routerPointsHere(), title: t('setupRouter'), how: t('setupRouterHow'), btn: t('setupRouterBtn'), act: 'setupHelp' },
       { id: 'child', done: M.kids.length > 0, title: t('setupChild'), how: t('setupChildHow'), btn: t('addDevice'), act: 'openAdd' }
     ];
-    // The counter question is asked only when the box says a counter address is configured (box.json): a promise nothing keeps is worse than
-    // silence. A box with no box.json (an older one) does not ask.
-    if (boxInfo && boxInfo.counter === true) {
-      items.push({ id: 'counter', done: s.telemetry.on !== null, title: t('setupCounterQ'), doneTitle: t('setupCounterDone'), how: t('setupCounterText') });
-    }
     var doneCount = items.filter(function (i) { return i.done; }).length;
     var all = doneCount === items.length;
     if (all && !s.setup.done && !setupSaving) {
@@ -1055,23 +1112,15 @@
     var ul = $('setupList'); ul.textContent = '';
     items.forEach(function (i) {
       var kids = [el('span', { class: 'setup-check', 'aria-hidden': 'true' }, [icon(i.done ? 'i-check' : 'i-dot')])];
-      var text = [el('span', { class: 'setup-title', text: i.done && i.doneTitle ? i.doneTitle : i.title }),
+      var text = [el('span', { class: 'setup-title', text: i.title }),
         el('span', { class: 'sr-only', text: ' (' + t(i.done ? 'setupDone' : 'setupTodo') + ')' })];
       var li = el('li', { class: 'setup-item' + (i.done ? ' is-done' : ''), 'data-item': i.id });
       if (!i.done && i.how) text.push(el('span', { class: 'setup-how', text: i.how }));
       var body = el('div', { class: 'setup-text' }, text);
       if (!i.done && i.act) body.appendChild(el('div', { class: 'setup-actions' }, [el('button', { type: 'button', class: 'btn btn-small', 'data-act': i.act, text: i.btn })]));
-      if (!i.done && i.id === 'counter') {
-        body.appendChild(el('div', { class: 'setup-actions' }, [
-          el('button', { type: 'button', class: 'btn btn-small btn-primary', 'data-act': 'counterYes', text: t('setupYes') }),
-          el('button', { type: 'button', class: 'btn btn-small', 'data-act': 'counterNo', text: t('setupNotNow') })]));
-      }
       li.appendChild(kids[0]); li.appendChild(body);
       ul.appendChild(li);
     });
-  }
-  function answerCounter(yes) {
-    run(function () { return writeState(function (st) { st.telemetry = { on: yes }; }); }, t(yes ? 'boxCounterOnToast' : 'setupLaterToast'));
   }
   function hideSetup() { run(function () { return writeState(function (st) { st.setup.done = true; }); }); }
   function showSetupHelp() {
@@ -1320,8 +1369,6 @@
       case 'learned': PBBox.open('boxLearnCard'); break;
       case 'boxClose': closeDialog('boxDialog'); break;
       case 'setupHelp': showSetupHelp(); break;
-      case 'counterYes': answerCounter(true); break;
-      case 'counterNo': answerCounter(false); break;
       case 'setupHide': hideSetup(); break;
     }
   }
@@ -1371,8 +1418,9 @@
     checkStale().catch(function () {});
   }
 
+  function enterApp() { showApp(); startPolling(); staleCheckedAt = Date.now(); checkStale(); }
   function start() {
-    return load().then(function () { showApp(); startPolling(); staleCheckedAt = Date.now(); checkStale(); })
+    return load().then(function () { if (termsNeeded()) showTerms(); else enterApp(); })
       .catch(function (e) {
         if (e && e.status === 401) return;
         showApp(); banner(e && e.message ? e.message : t('noConnection'));
@@ -1415,6 +1463,7 @@
     $('timerChips').addEventListener('click', onChipClick);
     $('loginForm').addEventListener('submit', login);
     $('claimForm').addEventListener('submit', claim);
+    $('termsForm').addEventListener('submit', agreeTerms);
     ['bedOn', 'bedStart', 'bedEnd', 'bedDays'].forEach(function (id) {
       $(id).addEventListener('change', function () { bedDirty = true; syncBedOn(); });
     });

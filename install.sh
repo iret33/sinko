@@ -40,7 +40,7 @@
 #                      (plain http is accepted only for this machine itself). Saved when it is not the default, so
 #                      "sinko update" and the update check use it too. SINKO_RELEASE_API (the latest-release
 #                      address, default https://api.github.com/repos/<slug>/releases/latest) is kept the same way.
-#   SINKO_TELEMETRY       1 = count this box in the anonymous number of Sinko boxes online, 0 = do not.
+#   SINKO_TELEMETRY       1 = count this box in the anonymous number of Sinko boxes online, 0 = do not (asked: default yes).
 #                      Interactive installs ask (default no). Not asked and not set: nothing is saved
 #                      and the parent page asks later. What is sent: docs/privacy.md
 #   SINKO_MDNS            0 = do not install avahi-daemon (the box answers to <hostname>.local when it is there)
@@ -489,8 +489,9 @@ counter_configured() {
 
 # Interactive installs ask once whether this box may be counted, but only when there is a counter to be counted in: a
 # build or a fork without a counter address can never send anything, and saying "this box will be counted" would be untrue.
-# Without an address nothing is said and nothing is saved. Nobody asked (no terminal, SINKO_NONINTERACTIVE=1) or no answer
-# given (Ctrl-D): nothing is saved, and the parent page asks later.
+# Without an address nothing is said and nothing is saved. The suggested answer is yes (Enter), as on the terms of use the parent
+# page shows at first sign-in. Nobody asked (no terminal, SINKO_NONINTERACTIVE=1) or no answer given (Ctrl-D): nothing is
+# saved, and the parent page asks later, on that terms screen.
 ask_telemetry() {
   [[ -z "$SINKO_TELEMETRY" ]] || return 0
   can_prompt || return 0
@@ -500,14 +501,14 @@ ask_telemetry() {
   printf '  Sinko can add this box to a public count of how many Sinko boxes are online. It sends only a random number,\n'
   printf '  the version and the kind of device, never names, addresses, websites or anything about your family.\n'
   printf '  What is sent, exactly: docs/privacy.md (https://github.com/%s/blob/master/docs/privacy.md)\n' "$SINKO_REPO_SLUG"
-  printf '  Count this box in the anonymous number of Sinko boxes online? [y/N] '
+  printf '  Count this box in the anonymous number of Sinko boxes online? [Y/n] '
   if ! read -r answer <"$TTY_DEV"; then
     printf '\n'
     warn "No answer: the parent page will ask later."
     return 0
   fi
   case "$answer" in
-    [Yy]|[Yy][Ee][Ss]) SINKO_TELEMETRY=1; ok "This box will be counted. Change it any time on the parent page (My box)." ;;
+    ''|[Yy]|[Yy][Ee][Ss]) SINKO_TELEMETRY=1; ok "This box will be counted. Change it any time on the parent page (My box)." ;;
     *) SINKO_TELEMETRY=0; ok "This box will not be counted. Change it any time on the parent page (My box)." ;;
   esac
 }

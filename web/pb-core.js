@@ -393,6 +393,7 @@
   var UPDATE_STATUSES = ['idle', 'running', 'ok', 'failed'];
   var POWER_ACTIONS = ['reboot', 'poweroff'];
   var HHMM_RE = /^\d\d:\d\d$/;
+  var TERMS_MAX = 9999;              // terms.agreed is a whole number from 0 to this; anything else reads as 0 (not agreed)
   // "Blank" for update.error: the same characters bin/sinko lists (neither language's own idea of whitespace decides).
   var BLANK_RE = /^[\t\n\v\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]*$/;
 
@@ -407,7 +408,8 @@
       telemetry: { on: null },
       community: null,
       setup: { done: false },
-      learn: { on: false }
+      learn: { on: false },
+      terms: { agreed: 0 }
     };
   }
 
@@ -494,6 +496,9 @@
     }
     if (isDict(d.setup)) s.setup = { done: d.setup.done === true };
     if (isDict(d.learn)) s.learn = { on: d.learn.on === true };
+    if (isDict(d.terms) && isCount(d.terms.agreed) && d.terms.agreed % 1 === 0 && d.terms.agreed <= TERMS_MAX) {
+      s.terms = { agreed: d.terms.agreed || 0 };            // || 0: -0 is stored as 0, as the scheduler does
+    }
     return s;
   }
 

@@ -488,6 +488,11 @@ body.is-busy .app button{cursor:progress}
 .tagline{color:var(--ink-2);font-weight:600;font-size:.95rem}
 .login-note{padding:10px 12px;border-radius:var(--radius-sm);background:var(--lagoon-soft);color:var(--lagoon-ink);font-weight:600;font-size:.92rem}
 .claim-why{padding:10px 12px;border-radius:var(--radius-sm);background:var(--dune);color:var(--dune-ink);font-size:.9rem;line-height:1.5}
+.terms-card{max-width:460px}
+.terms-card h1:focus{outline:none}
+.terms-list{display:grid;gap:8px;margin:0;padding-inline-start:1.2em;font-size:.92rem;line-height:1.5}
+.terms-links{display:flex;flex-wrap:wrap;gap:0 18px}
+.terms-choices{font-size:1.05rem;margin-top:4px}
 .topbar-actions{align-items:center}
 .topbar .link,.foot .link{min-height:44px}
 .topbar-box{display:inline-flex;align-items:center;gap:6px}

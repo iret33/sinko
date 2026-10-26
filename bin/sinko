@@ -125,13 +125,15 @@ DEFAULT_STATE = {
     "telemetry": {"on": None},                       # None: not asked yet; True/False: the parent's answer
     "community": None,                               # {"online": n, "at": epoch}, set by the scheduler after a ping
     "setup": {"done": False},                        # the first-run checklist was dismissed
-    "learn": {"on": False},                          # learning new addresses of blocked apps (Learner); off until switched on
+    "learn": {"on": False},                          # learning new addresses of blocked apps (Learner); set by the terms screen
+    "terms": {"agreed": 0},                          # the version of the terms of use the parent agreed to on the page; 0 = none yet
 }
 
 SEMVER_RE = re.compile(r"\d{1,4}\.\d{1,4}\.\d{1,4}", re.ASCII)      # always used with fullmatch: "$" lets a newline through
 NOTES_RE = re.compile(r"https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/releases(/tag/[A-Za-z0-9_.+-]+)?", re.ASCII)
 UPDATE_STATUSES = ("idle", "running", "ok", "failed")
 POWER_ACTIONS = ("reboot", "poweroff")
+TERMS_MAX = 9999                         # terms.agreed is a whole number from 0 to this; anything else reads as 0 (not agreed)
 
 log = logging.getLogger("sinko")
 
@@ -1178,6 +1180,10 @@ def _parse_state(raw) -> dict:
     learn = data.get("learn")
     if isinstance(learn, dict):
         state["learn"] = {"on": learn.get("on") is True}
+    terms = data.get("terms")
+    if isinstance(terms, dict) and _is_count(terms.get("agreed")) and terms["agreed"] == int(terms["agreed"]) \
+            and terms["agreed"] <= TERMS_MAX:
+        state["terms"] = {"agreed": int(terms["agreed"])}
     return state
 
 

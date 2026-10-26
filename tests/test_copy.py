@@ -5,7 +5,7 @@ Three groups of strings are checked, all read out of the source by tests/pbstrin
 * the live picture (LIVE_STR in web/app.js): the spec bans technical words from the default view: DNS, query, request, upstream,
   gravity, resolver, packet, latency, Pi-hole, cache. They may appear only in the "How it works" sheet (keys lvDetailTitle ...
   lvTopEmpty), each explained;
-* the first run (FIRST_STR in web/app.js): the claim screen, the setup list, the update banner;
+* the first run (FIRST_STR in web/app.js): the claim screen, the terms of use, the setup list, the update banner;
 * the My box sheet (BOX_STR in web/pb-box.js).
 
 The last two follow the same rule with no "How it works" sheet to hide behind: no technical word anywhere. The unavoidable exceptions
@@ -167,6 +167,28 @@ class FirstRunCopy(Copy, unittest.TestCase):
             self.assertNotIn(old, INDEX + APP + BOX_JS, "the old tagline is gone")
 
 
+    def test_the_terms_screen_says_the_same_as_the_string_table(self):
+        # index.html carries the English text of the terms screen before the script runs: it must be the table's own words.
+        screen = INDEX.split('<main id="terms"')[1].split("</main>")[0]
+        found = dict(re.findall(r'data-i18n="(\w+)">([^<]*)<', screen))
+        self.assertGreaterEqual(len(found), 12, "the terms screen's strings are in index.html")
+        for key, text in found.items():
+            self.assertEqual(text, self.table()["en"][key], key)
+
+    def test_the_terms_name_both_choices_and_say_where_to_change_them(self):
+        en, ar = self.table()["en"], self.table()["ar"]
+        self.assertRegex(en["termsLearnNote"], r"(?i)AI model on this box")
+        self.assertRegex(en["termsLearnNote"], r"(?i)stays on the box")
+        self.assertIn("الذكاء الاصطناعي", ar["termsLearnNote"])
+        for word in ("random code", "Sinko version", "kind of box", "Nothing about your family"):
+            self.assertIn(word, en["termsCounterNote"])
+        self.assertIn("My box", en["termsChange"])
+        self.assertIn("«صندوقي»", ar["termsChange"])
+        self.assertRegex(en["terms1"], r"(?i)without any warranty")
+        self.assertIn("دون أي ضمان", ar["terms1"])
+        self.assertRegex(en["terms2"], r"(?i)not a lock")
+
+
 class BoxCopy(Copy, unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -209,10 +231,12 @@ class BoxCopy(Copy, unittest.TestCase):
         en = self.table()["en"]
         text = " ".join(en[k] for k in en if k.startswith("boxCounter"))
         for must in ("random code", "Sinko version", "kind of box", "country", "does not store the internet address", "never sent",
-                     "names of children", "passwords", "language", "time zone", "Optional", "stays off until you switch it on"):
+                     "names of children", "passwords", "language", "time zone", "Optional",
+                     "nothing is sent before you agree to the terms of use", "switch it off here at any time"):
             self.assertIn(must.lower(), text.lower(), "the counter text must say: %s" % must)
         ar = " ".join(self.table()["ar"][k] for k in self.table()["ar"] if k.startswith("boxCounter"))
-        for must in ("رمز عشوائي", "الدولة", "عنوان الإنترنت", "كلمات المرور", "اللغة", "المنطقة الزمنية", "اختياري"):
+        for must in ("رمز عشوائي", "الدولة", "عنوان الإنترنت", "كلمات المرور", "اللغة", "المنطقة الزمنية", "اختياري",
+                     "قبل أن توافق على شروط الاستخدام"):
             self.assertIn(must, ar, "the Arabic counter text must say: %s" % must)
 
     def test_the_online_line_has_its_own_words_for_two_and_never_reads_one_of_one(self):
@@ -281,8 +305,8 @@ class BoxCopy(Copy, unittest.TestCase):
             self.assertRegex(s["en"][key], r"(?i)asks? the counter service to forget", key)
             self.assertIn("خدمة العدّاد أن تنسى", s["ar"][key], key)
         first = pbstrings.first_strings()
-        self.assertRegex(first["en"]["setupCounterText"], r"(?i)ask(s)? the counter service to forget")
-        self.assertIn("تنسى", first["ar"]["setupCounterText"])
+        self.assertRegex(first["en"]["termsCounterNote"], r"(?i)ask(s)? the counter service to forget")
+        self.assertIn("تنسى", first["ar"]["termsCounterNote"])
 
     def test_the_counter_card_says_what_the_counter_keeps_the_way_the_privacy_page_does(self):
         s = self.table()
@@ -290,7 +314,7 @@ class BoxCopy(Copy, unittest.TestCase):
         self.assertIn("أول رسالة وآخر رسالة", s["ar"]["boxCounterKept"])
         self.assertIn("the addresses of your devices", s["en"]["boxCounterNot"])
         self.assertIn("عناوين أجهزتك", s["ar"]["boxCounterNot"])
-        self.assertIn("country", pbstrings.first_strings()["en"]["setupCounterText"])
+        self.assertIn("country", pbstrings.first_strings()["en"]["termsCounterNote"])
 
     def test_the_time_zone_notes_are_honest_and_offer_no_fix_the_page_cannot_give(self):
         s = self.table()
