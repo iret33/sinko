@@ -33,6 +33,7 @@ Run standalone to develop the web page without a Raspberry Pi:
 from __future__ import annotations
 
 import argparse
+import datetime
 import email.parser
 import email.policy
 import hashlib
@@ -72,6 +73,12 @@ BLOCKED = {"GRAVITY", "REGEX", "DENYLIST", "EXTERNAL_BLOCKED_IP", "EXTERNAL_BLOC
            "EXTERNAL_BLOCKED_EDE15", "GRAVITY_CNAME", "REGEX_CNAME", "DENYLIST_CNAME", "DBBUSY", "SPECIAL_DOMAIN"}
 CACHED = {"CACHE", "CACHE_STALE"}
 FORWARDED = {"FORWARDED", "RETRIED", "RETRIED_DNSSEC"}
+# A general ad list like the one Pi-hole's own installer offers (Store.add_ad_list), and names it stops for every device at home,
+# the children's included. None of them is on an app's list, so the page calls such a stop "an unwanted site".
+AD_LIST_ADDRESS = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
+AD_LIST_COMMENT = "StevenBlack's Unified Hosts List"
+AD_DOMAINS = ("ads.doubleclick.net", "securepubads.g.doubleclick.net", "pagead2.googlesyndication.com", "app-measurement.com",
+              "settings.crashlytics.com", "data.flurry.com", "ads.mopub.com", "track.adform.net")
 
 
 class Store:
@@ -262,17 +269,57 @@ class Store:
         self.last_import = {"import": None if everything else wanted, "processed": processed}
         return processed
 
-    def add_query(self, domain, status="FORWARDED", client="192.168.1.21", name=None, when=None):
-        """Append one DNS query to the log; returns its id. `when` is a unix time (default: now)."""
+    def add_query(self, domain, status="FORWARDED", client="192.168.1.21", name=None, when=None, list_id=None):
+        """Append one DNS query to the log; returns its id. `when` is a unix time (default: now). `list_id` is what FTL notes:
+        the id of the list or rule that stopped it; by default the one that would have (blocking_list_id)."""
         qid = next(self.query_ids)
         blocked = status in BLOCKED
+        if list_id is None and blocked:
+            list_id = self.blocking_list_id(domain, status)
         self.query_log.append({
             "id": qid, "time": float(time.time() if when is None else when), "type": "A", "domain": domain,
             "status": status, "client": {"ip": client, "name": name}, "dnssec": "UNKNOWN",
             "reply": {"type": "IP", "time": 0.0002 if status in CACHED else 0.03},
-            "upstream": None if blocked or status in CACHED else "1.1.1.3#53", "list_id": 1 if blocked else None,
+            "upstream": None if blocked or status in CACHED else "1.1.1.3#53", "list_id": list_id,
             "cname": None, "ede": {"code": -1, "text": None}})
         return qid
+
+    def add_ad_list(self):
+        """The general ad list (AD_LIST_COMMENT) in the Default group, where Pi-hole's installer puts its own; added once.
+        Returns its id."""
+        row = next((l for l in self.lists if l.get("comment") == AD_LIST_COMMENT), None)
+        if row is None:
+            row = {"id": next(self.ids), "address": AD_LIST_ADDRESS, "type": "block", "comment": AD_LIST_COMMENT,
+                   "enabled": True, "groups": [0], "number": 0}
+            self.lists.append(row)
+        return row["id"]
+
+    def blocking_list_id(self, domain, status):
+        """The list_id FTL would note for a stop: the app's own list (pb:<id>) while that app is blocked, else the general ad
+        list (if the box has one) for a block-list stop; a learned rule over the name, else Sinko's block-everything rule, for a
+        regex stop; the owner's exact rule for a denylist stop. None when nothing on the box explains it (as for an upstream
+        refusal)."""
+        name = (domain or "").lower().rstrip(".")
+        if status in ("GRAVITY", "GRAVITY_CNAME"):
+            sid = app_of(name)
+            group = next((g for g in self.groups if g["name"] == "pb-svc-%s" % sid), None) if sid else None
+            mine = next((l for l in self.lists if l.get("comment") == "pb:%s" % sid), None) if sid else None
+            if mine is not None and (sid == "guard" or (group is not None and group.get("enabled"))):
+                return mine["id"]
+            ad = next((l for l in self.lists if l.get("comment") == AD_LIST_COMMENT), None)
+            return ad["id"] if ad is not None else None
+        if status in ("REGEX", "REGEX_CNAME"):
+            rules = [d for d in self.domains if d["type"] == "deny" and d["kind"] == "regex" and d.get("enabled", True)]
+            for d in rules:
+                zone = load_cli().regex_zone(d["domain"]) if (d.get("comment") or "").startswith("pb-learned:") else None
+                if zone and (name == zone or name.endswith("." + zone)):
+                    return d["id"]
+            every = next((d for d in rules if d["domain"] == "^.*$"), None)
+            return every["id"] if every is not None else None
+        if status in ("DENYLIST", "DENYLIST_CNAME"):
+            exact = next((d for d in self.domains if d["type"] == "deny" and d["kind"] == "exact" and d["domain"] == name), None)
+            return exact["id"] if exact is not None else None
+        return None
 
     # ---------- the shared state in the pb-state group, for tests that play the scheduler ----------
     def state_group(self):
@@ -1070,11 +1117,36 @@ def load_cli():
     return _CLI[0]
 
 
+_APP_NAMES = {}
+
+
+def app_of(name):
+    """The app whose list holds `name` (or a name it is under), "guard" for the guard list's names, or None: what the box
+    program's own domain map says (service_of)."""
+    if not _APP_NAMES:
+        pb = load_cli()
+        lists_dir = os.path.join(HERE, "..", "lists")
+        names = pb.service_domain_map(pb.load_catalog(lists_dir), lists_dir)
+        names.update({pb.bare_domain(d).lower(): "guard" for d in pb.list_domains("guard", lists_dir)})
+        _APP_NAMES.update(names)
+    return load_cli().service_of(name, _APP_NAMES) if name else None
+
+
+def bedtime_of(store):
+    """The bedtime in the store's shared state when it is switched on (parsed as the box program parses it), else None."""
+    group = store.state_group()
+    sched = load_cli().parse_state(group.get("comment") if group else None)["schedule"]
+    return sched if sched["enabled"] and sched["days"] else None
+
+
 def seed_history(store, count=2600, seed=11, now=None):
     """A believable day of DNS traffic spread over the last 24 hours (busier in the afternoon and evening).
 
     Children's devices ask for apps (answered GRAVITY while that app's group is enabled), a parent's phone and the
-    router mostly make ordinary lookups. Deterministic for a given seed.
+    router mostly make ordinary lookups. Deterministic for a given seed. Each stop carries the id of the list or rule that made
+    it (list_id, as FTL notes it). On top, the general ad list (added to the store) stops ad and tracker names for every
+    device, the children's included; and while the shared state has bedtime switched on, a child's lookup inside it that no
+    list stops is stopped by Sinko's block-everything rule (REGEX). The other lookups are the same as before these were added.
     """
     rng = random.Random(seed)
     now = time.time() if now is None else now
@@ -1086,6 +1158,11 @@ def seed_history(store, count=2600, seed=11, now=None):
     noise = ["www.apple.com", "api.github.com", "time.android.com", "www.bahrain.bh", "fonts.gstatic.com", "play.googleapis.com",
              "connectivitycheck.gstatic.com", "mesu.apple.com", "ocsp.digicert.com", "www.msftconnecttest.com"]
     weights = [1, 1, 1, 1, 1, 2, 2, 3, 3, 3, 3, 4, 4, 4, 5, 5, 6, 6, 7, 7, 7, 6, 4, 2]       # by hour of day
+    bedtime = bedtime_of(store)
+    pb = load_cli()
+
+    def asleep(t):
+        return bedtime is not None and pb.in_schedule(bedtime, datetime.datetime.fromtimestamp(t))
     start = now - 86400
     made = 0
     while made < count:
@@ -1101,7 +1178,18 @@ def seed_history(store, count=2600, seed=11, now=None):
             status = "GRAVITY" if child and group is not None and group["enabled"] else rng.choice(["FORWARDED", "FORWARDED", "CACHE"])
         else:
             domain, status = rng.choice(noise), rng.choice(["FORWARDED", "CACHE", "CACHE"])
+        if child and status != "GRAVITY" and asleep(t):
+            status = "REGEX"                         # FTL looks at the lists first: only what they let through meets the rule
         store.add_query(domain, status, ip, name, t)
+        made += 1
+    ads, ad_list = random.Random(seed + 1), store.add_ad_list()       # a generator of its own: the lookups above stay as they were
+    made = 0
+    while made < count // 6:
+        t = start + ads.random() * 86400
+        if ads.random() * 7 > weights[int(time.strftime("%H", time.localtime(t)))]:
+            continue
+        ip, name, _child, _w = ads.choices(devices, weights=[d[3] for d in devices])[0]
+        store.add_query(ads.choice(AD_DOMAINS), "GRAVITY", ip, name, t, list_id=ad_list)
         made += 1
     store.query_log.sort(key=lambda q: q["time"])
     for i, q in enumerate(store.query_log, 1):          # ids grow with time, as in FTL
@@ -1119,6 +1207,7 @@ def start_live(store, seed=7):
                for sid in ("youtube", "tiktok", "instagram", "roblox", "snapchat", "netflix")}
     devices = [("192.168.1.21", "Sara-iPad", True), ("192.168.1.22", "ali-galaxy", True), ("192.168.1.9", "parents-phone", False)]
     noise = ["www.apple.com", "api.github.com", "time.android.com", "www.bahrain.bh", "fonts.gstatic.com", "play.googleapis.com"]
+    ads = random.Random(seed + 1)          # the ad list's stops (only when the store has one): the other traffic stays as it was
 
     def loop():
         while True:
@@ -1132,8 +1221,102 @@ def start_live(store, seed=7):
             else:
                 domain, status = rng.choice(noise), rng.choice(["FORWARDED", "CACHE", "CACHE"])
             store.add_query(domain, status, ip, name)
+            if ads.random() < 0.15 and any(l.get("comment") == AD_LIST_COMMENT for l in store.lists):
+                who = ads.choice(devices)
+                store.add_query(ads.choice(AD_DOMAINS), "GRAVITY", who[0], who[1])
             time.sleep(rng.uniform(0.25, 1.1))
     threading.Thread(target=loop, daemon=True).start()
+
+
+def seed_ledger(store, now=None, seed=3):
+    """A believable week for the page's card "What Sinko did for you": the group pb-ledger as the box program would leave it on a
+    family with two children's devices, built by the box program's own code (bin/sinko: classify_stops, Ledger, ledger_text), so
+    that the demo cannot drift from the contract (docs/maintainers/architecture.md, "Savings ledger (pb-ledger)").
+
+    The stops of each day go through the classifier as rows of FTL's database would (status, list_id, count): 10 to 17 thousand
+    by the general ad list (added to the store), tries of TikTok, Roblox and YouTube in the hundreds a week, a few of other apps,
+    stops of the block-everything rule and upstream refusals (neither is an ad). The time off and the bedtime nights go through the
+    scheduler's own counting, a pass every two minutes over the week: the store's bedtime (one that is switched off is switched on
+    first, 21:30 to 06:30 every night, so that the page's bedtime and the card's nights agree), one night the internet was switched
+    back on at 23:00 (not kept), and an hour of homework time with the internet off on four afternoons: about 60 hours a week with
+    a bedtime every night. "since" is about seven months ago, and the totals of the time before the week are the same family's,
+    with the same bedtime. Deterministic for a given `now` and seed. Returns what was published, as data."""
+    pb = load_cli()
+    rng = random.Random(seed)
+    now = time.time() if now is None else now
+    when = datetime.datetime.fromtimestamp(now)
+    lists_dir = os.path.join(HERE, "..", "lists")
+    services = {s["id"] for s in pb.load_catalog(lists_dir)["services"]}
+    with store.lock:
+        ad_list = store.add_ad_list()
+        adlists = {l["id"]: l.get("comment") or "" for l in store.lists}
+        rules = {d["id"]: d.get("comment") or "" for d in store.domains}
+        ad_lists = sum(1 for l in store.lists if l.get("enabled", True) and not (l.get("comment") or "").startswith("pb:"))
+    # A store set up without `sinko setup` has no app lists and no block-everything rule: ids of their own, as a box has them.
+    for sid in ("tiktok", "roblox", "youtube", "instagram", "snapchat"):
+        if "pb:" + sid not in adlists.values():
+            adlists[90000 + len(adlists)] = "pb:" + sid
+    if not any(c in pb.BLOCK_ALL_OURS for c in rules.values()):
+        rules[90000] = pb.BLOCK_ALL_COMMENT
+    ids = {c: i for i, c in adlists.items()}
+    block_all = next(i for i, c in rules.items() if c in pb.BLOCK_ALL_OURS)
+    ledger = pb.Ledger.in_memory()
+    today = when.date()
+    stops = {}
+    for back in range(6, -1, -1):
+        day = today - datetime.timedelta(days=back)
+        share = 1.0 if back else (now - pb.day_start(today)) / 86400.0          # today is not over yet
+        tries = {"tiktok": rng.randint(40, 95), "roblox": rng.randint(25, 70), "youtube": rng.randint(30, 85),
+                 "instagram": rng.randint(0, 12), "snapchat": rng.randint(0, 8)}
+        rows = [{"status": 1, "list_id": ad_list, "n": int(rng.randint(10000, 17000) * share)},
+                {"status": 4, "list_id": block_all, "n": int(rng.randint(300, 900) * share)},
+                {"status": 6, "list_id": None, "n": int(rng.randint(5, 40) * share)}]
+        rows += [{"status": rng.choice((1, 1, 1, 9)), "list_id": ids["pb:" + sid], "n": int(n * share)} for sid, n in tries.items()]
+        got = pb.classify_stops([r for r in rows if r["n"] > 0], adlists, rules, services)
+        stops[day.isoformat()] = {"ads": got["ads"], "apps": got["apps"], "whole": back > 0}
+    sched = bedtime_of(store)
+    if sched is None:
+        sched = {"enabled": True, "start": "21:30", "end": "06:30", "days": [0, 1, 2, 3, 4, 5, 6]}
+        if store.state_group() is not None:       # a set-up box: its page shows the bedtime whose nights the card counts
+            store.edit_state(lambda st: st.update(schedule=dict(sched)))
+
+    def bedtime_on(day):                           # a night of the bedtime (its days are JavaScript's, 0 = Sunday)
+        return (day.weekday() + 1) % 7 in sched["days"]
+    first = pb.day_start(today - datetime.timedelta(days=6))
+    # The night the internet came back at 23:00: one of the week's bedtime nights, not the last ones (on now, or to come).
+    spoilt = next((d.isoformat() for d in (today - datetime.timedelta(days=b) for b in (3, 4, 2, 5, 6)) if bedtime_on(d)), None)
+    homework = {(today - datetime.timedelta(days=d)).isoformat() for d in (1, 2, 4, 5)}
+    t = first
+    while t <= now:
+        at = datetime.datetime.fromtimestamp(t)
+        active = pb.in_schedule(sched, at)
+        offline = active and not (pb.bedtime_night(sched, at) == spoilt and (at.date().isoformat() != spoilt or at.hour >= 23))
+        offline = offline or (at.date().isoformat() in homework and at.hour == 17)
+        ledger.observe(at, t - first, offline, True, active, sched)
+        t += pb.LEDGER_STEP_MAX
+    ledger.merge({"days": stops, "adLists": ad_lists}, when)
+    data = ledger.load()
+    days = 205                                   # the time before the week, from "since" (about seven months ago)
+    data["since"] = data["keptSince"] = (today - datetime.timedelta(days=days + 7)).isoformat()
+    # The same bedtime then as now: its nights a week, a few of them not known (the box was off), and about one in two weeks
+    # not kept (the internet came back on for a while); plus the homework hour on four afternoons a week.
+    night = ((int(sched["end"][:2]) - int(sched["start"][:2])) * 60 + int(sched["end"][3:]) - int(sched["start"][3:])) % 1440 * 60
+    nights = days * len(set(sched["days"])) // 7 - days // 30
+    kept = nights - nights // 14
+    data["before"] = {"ads": days * 13600 + rng.randint(0, 90000),
+                      "apps": {"tiktok": days * 61 + rng.randint(0, 400), "roblox": days * 44 + rng.randint(0, 300),
+                               "youtube": days * 53 + rng.randint(0, 300), "instagram": days * 5, "snapchat": days * 3},
+                      "off": kept * night + (nights - kept) * night / 4 + days * 4 // 7 * 3600, "nights": nights, "kept": kept}
+    payload = ledger.payload(when, services, ad_lists)
+    text = pb.ledger_text(payload)
+    with store.lock:
+        group = next((g for g in store.groups if g["name"] == "pb-ledger"), None)
+        if group is None:
+            store.groups.append({"id": next(store.ids), "name": "pb-ledger", "enabled": False, "comment": text})
+        else:
+            group.update(enabled=False, comment=text)
+        store.writes += 1
+    return json.loads(text)
 
 
 def serve(port=0, web_dir=None, store=None):
@@ -1182,6 +1365,10 @@ if __name__ == "__main__":
         store.box_info = None
     if a.open:
         store.pwhash = ""
+    if a.setup or a.live:
+        # The card "What Sinko did for you" has a week to show. First: on a set-up box it switches bedtime on, so that the
+        # page's bedtime is the one the card counted nights of, and the history below has its bedtime stops.
+        seed_ledger(store)
     if a.live:
         seed_history(store)
         start_live(store)

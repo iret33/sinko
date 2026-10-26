@@ -1,6 +1,7 @@
 """The mock Pi-hole's "My box" half: password changes, open mode, the Teleporter archive, /api/info/*, /api/config, and the
 scheduler simulation. The browser tests lean on all of it, so its behaviour (and its resemblance to FTL, whose shapes come from the
 OpenAPI specs) is pinned here."""
+import datetime as dt
 import http.client
 import io
 import json
@@ -653,6 +654,152 @@ class GravityTests(MockCase):
     def test_it_needs_a_session(self):
         self.assertEqual(Box(self.httpd.server_port).req("POST", "/api/action/gravity")[0], 401)
         self.assertEqual(self.store.gravity_runs, 0)
+
+
+class StopsAndLedgerTests(unittest.TestCase):
+    """What a stop says stopped it (list_id, as FTL notes it), the general ad list and the bedtime in the seeded history, and the
+    demo week of "What Sinko did for you" (seed_ledger), which must be the contract the page is built against."""
+
+    def setUp(self):
+        self.httpd, self.store = mock_pihole.serve()
+        self.addCleanup(self.httpd.server_close)
+        self.addCleanup(self.httpd.shutdown)
+        self.pb = mock_pihole.load_cli()
+        self.api = self.pb.Api("http://127.0.0.1:%d" % self.httpd.server_port, password=mock_pihole.PASSWORD)
+        self.api.login()
+        lists = os.path.join(HERE, "..", "lists")
+        self.catalog = self.pb.load_catalog(lists)
+        self.pb.Controller(self.api, self.catalog, lists).setup(run_gravity=False)
+        self.api.put_group("pb-svc-tiktok", "", True)
+        self.now = time.mktime((2026, 10, 21, 15, 0, 0, 0, 0, -1))
+
+    def list_id(self, comment):
+        return next(l["id"] for l in self.store.lists if l.get("comment") == comment)
+
+    def rule_id(self, comment_start):
+        return next(d["id"] for d in self.store.domains if (d.get("comment") or "").startswith(comment_start))
+
+    def test_a_query_keeps_the_list_id_it_is_given(self):
+        self.store.add_query("www.tiktok.com", "GRAVITY", list_id=4242)
+        self.assertEqual(self.store.query_log[-1]["list_id"], 4242)
+
+    def test_a_stop_carries_the_id_of_what_made_it(self):
+        add = lambda name, status: (self.store.add_query(name, status), self.store.query_log[-1]["list_id"])[1]
+        self.assertEqual(add("www.tiktok.com", "GRAVITY"), self.list_id("pb:tiktok"), "a blocked app's own list")
+        self.assertEqual(add("dns.google", "GRAVITY"), self.list_id("pb:guard"))
+        self.assertIsNone(add("ads.doubleclick.net", "GRAVITY"), "no ad list on this box yet")
+        ad = self.store.add_ad_list()
+        self.assertEqual(self.store.add_ad_list(), ad, "added once")
+        self.assertEqual(add("ads.doubleclick.net", "GRAVITY"), ad)
+        self.assertEqual(add("logs.netflix.com", "GRAVITY"), ad, "Netflix is allowed: its own list did not stop it")
+        self.assertEqual(add("www.youtube.com", "REGEX"), self.rule_id("sinko: blocks everything"), "internet off")
+        self.api.request("POST", "/api/domains/deny/regex", {"domain": r"(^|\.)tiktokv\.com$", "comment": "pb-learned:tiktok 2026-10-01",
+                                                             "groups": [0], "enabled": True})
+        self.assertEqual(add("api.tiktokv.com", "REGEX"), self.rule_id("pb-learned:tiktok"))
+        self.assertIsNone(add("www.apple.com", "FORWARDED"))
+        self.assertIsNone(add("x.example", "EXTERNAL_BLOCKED_NXRA"), "the upstream refused it: nothing on the box did")
+        rows = self.box_queries()
+        self.assertTrue(all("list_id" in r for r in rows))
+
+    def box_queries(self):
+        box = Box(self.httpd.server_port)
+        box.login()
+        return json.loads(box.req("GET", "/api/queries?length=100")[1])["queries"]
+
+    def test_the_seeded_history_has_ad_stops_for_every_device_and_bedtime_stops_only_when_it_is_on(self):
+        mock_pihole.seed_history(self.store, now=self.now)
+        ad = self.list_id(mock_pihole.AD_LIST_COMMENT)
+        ads = [q for q in self.store.query_log if q["domain"] in mock_pihole.AD_DOMAINS]
+        self.assertTrue(ads and all(q["status"] == "GRAVITY" and q["list_id"] == ad for q in ads))
+        self.assertEqual({q["client"]["ip"] for q in ads}, {"192.168.1.21", "192.168.1.22", "192.168.1.9", "192.168.1.1"},
+                         "every device, the children's included")
+        # (the history also asks for the name "domain", a word of the lists' header line: on no list, so stopped by none)
+        apps = [q for q in self.store.query_log if q["status"] == "GRAVITY" and mock_pihole.app_of(q["domain"])]
+        self.assertTrue(apps and all(q["list_id"] == self.list_id("pb:tiktok") for q in apps), "only TikTok is blocked")
+        self.assertFalse([q for q in self.store.query_log if q["status"] == "REGEX"], "no bedtime set: no bedtime stops")
+        self.assertEqual([q["id"] for q in self.store.query_log], list(range(1, len(self.store.query_log) + 1)))
+
+        httpd, store = mock_pihole.serve()
+        self.addCleanup(httpd.server_close)
+        self.addCleanup(httpd.shutdown)
+        api = self.pb.Api("http://127.0.0.1:%d" % httpd.server_port, password=mock_pihole.PASSWORD)
+        api.login()
+        ctl = self.pb.Controller(api, self.catalog, os.path.join(HERE, "..", "lists"))
+        ctl.setup(run_gravity=False)
+        state = ctl.read_state()[0]
+        state["schedule"] = {"enabled": True, "start": "21:30", "end": "06:30", "days": [0, 1, 2, 3, 4, 5, 6]}
+        ctl.write_state(state)
+        mock_pihole.seed_history(store, now=self.now)
+        night = [q for q in store.query_log if q["status"] == "REGEX"]
+        self.assertTrue(night)
+        for q in night:
+            hour = time.localtime(q["time"]).tm_hour
+            self.assertTrue(hour >= 21 or hour < 7, q)
+            self.assertIn(q["client"]["ip"], ("192.168.1.21", "192.168.1.22"), "only the children's devices")
+            self.assertEqual(q["list_id"], next(d["id"] for d in store.domains if d["domain"] == "^.*$"))
+
+    def test_the_demo_week_is_the_contract_and_a_believable_family(self):
+        import test_savings
+        data = mock_pihole.seed_ledger(self.store, now=self.now)
+        group = next(g for g in self.store.groups if g["name"] == "pb-ledger")
+        self.assertFalse(group["enabled"])
+        self.assertEqual(json.loads(group["comment"]), data)
+        test_savings.check_contract(self, group["comment"], {s["id"] for s in self.catalog["services"]})
+        self.assertEqual(len(data["days"]), 7)
+        self.assertEqual(data["today"], "2026-10-21")
+        self.assertGreaterEqual(data["adLists"], 1)
+        for d in data["days"][:-1]:
+            self.assertTrue(10000 <= d["ads"] <= 17000, d)
+        week = {}
+        for d in data["days"]:
+            for sid, n in d["apps"].items():
+                week[sid] = week.get(sid, 0) + n
+        for sid in ("tiktok", "roblox", "youtube"):
+            self.assertTrue(100 <= week[sid] < 1000, (sid, week[sid]))
+        kept = [d["kept"] for d in data["days"] if d["kept"] is not None]
+        self.assertGreater(kept.count(1), kept.count(0))
+        self.assertIn(0, kept, "and one night it was not")
+        hours = sum(d["offSec"] for d in data["days"]) / 3600.0
+        self.assertTrue(45 <= hours <= 66, hours)
+        since = time.strptime(data["since"], "%Y-%m-%d")
+        months = (2026 - since.tm_year) * 12 + 10 - since.tm_mon
+        self.assertTrue(6 <= months <= 8, data["since"])
+        self.assertGreater(data["tot"]["ads"], 2500000)
+        self.assertEqual(data["keptSince"], data["since"])
+        # Bedtime was off on this box (as after `sinko setup`): the demo switched it on, so the page shows the bedtime whose
+        # nights the card counts, and the nights before the week are of the same bedtime (one a day, a few not known).
+        self.assertEqual(mock_pihole.bedtime_of(self.store), {"enabled": True, "start": "21:30", "end": "06:30",
+                                                              "days": [0, 1, 2, 3, 4, 5, 6]})
+        all_days = (dt.date(2026, 10, 21) - dt.date.fromisoformat(data["since"])).days + 1
+        self.assertTrue(0.9 * all_days <= data["tot"]["nights"] <= all_days, (data["tot"]["nights"], all_days))
+        self.assertTrue(54 * 3600 <= data["tot"]["offSec"] / all_days * 7 <= 66 * 3600, "about 60 hours a week, then as now")
+
+    def test_the_demo_week_follows_the_bedtime_the_box_has(self):
+        # The screenshots' family has bedtime on school nights only (Sunday to Thursday): no night of Friday or Saturday is
+        # kept or missed, and the time before the week has as many nights as that bedtime had.
+        school = {"enabled": True, "start": "21:30", "end": "06:30", "days": [0, 1, 2, 3, 4]}
+        self.store.edit_state(lambda st: st.update(schedule=dict(school)))
+        data = mock_pihole.seed_ledger(self.store, now=self.now)
+        self.assertEqual(mock_pihole.bedtime_of(self.store), school, "the box's own bedtime stays as it is")
+        for d in data["days"]:
+            if dt.date.fromisoformat(d["d"]).weekday() in (4, 5):          # Friday and Saturday
+                self.assertIsNone(d["kept"], d)
+        self.assertIn(0, [d["kept"] for d in data["days"]], "one school night of the week was not kept")
+        all_days = (dt.date(2026, 10, 21) - dt.date.fromisoformat(data["since"])).days + 1
+        school_nights = all_days * 5 / 7
+        self.assertTrue(0.9 * school_nights <= data["tot"]["nights"] <= school_nights + 1, (data["tot"]["nights"], school_nights))
+        self.assertLess(data["tot"]["offSec"] / all_days * 7, 50 * 3600)
+        import test_savings
+        test_savings.check_contract(self, json.dumps(data, separators=(",", ":")))
+
+    def test_the_demo_week_is_the_same_every_time_and_needs_no_setup(self):
+        first = mock_pihole.seed_ledger(self.store, now=self.now)
+        again = mock_pihole.seed_ledger(self.store, now=self.now)
+        self.assertEqual(first, again)
+        self.assertEqual(len([g for g in self.store.groups if g["name"] == "pb-ledger"]), 1)
+        bare = mock_pihole.Store()
+        import test_savings
+        test_savings.check_contract(self, json.dumps(mock_pihole.seed_ledger(bare, now=self.now), separators=(",", ":")))
 
 
 if __name__ == "__main__":

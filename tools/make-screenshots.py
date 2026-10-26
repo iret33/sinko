@@ -67,9 +67,10 @@ def demo_box():
         "update": {"latest": DEMO_LATEST, "notes": notes, "checked": int(time.time()) - 3 * 3600, "auto": False, "status": "idle"},
         "telemetry": {"on": True}, "community": {"online": 1234, "at": int(time.time())},
         "setup": {"done": True}, "learn": {"on": True}, "terms": {"agreed": 1}}))
+    # "What Sinko did for you": a believable week, counted by the box program's own code. First, so that the day of traffic and the
+    # live picture also stop ads (it adds the ad list they use).
+    mock_pihole.seed_ledger(store)
     mock_pihole.seed_history(store)
-    if hasattr(mock_pihole, "seed_ledger"):
-        mock_pihole.seed_ledger(store)              # "What Sinko did for you": a believable week, as the box program would publish it
     mock_pihole.start_live(store)
     return httpd, store
 
