@@ -19,7 +19,6 @@
   var PERIOD_KEY = 'pb.period';      // the savings card's period on this phone: today | week | since
   var PRICE_KEY = 'pb.price';        // what the parent pays for 1 GB, kept on this phone only: {"v": "0.5", "cur": "BHD"}
   var MORNING = '07:00';             // "Off until morning" without a bedtime: the box's wall clock
-  var LEDGER_STALE_SEC = 6 * 3600;   // the box republishes at least every two hours; numbers older than this are said to be old
 
   // ------------------------------------------------------------------ strings
   var STR = {
@@ -1376,7 +1375,7 @@
     body.textContent = '';
     $('savedAt').textContent = L ? t('savedAt', { t: fmtBoxTime(L.at) }) : '';
     if (!L) { body.appendChild(el('p', { class: 'saved-msg', text: t('savedWaiting') })); return; }
-    if (serverNowSec() - L.at > LEDGER_STALE_SEC) {
+    if (PBCore.ledgerLate(L, serverNowSec(), boxOffsetMin())) {
       body.appendChild(el('p', { class: 'saved-msg', text: t('savedStale', { t: fmtDay(L.today) + ' ' + fmtBoxTime(L.at) }) }));
     }
     // "Today" is the box's own date; a ledger that has not turned the day yet has no row for it.

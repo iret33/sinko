@@ -453,6 +453,19 @@
   }
   function addCount(a, b) { return a === null ? b : b === null ? a : a + b; }
   /**
+   * Has the box stopped updating its copy? The box writes pb-ledger only when the numbers change (each write makes Pi-hole
+   * reload its lists), so on a quiet box `at` can be hours old while the numbers are right. What it never skips is the new
+   * day: a few minutes after midnight on its clock the copy carries the new `today`. So the copy is late when `today` is
+   * not the box's date LEDGER_LATE_SEC after midnight, or is more than a day behind. `nowSec` is the box's clock, `offsetMin`
+   * its zone.
+   */
+  var LEDGER_LATE_SEC = 2 * 3600;
+  function ledgerLate(ledger, nowSec, offsetMin) {
+    var local = nowSec + offsetMin * 60, today = Math.floor(local / 86400), copy = ledger ? dayNumber(ledger.today) : null;
+    if (copy === null || copy >= today) return false;
+    return today - copy > 1 || local - today * 86400 > LEDGER_LATE_SEC;
+  }
+  /**
    * What the card shows for one period of a parsed ledger: 'today', 'week' (the days the box sent, at most 7) or 'since'
    * (the running totals). -> { ads, apps: [{ app, count }] biggest first, offSec, nights, nightsKept, waitSec, bytes,
    * days }. A number the box does not know is null, never 0. `days` is how many days the week holds.
@@ -780,7 +793,7 @@
     parseState: parseState, defaultState: defaultState, editState: editState, learnedRules: learnedRules, regexZone: regexZone,
     classify: classify, isHiddenDomain: isHiddenDomain, isHiddenClient: isHiddenClient, baseDomain: baseDomain, appFor: appFor,
     formatCount: formatCount, percent: percent, topByApp: topByApp, hourly: hourly, deviceState: deviceState, Feed: Feed, priority: priority, Pacer: Pacer, Poller: Poller,
-    parseLedger: parseLedger, savings: savings, ledgerWeek: ledgerWeek, weekday: weekday, durationParts: durationParts, sizeParts: sizeParts,
+    parseLedger: parseLedger, savings: savings, ledgerLate: ledgerLate, ledgerWeek: ledgerWeek, weekday: weekday, durationParts: durationParts, sizeParts: sizeParts,
     moneyFor: moneyFor, parseAmount: parseAmount, utcOffsetMinutes: utcOffsetMinutes, nextWallTime: nextWallTime, WAIT_MS_PER_STOP: WAIT_MS_PER_STOP, BYTES_PER_STOP: BYTES_PER_STOP,
     inBedtime: inBedtime, bedtimeWindows: bedtimeWindows, comesBack: comesBack,
     lerp: lerp, easeInOut: easeInOut, clamp01: clamp01, wire: wire, elbow: elbow, trace: trace, pointAt: pointAt,

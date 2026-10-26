@@ -508,3 +508,20 @@ test('comesBack: what the panel promises is what the box will do', () => {
   const fri = at('2026-10-30T20:00:00+03:00');
   assert.deepEqual(C.comesBack('off', SC, fri, null, BH), { at: at('2026-11-02T06:30:00+03:00'), bedtime: true });
 });
+
+test('ledgerLate: judged by the box\'s day, not by when the numbers last changed', () => {
+  const L = (today) => ({ today: today, at: at('2026-10-26T09:00:00+03:00') });
+  // a quiet box: numbers unchanged since 09:00, but the copy is today's
+  assert.equal(C.ledgerLate(L('2026-10-26'), at('2026-10-26T23:00:00+03:00'), BH), false);
+  // just after midnight the new day is not written yet: not late
+  assert.equal(C.ledgerLate(L('2026-10-26'), at('2026-10-27T00:30:00+03:00'), BH), false);
+  // two hours after midnight it should have been
+  assert.equal(C.ledgerLate(L('2026-10-26'), at('2026-10-27T02:30:00+03:00'), BH), true);
+  // more than a day behind, whatever the hour
+  assert.equal(C.ledgerLate(L('2026-10-25'), at('2026-10-27T00:10:00+03:00'), BH), true);
+  // the box's day, not UTC's: 01:00 in Bahrain is still the 26th in UTC
+  assert.equal(C.ledgerLate(L('2026-10-26'), at('2026-10-27T01:00:00+03:00'), BH), false);
+  // a copy dated ahead (the clock was set back) or with no date is not called late
+  assert.equal(C.ledgerLate(L('2026-10-28'), at('2026-10-27T12:00:00+03:00'), BH), false);
+  assert.equal(C.ledgerLate(null, at('2026-10-27T12:00:00+03:00'), BH), false);
+});
