@@ -3,7 +3,7 @@
 All notable changes to Sinko. Versions follow [Semantic Versioning](https://semver.org); the newest release is at the top.
 Boxes learn about a release from this repository's GitHub releases, whose notes are the section of this file.
 
-## [3.3.0] - Unreleased
+## [3.2.1] - 2026-10-26
 
 ### Added
 - **Terms of use at first set-up.** After you choose the parent password (or the first time you sign in after this update),
