@@ -650,3 +650,17 @@ class TheChecklistHasTheItemsOnlyARealBoxCanAnswer(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheSavingsEstimatesAreTheOnesThePageUses(unittest.TestCase):
+    """The README and how-it-works quote the two estimates behind "What Sinko did for you": they must be the page's own constants."""
+
+    def test_the_quoted_figures_are_the_constants_in_pb_core(self):
+        core = read("web/pb-core.js")
+        ms = int(re.search(r"var WAIT_MS_PER_STOP = (\d+);", core).group(1))
+        kb = int(re.search(r"var BYTES_PER_STOP = (\d+);", core).group(1)) // 1000
+        for path in ("README.md", "docs/how-it-works.md"):
+            text = flat(read(path))
+            self.assertIn("%d ms" % ms, text, path)
+            self.assertIn("%d KB" % kb, text, path)
+            self.assertNotRegex(text, r"\b(?!%d\b)\d+ ms\b(?=[^.]*(stop|ad|tracker))" % ms, "%s quotes another figure for the waiting" % path)
