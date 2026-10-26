@@ -398,6 +398,43 @@ class TheUpdateTrafficIsDescribedCompletely(unittest.TestCase):
         self.assertRegex(box, r"n < 2\) return null")
 
 
+class TheLedgerIsDescribedWithTheProgramsNumbers(unittest.TestCase):
+    """What the box counts for the card "What Sinko did for you": privacy.md (both languages) and how-it-works.md say how long the
+    daily counts are kept and how often they are counted and copied for the page; the numbers are the program's."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.eng = flat(english(read("docs/privacy.md")))
+        cls.ara = flat(arabic(read("docs/privacy.md")))
+        cls.how = flat(read("docs/how-it-works.md"))
+
+    def test_the_numbers_in_the_text_are_the_numbers_in_the_program(self):
+        # If one of these changes, the sentences below (and their Arabic) are wrong: change them in the same commit.
+        self.assertEqual(constant("bin/sinko", "LEDGER_KEEP_DAYS"), 35)              # "kept for 35 days"
+        self.assertEqual(constant("bin/sinko", "LEDGER_REFRESH"), 15 * 60)          # "every 15 minutes"
+        self.assertEqual(constant("bin/sinko", "LEDGER_PUBLISH_EVERY"), 60 * 60)     # "at most once an hour"
+
+    def test_both_languages_say_them_and_what_is_kept(self):
+        for needle in ("kept for 35 days", "Every 15 minutes", "at most once an hour", "`pb-ledger`", "/var/lib/sinko/savings.json",
+                       "Counts only", "No site names", "Never sent anywhere", "Pi-hole backup", "when a ready-made box is prepared"):
+            self.assertIn(needle, self.eng)
+        for needle in ("35 يومًا", "كل 15 دقيقة", "مرة في الساعة على الأكثر", "`pb-ledger`", "/var/lib/sinko/savings.json",
+                       "أعداد فقط", "لا أسماء مواقع", "لا تُرسَل إلى أي مكان أبدًا", "النسخة الاحتياطية", "عند تجهيز الصندوق الجاهز"):
+            self.assertIn(needle, self.ara)
+        for needle in ("every 15 minutes", "for 35 days", "at most once an hour", "`pb-ledger`"):
+            self.assertIn(needle, self.how)
+
+    def test_the_files_every_device_can_read_still_say_nothing_about_the_family(self):
+        # privacy.md promises that /pb/ says nothing about the children or the rules: the ledger's copy is a group, never a file there.
+        program = read("bin/sinko")
+        self.assertIn('G_LEDGER = "pb-ledger"', program)
+        section = program.split("# What Sinko did for the family: the savings ledger")[1].split("\nclass Maintenance:")[0]
+        self.assertNotIn("webroot", section)
+        self.assertNotIn("box_info_path", section)
+        self.assertIn("neither holds the counts", self.eng)
+        self.assertIn("ولا يحمل أيٌّ منهما الأعداد", self.ara)
+
+
 class AnUpdateThatWasCutShortIsDescribedHonestly(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

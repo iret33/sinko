@@ -10,7 +10,7 @@ Writes (into docs/img by default):
     box-en.png    box-ar.png     the My box sheet
 
 Nothing here talks to a real box: tests/mock_pihole.py plays Pi-hole, with two children's devices, a day of traffic, two apps blocked,
-bedtime set, a newer Sinko on offer and the box reporting a healthy 3 days of uptime. The text on the pictures is the page's own;
+bedtime set, a week of "What Sinko did for you", a newer Sinko on offer and the box reporting a healthy 3 days of uptime. The text on the pictures is the page's own;
 only the clock-dependent words ("just now", "3 hours ago") change from one run to the next.
 """
 import argparse
@@ -65,6 +65,7 @@ def demo_box():
         "setup": {"done": True}, "learn": {"on": True}, "terms": {"agreed": 1}}))
     mock_pihole.seed_history(store)
     mock_pihole.start_live(store)
+    mock_pihole.seed_ledger(store)                  # a week of "What Sinko did for you", as the scheduler writes it
     return httpd, store
 
 

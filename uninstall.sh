@@ -108,7 +108,8 @@ if [[ -L "$legacy_bin" && "$(readlink -f "$legacy_bin")" == "$(readlink -f "$BIN
 fi
 
 rm -rf "$APP_DIR" "$R/etc/sinko" "$R/usr/local/bin/sinko" "$R/usr/local/bin/sinko.sinko-new"
-# Runtime data: update results, rollback copies, the counter's random id, the first-start flag, the install lock.
+# Runtime data: update results, rollback copies, the counter's random id, the first-start flag, the install lock, and what
+# the box counted for the family (savings.json; its copy for the page, the group pb-ledger, went with the other pb- groups).
 if [[ -n "$STATE_DIR" && "$STATE_DIR" != "$R" && "$STATE_DIR" != / ]]; then
   rm -rf "$STATE_DIR"
 fi

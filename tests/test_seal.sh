@@ -56,6 +56,7 @@ make_golden() {
   echo "generated-password" >"$ROOT/etc/sinko/initial-password"
   printf '%s\n' 0123456789abcdef0123456789abcdef >"$ROOT/var/lib/sinko/install-id"
   echo '{"update": 5, "check": 6, "power": 7}' >"$ROOT/var/lib/sinko/handled.json"
+  echo '{"v":1,"since":"2026-03-01","keptSince":"2026-03-01","adLists":1,"days":{}}' >"$ROOT/var/lib/sinko/savings.json"
   echo '{"status": "ok"}' >"$ROOT/var/lib/sinko/update-result.json"
   echo "rollback copy" >"$ROOT/var/lib/sinko/cache/sinko-1.0.0.tar.gz"
   local f
@@ -135,7 +136,7 @@ world_before="$(world_digest)"; api_before="$(api_digest)"
 bash "$SEAL" --dry-run >"$WORK/dry.out" 2>&1 || { cat "$WORK/dry.out"; fail "dry run failed"; }
 for shown in "Sara, Omar" "pihole-FTL.db" "ssh_host_ed25519_key" "$ROOT/root/.bash_history" "$ROOT/home/pi/.bash_history" \
              "$ROOT/root/.ssh/authorized_keys" "$ROOT/root/.not_logged_in_yet" "/etc/machine-id" "install-id" "initial-password" \
-             "$ROOT/var/lib/sinko/box-id" "$ROOT/var/www/html/pb/box.json" \
+             "$ROOT/var/lib/sinko/box-id" "$ROOT/var/www/html/pb/box.json" "$ROOT/var/lib/sinko/savings.json" \
              "Set the host name to sinko" "hardware watchdog" "anonymous-counter" "welcome screen" "random-seed" \
              "tls.pem" "tls_ca.crt" "config_backups" "migration_backup_v6" "gravity_old.db" "gravity_backups" "pihole-tmp.db" "two-factor secret" "application password" \
              "getty@.service.d/override.conf" "serial-getty@.service.d/override.conf" "30-wifis-dhcp.yaml" "HomeNet.nmconnection" \
@@ -148,6 +149,11 @@ grep -q "Dry run: nothing was changed" "$WORK/dry.out" || fail "the dry run does
 [[ "$(api_digest)" == "$api_before" ]] || fail "the dry run changed Pi-hole"
 grep -qE 'systemctl (stop|enable|disable|start|daemon-reload)|passwd|ssh-keygen|journalctl|apt-get|dd ' "$WORK/calls.log" && fail "the dry run ran a command that changes the system"
 [[ -e "$WORK/units/sinko.service.active" && -e "$WORK/units/pihole-FTL.service.active" ]] || fail "the dry run stopped a service"
+echo "    what the scheduler counted for the family is in the plan even before the file exists (it writes it when it stops)"
+mv "$ROOT/var/lib/sinko/savings.json" "$WORK/savings.json.kept"
+bash "$SEAL" --dry-run >"$WORK/dry-noledger.out" 2>&1 || { cat "$WORK/dry-noledger.out"; fail "dry run failed"; }
+grep -qF -- "$ROOT/var/lib/sinko/savings.json" "$WORK/dry-noledger.out" || fail "the plan does not name savings.json when it is not there yet"
+mv "$WORK/savings.json.kept" "$ROOT/var/lib/sinko/savings.json"
 
 echo "--- without a terminal and without --yes it will not go on; a wrong answer changes nothing"
 if SINKO_TTY="$WORK/no-such-dir/tty" bash "$SEAL" >"$WORK/noterm.out" 2>&1; then fail "sealed without a terminal and without --yes"; fi
@@ -231,7 +237,7 @@ grep -q 'systemd-shutdown does' "$REPO/tools/seal.sh" && fail "tools/seal.sh aga
 [[ -e "$WORK/units/sinko-firstboot.service.enabled" ]] || fail "the first-start service is not enabled"
 echo "    what is unique or private is gone; what is needed stays"
 for gone in "$ROOT/var/lib/sinko/install-id" "$ROOT/var/lib/sinko/handled.json" "$ROOT/var/lib/sinko/update-result.json" "$ROOT/etc/sinko/initial-password" \
-            "$ROOT/var/lib/sinko/box-id" "$ROOT/var/www/html/pb/box.json" \
+            "$ROOT/var/lib/sinko/box-id" "$ROOT/var/www/html/pb/box.json" "$ROOT/var/lib/sinko/savings.json" \
             "$ROOT/root/.bash_history" "$ROOT/root/.python_history" "$ROOT/home/pi/.bash_history" "$ROOT/root/.not_logged_in_yet" \
             "$ROOT/var/lib/systemd/random-seed" "$ROOT/var/lib/dhcp/dhclient.leases"; do
   [[ ! -e "$gone" ]] || fail "$gone is still there"

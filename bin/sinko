@@ -43,6 +43,11 @@ How it works
   database. The page only asks (a request marker); the daemon acts once and clears
   the marker. Runtime data of the daemon itself lives in /var/lib/sinko (root only).
 
+  For the page's card "What Sinko did for you" the daemon also keeps a ledger of counts
+  (stops by kind and app, time the children's internet was off, bedtime nights kept)
+  in /var/lib/sinko/savings.json, and copies it into the disabled group "pb-ledger",
+  which only a signed-in parent can read.
+
 Only the Python 3 standard library is used.
 """
 from __future__ import annotations
@@ -3472,9 +3477,603 @@ class Learner:
         return actions
 
 
+# --------------------------------------------------------------------------- #
+# What Sinko did for the family: the savings ledger (architecture.md, "Savings ledger (pb-ledger)")
+# --------------------------------------------------------------------------- #
+# The page's card "What Sinko did for you" needs running totals that Pi-hole cannot give: its long-term database keeps only
+# database.maxDBdays days (30 on a box Sinko set up, 91 by default), and nothing in it says how long the children's internet
+# was off or whether bedtime was kept. So the scheduler keeps a small daily ledger of counts in the root-only state folder
+# (savings.json) and hands the page a compact copy in the disabled group pb-ledger, which only a signed-in parent can read.
+# Never a file under /pb/: every device at home can read those without the password, and docs/privacy.md promises that they
+# say nothing about the children or the rules.
+G_LEDGER = "pb-ledger"           # disabled, never joined by a client: its comment is the page's copy of the ledger
+SAVINGS_FILE = "savings.json"
+LEDGER_KEEP_DAYS = 35            # daily rows kept in savings.json; older ones are folded into the running totals
+LEDGER_REFRESH = 15 * 60         # seconds between two reads of Pi-hole's database (the first right after the start)
+LEDGER_PUBLISH_EVERY = 60 * 60   # pb-ledger is written at most this often: every group write makes Pi-hole reload its lists
+LEDGER_SETTLE = 5 * 60           # a day is read whole this long after it ended: FTL writes its database once a minute
+LEDGER_STEP_MAX = 120            # seconds one pass may count, however long ago the last counted pass was
+LEDGER_BACKFILL = 6              # whole days before today read on the first run, so that the week is full on day one
+LEDGER_WEEK = 7                  # days in pb-ledger, today included
+LEDGER_MAX_CHARS = 4000          # pb-ledger's comment stays shorter than this
+LEDGER_APPS = 8                  # apps per day, and in the totals, at most
+LEDGER_NIGHT_SEEN = 0.9          # a bedtime night counts when the scheduler saw this share of it ...
+LEDGER_NIGHT_OFF = 0.97          # ... and it was kept when the internet was off for this share of what was seen
+LEDGER_LOOK_KIDS = 60            # seconds between two looks at whether a child's device exists at all
+LEDGER_COUNT_MAX = 10 ** 12      # no count of a home comes near this; a bigger number in savings.json is not ours
+DAY_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
+SID_RE = re.compile(r"[a-z0-9][a-z0-9_-]{0,39}")
+
+# What stopped a lookup, by FTL's status code (QUERY_STATUS). For the first two kinds, the query's list_id is the id of the
+# block list (gravity.db's adlist) or of the rule (domainlist) that stopped it.
+STOP_GRAVITY = {1, 9}            # a block list, also through a CNAME
+STOP_REGEX = {4, 10}             # a deny regex: Sinko's block-everything rule, a learned rule, or one of the owner's
+STOP_DENY = {5, 11}              # an exact deny rule: always the owner's
+STOP_UPSTREAM = {6, 7, 8, 18}    # the upstream service refused the name: nothing on the box did it
+
+
+def day_start(day: dt.date) -> float:
+    """The box-local midnight that begins `day`, in epoch seconds (a day with a clock change is 23 or 25 hours long)."""
+    return dt.datetime.combine(day, dt.time()).timestamp()
+
+
+def _is_day(value) -> bool:
+    if not isinstance(value, str) or not DAY_RE.fullmatch(value):
+        return False
+    try:
+        dt.date.fromisoformat(value)
+    except ValueError:
+        return False
+    return True
+
+
+def _ledger_count(value):
+    """A count of the ledger (a whole number, never a bool or a float), or None."""
+    return value if _is_int(value) and 0 <= value < LEDGER_COUNT_MAX else None
+
+
+def _ledger_seconds(value) -> float:
+    return float(value) if _is_number(value) and 0 <= value < LEDGER_COUNT_MAX else 0.0
+
+
+def _ledger_apps(value):
+    """{app id: count} with the entries that make sense, or None when it is not an object."""
+    if not isinstance(value, dict):
+        return None
+    return {sid: n for sid, n in value.items() if isinstance(sid, str) and SID_RE.fullmatch(sid) and _ledger_count(n) is not None}
+
+
+def _hhmm_minutes(text: str) -> int:
+    return int(text[:2]) * 60 + int(text[3:])
+
+
+def bedtime_night(sched: dict, now: dt.datetime) -> str:
+    """The day the bedtime that is on now belongs to: the day it started (in_schedule's rule: Thursday 21:00 to Friday
+    06:00 is Thursday's night)."""
+    start, end = _hhmm_minutes(sched["start"]), _hhmm_minutes(sched["end"])
+    day = now.date()
+    if start > end and now.hour * 60 + now.minute < end:
+        day -= dt.timedelta(days=1)
+    return day.isoformat()
+
+
+def bedtime_seconds(sched: dict) -> int:
+    """How long a bedtime night is planned to be."""
+    return ((_hhmm_minutes(sched["end"]) - _hhmm_minutes(sched["start"])) % 1440) * 60
+
+
+def stop_source(status, list_id, adlists: dict, rules: dict, services) -> tuple:
+    """What stopped one lookup, from the list or rule FTL names (list_id) and the comment gravity.db holds on it:
+    ("ads", None) a general block list (any list that is not Sinko's), ("app", sid) the list of an app the family blocked
+    (comment pb:<sid>) or a rule the box learned for it (pb-learned:<sid>), ("off", None) Sinko's block-everything rule
+    (internet off, bedtime, a paused device), ("guard", None) the list of outside DNS services, ("own", None) the owner's
+    own rules, ("upstream", None) the upstream service, ("other", None) whatever cannot be told: a list deleted since, the
+    list of an app this release does not know, a status that is no stop."""
+    if status in STOP_GRAVITY:
+        comment = adlists.get(list_id)
+        if comment is None:
+            return "other", None
+        if not comment.startswith(LIST_COMMENT_PREFIX):
+            return "ads", None
+        sid = comment[len(LIST_COMMENT_PREFIX):]
+        if sid == "guard":
+            return "guard", None
+        return ("app", sid) if sid in services else ("other", None)
+    if status in STOP_REGEX:
+        comment = rules.get(list_id)
+        if comment is None:
+            return "other", None
+        if comment in BLOCK_ALL_OURS:
+            return "off", None
+        if comment.startswith(LEARNED_PREFIX):
+            parts = comment[len(LEARNED_PREFIX):].split()
+            if parts and parts[0] in services:
+                return "app", parts[0]
+        return "own", None
+    if status in STOP_DENY:
+        return "own", None
+    if status in STOP_UPSTREAM:
+        return "upstream", None
+    return "other", None
+
+
+def stop_by_name(status, domain, names: dict, services) -> tuple:
+    """stop_source for an FTL that keeps no list_id: the stopped name is all there is. A block-list stop of a name on an
+    app's list is that app's (a general list that holds the same name cannot be told apart), of a name on the guard list
+    the guard's, and of any other name an ad list's. A regex stop is an app's only when the name is under a zone the box
+    learned for it: Sinko's block-everything rule and the owner's own rules cannot be told apart by name."""
+    if not isinstance(domain, str) or not domain or domain == "hidden":
+        return "other", None
+    name = domain.lower().rstrip(".")
+    if status in STOP_GRAVITY:
+        if service_of(name, names.get("guard", {})):
+            return "guard", None
+        sid = service_of(name, names.get("apps", {}))
+        return ("app", sid) if sid in services else ("ads", None)
+    if status in STOP_REGEX:
+        for z, sid in names.get("zones", ()):
+            if sid in services and under(name, z):
+                return "app", sid
+        return "other", None
+    if status in STOP_DENY:
+        return "own", None
+    if status in STOP_UPSTREAM:
+        return "upstream", None
+    return "other", None
+
+
+def classify_stops(rows, adlists: dict, rules: dict, services, names=None) -> dict:
+    """Counts by what stopped them, from rows of Pi-hole's long-term database grouped by status and list_id ({"status",
+    "list_id", "n"}), or, from an FTL that keeps no list_id, by status and name ({"status", "domain", "n"}, with `names`
+    from stop_names). {"ads": n, "apps": {sid: n}, "off": n, "guard": n, "own": n, "upstream": n, "other": n}."""
+    out = {"ads": 0, "apps": {}, "off": 0, "guard": 0, "own": 0, "upstream": 0, "other": 0}
+    for row in rows:
+        n, status = row.get("n"), row.get("status")
+        if not _is_int(n) or n <= 0 or not _is_int(status):
+            continue
+        if "list_id" in row:
+            kind, sid = stop_source(status, row["list_id"], adlists, rules, services)
+        else:
+            kind, sid = stop_by_name(status, row.get("domain"), names or {}, services)
+        if kind == "app":
+            out["apps"][sid] = out["apps"].get(sid, 0) + n
+        else:
+            out[kind] += n
+    return out
+
+
+def stop_names(services, rule_rows: list, lists_dir: str | None = None) -> dict:
+    """What stop_by_name needs: the app of each name on the apps' lists, the guard list's names, and the zones the box
+    learned ({"apps": {name: sid}, "guard": {name: "guard"}, "zones": [(zone, sid)]})."""
+    apps = {}
+    for sid in sorted(services):
+        for entry in list_domains(sid, lists_dir):
+            apps[bare_domain(entry).lower()] = sid
+    guard = {bare_domain(entry).lower(): "guard" for entry in list_domains("guard", lists_dir)}
+    zones = []
+    for r in rule_rows:
+        comment = _text(r.get("comment"))
+        if r.get("type") == 3 and r.get("enabled") and comment.startswith(LEARNED_PREFIX):
+            z, parts = regex_zone(_text(r.get("domain"))), comment[len(LEARNED_PREFIX):].split()
+            if z and parts:
+                zones.append((z, parts[0]))
+    return {"apps": apps, "guard": guard, "zones": zones}
+
+
+def read_stops(windows: list, services, setting=None, sql=None, lists_dir: str | None = None) -> dict:
+    """Count what Pi-hole stopped, by what stopped it, in each window of the ledger (Ledger.windows), read-only from Pi-hole's
+    long-term database and gravity.db's comments. It runs programs and can take a while on a busy day: only ever in the
+    ledger's background job, never on the tick thread. Only whole numbers reach the SQL (sql_ints and int()).
+
+    Returns {"days": {day: {"ads": n, "apps": {sid: n}, "whole": bool}}, "adLists": n, "why": None}. What cannot be counted
+    is None, never 0, and `why` says why: Pi-hole keeps no history (database.maxDBdays 0, or no database file), a database
+    cannot be read, or the privacy level keeps out what is needed. A window that would only fill a gap (the first run's
+    days before today) is left out unless the database holds the whole of it."""
+    setting = setting or ftl_try
+    sql = sql or sql_rows
+    out = {"days": {}, "adLists": None, "why": None}
+
+    def unknown(why):
+        out["why"] = why
+        out["days"] = {day: {"ads": None, "apps": None, "whole": whole} for day, _s, _e, whole, gap in windows if not gap}
+        return out
+
+    def ask(db, text):
+        for attempt in range(3):
+            try:
+                return sql(db, text)
+            except SqlError as err:
+                # FTL writes its database once a minute, and a reader that meets that moment is told it is locked.
+                if attempt == 2 or not re.search(r"locked|busy", str(err), re.I):
+                    raise
+                time.sleep(1)
+        return []
+
+    if os.environ.get("SINKO_GRAVITY_DB"):
+        gravity_db = os.environ["SINKO_GRAVITY_DB"]
+    else:
+        value, err = setting("files.gravity")
+        gravity_db = value.strip() if err is None and value and value.strip() else GRAVITY_DB
+    try:
+        adlist_rows = ask(gravity_db, "SELECT id, comment, enabled, type FROM adlist")
+        rule_rows = ask(gravity_db, "SELECT id, type, domain, comment, enabled FROM domainlist")
+    except (SqlError, ValueError) as err:
+        return unknown("gravity.db cannot be read (%s)" % short_text(err, 100))
+    adlists = {r["id"]: _text(r.get("comment")) for r in adlist_rows if _is_int(r.get("id"))}
+    rules = {r["id"]: _text(r.get("comment")) for r in rule_rows if _is_int(r.get("id"))}
+    out["adLists"] = sum(1 for r in adlist_rows if r.get("enabled") and not r.get("type")
+                         and not _text(r.get("comment")).startswith(LIST_COMMENT_PREFIX))
+
+    kept, err = setting("database.maxDBdays")
+    if err is None and kept.strip() == "0":
+        return unknown("Pi-hole keeps no history (database.maxDBdays is 0)")
+    if os.environ.get("SINKO_FTL_DB"):
+        ftl_db = os.environ["SINKO_FTL_DB"]
+    else:
+        value, err = setting("files.database")
+        if err is None and not value.strip():
+            return unknown("Pi-hole keeps no history (files.database is empty)")
+        ftl_db = value.strip() if err is None else FTL_DB
+    level, err = setting("misc.privacylevel")
+    level = int(level.strip()) if err is None and level.strip().isdigit() else 0
+    if level >= 3:
+        return unknown("Pi-hole's privacy level 3 keeps no history")
+    try:
+        cols = {t: {r.get("name") for r in ask(ftl_db, "PRAGMA table_info(%s)" % t)} for t in ("query_storage", "queries")}
+        # FTL 6 notes which list or rule stopped a lookup (list_id). Without it (an older database) only the name can say,
+        # and a privacy level of 1 or more hides the name.
+        table, key, names = next((t for t in ("query_storage", "queries") if "list_id" in cols[t]), None), "list_id", None
+        if table is None:
+            if not {"timestamp", "status", "domain"} <= cols["queries"]:
+                return unknown("Pi-hole's database has no table of lookups")
+            if level >= 1:
+                return unknown("this Pi-hole notes no list ids and its privacy level %d hides the names" % level)
+            table, key, names = "queries", "domain", stop_names(services, rule_rows, lists_dir)
+        first = ask(ftl_db, "SELECT MIN(timestamp) AS t FROM %s" % table)
+        oldest = first[0].get("t") if first else None
+        for day, start, end, whole, gap in windows:
+            if gap and not (_is_number(oldest) and oldest < start):
+                continue                       # the database does not hold the whole day: a gap stays a gap
+            rows = ask(ftl_db, "SELECT status, %s, COUNT(*) AS n FROM %s WHERE timestamp >= %d AND timestamp < %d "
+                               "AND status IN (%s) GROUP BY status, %s"
+                       % (key, table, int(start), int(end), sql_ints(sorted(BLOCKED_STATUS)), key))
+            if key == "domain" and any(r.get("domain") == "hidden" for r in rows):
+                out["days"][day] = {"ads": None, "apps": None, "whole": whole}
+                out["why"] = "Pi-hole's privacy level hid the names on %s" % day
+                continue
+            got = classify_stops(rows, adlists, rules, services, names)
+            out["days"][day] = {"ads": got["ads"], "apps": got["apps"], "whole": whole}
+    except (SqlError, ValueError) as err:
+        return unknown("Pi-hole's database cannot be read (%s)" % short_text(err, 100))
+    return out
+
+
+def parse_ledger(text):
+    """pb-ledger's comment as data, or None when it is not the JSON of an object (nothing yet, a hand edit)."""
+    try:
+        data = json.loads(text, parse_constant=_no_constants, parse_int=_json_int) if isinstance(text, str) and text else None
+    except (ValueError, RecursionError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def ledger_text(payload: dict) -> str:
+    """pb-ledger's comment: compact JSON shorter than LEDGER_MAX_CHARS. Should a family's apps make it longer, each day loses
+    its smallest apps first, then the oldest days go; the totals always stay."""
+    p = json.loads(json.dumps(payload))
+
+    def text():
+        return json.dumps(p, separators=(",", ":"))
+    for keep in (LEDGER_APPS, 5, 3, 1, 0):
+        for day in p["days"]:
+            day["apps"] = dict(list(day["apps"].items())[:keep])
+        if len(text()) < LEDGER_MAX_CHARS:
+            return text()
+    while len(p["days"]) > 1 and len(text()) >= LEDGER_MAX_CHARS:
+        p["days"].pop(0)
+    return text()
+
+
+def same_ledger(stored, wanted) -> bool:
+    """Do two copies say the same (the time they were made apart)?"""
+    if not isinstance(stored, dict) or not isinstance(wanted, dict):
+        return False
+    return {k: v for k, v in stored.items() if k != "at"} == {k: v for k, v in wanted.items() if k != "at"}
+
+
+class Ledger:
+    """The counts behind the page's card "What Sinko did for you". Kept by the scheduler (Maintenance, on its own thread
+    only) in /var/lib/sinko/savings.json, root only, and shown to the page as pb-ledger (payload, ledger_text).
+
+    savings.json, version 1 (architecture.md, "Savings ledger (pb-ledger)"); days are box-local "YYYY-MM-DD" and null is
+    "not known", never 0:
+      {"v": 1, "since": day|null, "keptSince": day|null, "adLists": n|null,
+       "days": {day: {"ads": n|null, "apps": {sid: n}|null, "final": bool, "off": s, "seen": s, "kept": 1|0|null}},
+       "night": {"d": day, "seen": s, "off": s, "planned": s}|null,
+       "before": {"ads": n, "apps": {sid: n}, "off": s, "nights": n, "kept": n}}
+    "ads"/"apps" are the stops Pi-hole's database showed (read_stops), "final" says the day was read whole after it ended,
+    "seen" and "off" are the seconds the scheduler watched the day and the children's internet was off in them, "kept" is
+    the bedtime night that started on that day. "night" is the bedtime that is on (or was on when the scheduler stopped),
+    and "before" the totals of the rows folded away after LEDGER_KEEP_DAYS days."""
+
+    def __init__(self, path: str | None = None):
+        self.path = path                     # None: savings.json in the state folder, looked up when it is read
+        self.data = None
+        self.dirty = False                   # counted since the last save
+        self._last = None                    # the monotonic clock at the last counted pass
+        self._was_off = False
+        self._folded = None                  # the day of the last fold
+
+    @classmethod
+    def in_memory(cls) -> "Ledger":
+        """A ledger that starts empty instead of reading savings.json (the mock's demo week, tests)."""
+        ledger = cls()
+        ledger.data = cls._fresh()
+        return ledger
+
+    # ----- the file -----
+    def file(self) -> str:
+        return self.path or state_path(SAVINGS_FILE)
+
+    def load(self) -> dict:
+        if self.data is None:
+            path = self.file()
+            self.data = self._clean(read_json_file(path))
+            if self.data is None:
+                self.data = self._fresh()
+                if os.path.exists(path):
+                    # Never a reason to stop the scheduler: the file is replaced at the next save.
+                    log.warning("%s could not be read: starting it again (the totals on the page start from today)", SAVINGS_FILE)
+                    self.dirty = True
+        return self.data
+
+    def save(self) -> None:
+        data = self.load()
+        if self.path is None:
+            ensure_state_dir()
+        out = json.loads(json.dumps(data))
+        for row in list(out["days"].values()) + ([out["night"]] if out["night"] else []):
+            for key in ("off", "seen"):
+                row[key] = round(row[key], 1)
+        out["before"]["off"] = round(out["before"]["off"], 1)
+        atomic_write(self.file(), json.dumps(out, sort_keys=True, separators=(",", ":")))
+        self.dirty = False
+
+    @staticmethod
+    def _fresh() -> dict:
+        return {"v": 1, "since": None, "keptSince": None, "adLists": None, "days": {}, "night": None,
+                "before": {"ads": 0, "apps": {}, "off": 0.0, "nights": 0, "kept": 0}}
+
+    @classmethod
+    def _clean(cls, raw):
+        """savings.json as this version keeps it, or None when it is not one (corrupt, another program's, another version).
+        A field that makes no sense loses only itself."""
+        if not isinstance(raw, dict) or raw.get("v") != 1 or not isinstance(raw.get("days"), dict):
+            return None
+        data = cls._fresh()
+        for key in ("since", "keptSince"):
+            data[key] = raw[key] if _is_day(raw.get(key)) else None
+        data["adLists"] = _ledger_count(raw.get("adLists"))
+        for day, row in raw["days"].items():
+            if _is_day(day) and isinstance(row, dict):
+                ads = _ledger_count(row.get("ads"))
+                apps = _ledger_apps(row.get("apps")) if ads is not None else None
+                kept = row.get("kept") if _is_int(row.get("kept")) and row.get("kept") in (0, 1) else None
+                data["days"][day] = {"ads": ads, "apps": apps if apps is not None or ads is None else {},
+                                     "final": row.get("final") is True, "off": _ledger_seconds(row.get("off")),
+                                     "seen": _ledger_seconds(row.get("seen")), "kept": kept}
+        night = raw.get("night")
+        if isinstance(night, dict) and _is_day(night.get("d")):
+            data["night"] = {"d": night["d"], "seen": _ledger_seconds(night.get("seen")), "off": _ledger_seconds(night.get("off")),
+                             "planned": int(_ledger_seconds(night.get("planned")))}
+        before = raw.get("before") if isinstance(raw.get("before"), dict) else {}
+        data["before"] = {"ads": _ledger_count(before.get("ads")) or 0, "apps": _ledger_apps(before.get("apps")) or {},
+                          "off": _ledger_seconds(before.get("off")), "nights": _ledger_count(before.get("nights")) or 0,
+                          "kept": _ledger_count(before.get("kept")) or 0}
+        return data
+
+    def _row(self, day: str) -> dict:
+        return self.load()["days"].setdefault(day, {"ads": None, "apps": None, "final": False, "off": 0.0, "seen": 0.0,
+                                                    "kept": None})
+
+    # ----- what the scheduler sees on every pass -----
+    def observe(self, now: dt.datetime, mono: float, offline: bool, kids: bool, active: bool, sched: dict) -> bool:
+        """One pass of the scheduler that applied the rules on a believed clock. The time since the last such pass (at most
+        LEDGER_STEP_MAX: a scheduler that stopped, or a clock that was not believed, does not know what happened meanwhile) is
+        added to the day as watched, and as off while pb-offline is on and a child's device exists (with none, nobody's
+        internet was off). While bedtime is on (scheduleActive), it is added to that night too. Returns True when an off
+        period or a bedtime night has just ended: the page should hear of it soon."""
+        data = self.load()
+        step = 0.0 if self._last is None else min(max(mono - self._last, 0.0), LEDGER_STEP_MAX)
+        self._last = mono
+        today = now.date()
+        if data["keptSince"] is None:
+            data["keptSince"] = today.isoformat()
+        off = offline and kids
+        parts = [(today, step)]
+        began = now - dt.timedelta(seconds=step)
+        if began.date() != today:                       # the step crossed midnight: each day gets its own share
+            before = (dt.datetime.combine(today, dt.time()) - began).total_seconds()
+            parts = [(began.date(), before), (today, step - before)]
+        for day, secs in parts:
+            row = self._row(day.isoformat())
+            row["seen"] += secs
+            if off:
+                row["off"] += secs
+        ended = self._was_off and not off
+        self._was_off = off
+        key = bedtime_night(sched, now) if active else None
+        night = data["night"]
+        if night is not None and night["d"] != key:
+            self._close_night()
+            ended, night = True, None
+        if key is not None:
+            if night is None:
+                night = data["night"] = {"d": key, "seen": 0.0, "off": 0.0, "planned": 0}
+            night["planned"] = bedtime_seconds(sched)
+            if kids:                                    # a night with no child's device kept nobody's bedtime
+                night["seen"] += step
+                if offline:
+                    night["off"] += step
+        if self._folded != today:
+            self.fold(today)
+        self.dirty = True
+        return ended
+
+    def _close_night(self) -> None:
+        """Bedtime ended (or the night it belonged to is over): kept when the scheduler saw practically all of it and the
+        internet was off for practically all it saw; not kept when it saw it but the internet was on (a parent switched it
+        back on, a free-time timer); not known when it saw too little (the box was off, there was no child's device)."""
+        data = self.load()
+        night, data["night"] = data["night"], None
+        planned = night["planned"]
+        kept = None
+        if planned > 0 and night["seen"] >= LEDGER_NIGHT_SEEN * planned:
+            kept = 1 if night["off"] >= LEDGER_NIGHT_OFF * night["seen"] else 0
+        row = self._row(night["d"])
+        if kept is not None or row["kept"] is None:     # a night that was cut in two (the bedtime was edited) keeps what it knew
+            row["kept"] = kept
+
+    # ----- what Pi-hole's database says, read by the background job -----
+    def windows(self, now: dt.datetime) -> list:
+        """What read_stops should count: [(day, start, end, whole, gap)]. Today so far; every day of the last week the ledger
+        holds and has not read whole since it ended (yesterday only LEDGER_SETTLE after midnight, when FTL has written its
+        end); and, until anything was counted at all, the LEDGER_BACKFILL days before today as gaps (counted only when the
+        database holds the whole day), so that the week is full on the first day."""
+        data = self.load()
+        today = now.date()
+        out = [(today.isoformat(), day_start(today), now.timestamp(), False, False)]
+        settled = now.timestamp() - day_start(today) >= LEDGER_SETTLE
+        for back in range(1, LEDGER_WEEK + 1):
+            day = today - dt.timedelta(days=back)
+            if back == 1 and not settled:
+                continue
+            row = data["days"].get(day.isoformat())
+            whole = (day.isoformat(), day_start(day), day_start(day + dt.timedelta(days=1)), True)
+            if row is not None and not row["final"]:
+                # A day with no counts yet is read only when the database holds the whole of it, like a gap.
+                out.append(whole + (row["ads"] is None,))
+            elif row is None and data["since"] is None and back <= LEDGER_BACKFILL:
+                out.append(whole + (True,))
+        return out
+
+    def merge(self, result: dict, now: dt.datetime) -> None:
+        """Take what read_stops counted. What it could not count leaves what was counted before alone. A day's count only
+        grows: a smaller one means Pi-hole's database lost rows (flushed, or past its days), and what was counted stays. A
+        day read whole after it ended is final."""
+        data = self.load()
+        if not isinstance(result, dict):
+            return
+        lists = _ledger_count(result.get("adLists"))
+        if lists is not None:
+            data["adLists"] = lists
+        days = result.get("days") if isinstance(result.get("days"), dict) else {}
+        for day, got in sorted(days.items()):
+            if not _is_day(day) or not isinstance(got, dict):
+                continue
+            ads, apps = _ledger_count(got.get("ads")), _ledger_apps(got.get("apps"))
+            if ads is None or apps is None:
+                continue
+            row = self._row(day)
+            if row["final"]:
+                continue
+            if row["ads"] is None or ads + sum(apps.values()) >= row["ads"] + sum(row["apps"].values()):
+                row["ads"], row["apps"] = ads, apps
+            row["final"] = got.get("whole") is True
+            if data["since"] is None or day < data["since"]:
+                data["since"] = day
+        self.fold(now.date())
+        self.dirty = True
+
+    def fold(self, today: dt.date) -> None:
+        """Rows older than LEDGER_KEEP_DAYS days go into the running totals ("before"), which so outlive both the rows and
+        Pi-hole's own limit. A row too old to be read whole again is final as it is. Rows of days after today (the clock
+        was set back) are left alone: the clock comes right again."""
+        data = self.load()
+        self._folded = today
+        oldest = (today - dt.timedelta(days=LEDGER_KEEP_DAYS - 1)).isoformat()
+        last_read = (today - dt.timedelta(days=LEDGER_WEEK)).isoformat()
+        b = data["before"]
+        for day in sorted(data["days"]):
+            row = data["days"][day]
+            if day < oldest:
+                if row["ads"] is not None:
+                    b["ads"] += row["ads"]
+                    for sid, n in row["apps"].items():
+                        b["apps"][sid] = b["apps"].get(sid, 0) + n
+                if data["keptSince"] is not None and day >= data["keptSince"]:
+                    b["off"] += row["off"]
+                if row["kept"] is not None:
+                    b["nights"] += 1
+                    b["kept"] += row["kept"]
+                del data["days"][day]
+                self.dirty = True
+            elif day < last_read and not row["final"]:
+                row["final"] = True
+                self.dirty = True
+
+    # ----- the page's copy -----
+    def payload(self, now: dt.datetime, services, ad_lists: int) -> dict:
+        """What pb-ledger holds (architecture.md, "Savings ledger (pb-ledger)"): today and the days of the week before it that
+        the ledger has, oldest first, and the totals since "since" (stops) and "keptSince" (time off, nights). Whole numbers
+        only, and only apps of the catalog (`services`)."""
+        data = self.load()
+        today = now.date().isoformat()
+        since = min(data["since"], today) if data["since"] else None
+        kept_since = min(data["keptSince"], today) if data["keptSince"] else None
+
+        def top(apps):
+            known = [(sid, int(n)) for sid, n in (apps or {}).items() if sid in services and n > 0]
+            return dict(sorted(known, key=lambda kv: (-kv[1], kv[0]))[:LEDGER_APPS])
+
+        def off_of(day, row):
+            if kept_since is None or day < kept_since or (day != today and row["seen"] <= 0):
+                return None                     # the scheduler did not watch that day
+            return int(row["off"])
+        days = []
+        for back in range(LEDGER_WEEK - 1, -1, -1):
+            day = (now.date() - dt.timedelta(days=back)).isoformat()
+            row = data["days"].get(day)
+            if row is None and day != today:
+                continue                        # a day the box has nothing for is a gap
+            row = row or {"ads": None, "apps": None, "off": 0.0, "seen": 0.0, "kept": None}
+            days.append({"d": day, "ads": row["ads"], "apps": top(row["apps"]), "offSec": off_of(day, row), "kept": row["kept"]})
+        b = data["before"]
+        rows = list(data["days"].items())
+        apps = dict(b["apps"])
+        for _day, row in rows:
+            for sid, n in (row["apps"] or {}).items():
+                apps[sid] = apps.get(sid, 0) + n
+        tot = {"ads": None if since is None else b["ads"] + sum(r["ads"] for _d, r in rows if r["ads"] is not None),
+               "apps": top(apps),
+               "offSec": None if kept_since is None else int(b["off"] + sum(r["off"] for d, r in rows if d >= kept_since)),
+               "nights": b["nights"] + sum(1 for _d, r in rows if r["kept"] is not None),
+               "nightsKept": b["kept"] + sum(r["kept"] for _d, r in rows if r["kept"] is not None)}
+        return {"v": 1, "at": int(now.timestamp()), "today": today, "since": since, "keptSince": kept_since,
+                "adLists": int(ad_lists), "days": days, "tot": tot}
+
+
+def ledger_lines(payload: dict, lists=None) -> list:
+    """`diagnose`'s summary of the ledger: counts only. `lists`: the number of other block lists, None when not known."""
+    if payload["since"] is None and payload["keptSince"] is None:
+        return ["  nothing counted yet"]
+    tot = payload["tot"]
+    out = ["  stops counted since %s, time off and bedtime since %s; %s block list(s) besides Sinko's"
+           % (payload["since"] or "-", payload["keptSince"] or "-", "?" if lists is None else lists)]
+    out.append("  in all: %s ads and trackers stopped; apps %s; %s hours off; bedtime kept %d of %d nights"
+               % ("?" if tot["ads"] is None else tot["ads"], ", ".join("%s %d" % kv for kv in tot["apps"].items()) or "none",
+                  "?" if tot["offSec"] is None else "%.1f" % (tot["offSec"] / 3600.0), tot["nightsKept"], tot["nights"]))
+    for day in payload["days"]:
+        out.append("  %s  ads %-7s apps %-6s off %-8s bedtime %s"
+                   % (day["d"], "?" if day["ads"] is None else day["ads"], sum(day["apps"].values()),
+                      "?" if day["offSec"] is None else "%.1f h" % (day["offSec"] / 3600.0),
+                      {1: "kept", 0: "not kept", None: "-"}[day["kept"]]))
+    return out
+
+
 class Maintenance:
     """The scheduler's side jobs: update check and install, power requests, address watch, anonymous counter, learning
-    new addresses of blocked apps.
+    new addresses of blocked apps, the savings ledger.
 
     `Controller.tick` stays the only code that changes the parent's rules; the learner adds only its own (pb-learned:,
     see Learner). These jobs only touch the keys of the shared state that belong to the scheduler (update.*, community,
@@ -3511,7 +4110,7 @@ class Maintenance:
     def __init__(self, api=None, config_path=None, monotonic=time.monotonic, job_factory=BackgroundJob, clock_ok=None,
                  check=None, start_runner=None, power=None, default_ip=None, apply_address=None, ping=None, body=None,
                  jitter=None, box_info=None, forget=None, heal=None, recover=None, catalog=None, page_version=None,
-                 start_repair=None, learner=None):
+                 start_repair=None, learner=None, ledger=None, stops=None):
         self.api = api
         self.config_path = config_path or CONFIG_FILE
         self.mono = monotonic
@@ -3535,6 +4134,10 @@ class Maintenance:
         self.page_version = page_version
         self.start_repair = start_repair
         self.learner = learner or Learner()
+        # The savings ledger (see _ledger) is off unless a Ledger is given, like the repair: the scheduler gives the real one,
+        # and a test that is about something else neither reads this machine's Pi-hole database nor adds a group.
+        self.ledger = ledger
+        self.stops = stops or read_stops
         started = monotonic()
         self._next_check = started + self.CHECK_FIRST
         self._next_address = started + self.ADDRESS_FIRST
@@ -3545,6 +4148,16 @@ class Maintenance:
         self._next_heal = started
         self._next_page_look = started
         self._next_learn = started
+        self._next_ledger = started       # the stops are read right after the start, then every LEDGER_REFRESH
+        self._next_ledger_save = started + LEDGER_REFRESH
+        self._ledger_read = False         # the first read of the stops is back (the first copy for the page waits for it)
+        self._ledger_written = None       # when pb-ledger was last written (or first looked at after the start)
+        self._ledger_day = None           # the box's day at that moment
+        self._ledger_event = False        # an off period or a bedtime night ended since then
+        self._ledger_why = None           # why the stops cannot be counted, as last logged
+        self._kids = None                 # a child's device exists (asked every LEDGER_LOOK_KIDS seconds while it matters)
+        self._next_kids = started
+        self._ad_lists = None             # (when to ask again, how many) from /api/lists, while the ledger does not know
         self._mismatch_since = None       # when the page and the program were first seen to be of different versions
         self._heal_streak = 0
         self._lists_missing = []
@@ -3575,7 +4188,7 @@ class Maintenance:
         steps = (("jobs", self._collect), ("reconcile", self._reconcile), ("check", self._check),
                  ("update", self._update), ("power", self._power), ("address", self._address),
                  ("box.json", self._boxinfo), ("telemetry", self._telemetry), ("self-repair", self._heal),
-                 ("page", self._page), ("learning", self._learn))
+                 ("page", self._page), ("learning", self._learn), ("savings ledger", self._ledger))
         try:
             self._cur()
         except LookupError:
@@ -4079,6 +4692,118 @@ class Maintenance:
         self._next_learn = self.mono() + Learner.EVERY
         self._actions.extend(self.learner.run(self.api, self._groups, epoch))
 
+    # ----- what Sinko did for the family (the savings ledger) -----
+    def _ledger(self, now, epoch) -> None:
+        """The counts behind the page's card "What Sinko did for you" (Ledger). On every pass whose rules were applied on a
+        believed clock: the time the children's internet was off and the bedtime nights. Every LEDGER_REFRESH, and right after
+        the start: the stops, read from Pi-hole's database in a job of their own (slow on a busy day, and it runs programs).
+        Now and then a copy for the page (_publish_ledger). savings.json is written with each read of the stops (or every
+        LEDGER_REFRESH, should that job hang) and when the scheduler stops, so a power cut loses at most that much."""
+        if self.ledger is None or not self.tick_ok or not self.clock_ok():
+            return
+        st = self._cur()
+        offline = bool(self._groups.get(G_OFFLINE, {}).get("enabled"))
+        active = st["scheduleActive"]
+        kids = self._kids_present() if offline or active else False
+        if self.ledger.observe(now, self.mono(), offline, kids, active, st["schedule"]):
+            self._ledger_event = True
+        if self.mono() >= self._next_ledger:
+            windows, services = self.ledger.windows(now), self._services()
+            if self._spawn("savings", lambda: self.stops(windows, services),
+                           lambda outcome, _epoch, at=now: self._ledger_done(outcome, at)):
+                self._next_ledger = self.mono() + LEDGER_REFRESH
+        if self.ledger.dirty and self.mono() >= self._next_ledger_save:
+            self._save_ledger()
+        self._publish_ledger(now)
+
+    def _ledger_done(self, outcome, at) -> None:
+        """The stops were read (`at` is the box's time when the read began: the days it names are of that time)."""
+        status, value = outcome
+        self._ledger_read = True
+        if status == "error":
+            self._complain("savings ledger", value)
+        else:
+            self.ledger.merge(value, at)
+            why = value.get("why") if isinstance(value, dict) else None
+            if why != self._ledger_why:
+                self._ledger_why = why
+                if why:
+                    log.info("what the box stopped is not counted for now: %s", why)
+        self._save_ledger()
+
+    def _save_ledger(self) -> None:
+        self._next_ledger_save = self.mono() + LEDGER_REFRESH
+        try:
+            self.ledger.save()
+        except OSError as err:
+            self._complain("savings ledger", err)
+
+    def _services(self) -> set:
+        """The ids of the catalog's apps (the only apps the ledger names)."""
+        try:
+            if self._catalog is None:
+                self._catalog = self.catalog()
+            return {s["id"] for s in self._catalog["services"]}
+        except CatalogError:
+            return set()
+
+    def _kids_present(self) -> bool:
+        """Is there a child's device at all (a client in pb-kids)? Asked of Pi-hole once a minute, and only while the
+        internet is off or bedtime is on: with no child's device, nobody's internet was off."""
+        if self._kids is None or self.mono() >= self._next_kids:
+            kid_id = self._groups.get(G_KIDS, {}).get("id")
+            self._kids = kid_id is not None and any(kid_id in c.get("groups", []) for c in self.api.clients())
+            self._next_kids = self.mono() + LEDGER_LOOK_KIDS
+        return self._kids
+
+    def _ad_lists_now(self) -> int:
+        """How many block lists that are not Sinko's are switched on: the ledger's count from gravity.db, or, until it has
+        one, Pi-hole's own answer (asked at most once an hour)."""
+        known = self.ledger.load()["adLists"]
+        if known is not None:
+            return known
+        if self._ad_lists is None or self.mono() >= self._ad_lists[0]:
+            n = sum(1 for l in self.api.lists() if l.get("enabled") and l.get("type", "block") == "block"
+                    and not l.get("comment", "").startswith(LIST_COMMENT_PREFIX))
+            self._ad_lists = (self.mono() + LEDGER_PUBLISH_EVERY, n)
+        return self._ad_lists[1]
+
+    def _publish_ledger(self, now) -> None:
+        """Give the page its copy (pb-ledger, made when missing: disabled, and no client ever joins it) when it says
+        something new, but not more often than Pi-hole should reload its lists, which every group write makes it do: once
+        after the start (when the first stops are in), then when LEDGER_PUBLISH_EVERY has passed since the last write, the
+        box's day has changed, or an off period or a bedtime night has ended. The group is compared with what the ledger
+        says, so a restored backup or a hand edit is put right at the next such moment. Never while an update runs (the
+        installer restarts Pi-hole), nor after Sinko was removed on purpose."""
+        if os.path.exists(state_path("removed")) or self._update_going():
+            return
+        mono, today = self.mono(), now.date().isoformat()
+        if self._ledger_written is None:
+            if not self._ledger_read:
+                return
+        elif not (mono - self._ledger_written >= LEDGER_PUBLISH_EVERY or today != self._ledger_day or self._ledger_event):
+            return
+        if self._ledger_written is None:
+            self._ledger_written = mono       # what the group already says counts as the last write
+        self._ledger_day, self._ledger_event = today, False
+        text = ledger_text(self.ledger.payload(now, self._services(), self._ad_lists_now()))
+        group = self._groups.get(G_LEDGER)
+        if group is not None and not group.get("enabled") and same_ledger(parse_ledger(group.get("comment")), json.loads(text)):
+            return
+        if group is None:
+            self.api.add_group(G_LEDGER, text, False)
+        else:
+            self.api.put_group(G_LEDGER, text, False)
+        self._ledger_written = mono
+
+    def close(self) -> None:
+        """The scheduler stops cleanly: keep what the ledger counted since its last save."""
+        if self.ledger is not None and self.ledger.dirty:
+            try:
+                self.ledger.save()
+            except OSError as err:
+                log.warning("could not keep what the box counted: %s", short_text(err, 100))
+
     # ----- the page and the program are of one version -----
     def _page(self, now, epoch) -> None:
         """An update that is cut off (the power goes) between the replacing of the program and the replacing of the page
@@ -4462,7 +5187,7 @@ class Scheduler:
     def __init__(self, clock=None, maintenance=None, gate=None, repair=None, monotonic=time.monotonic):
         self.clock = clock or ClockGuard()
         self.maintenance = maintenance if maintenance is not None else Maintenance(
-            clock_ok=self.clock.trusted, page_version=PageWatch().version, start_repair=start_repair_runner)
+            clock_ok=self.clock.trusted, page_version=PageWatch().version, start_repair=start_repair_runner, ledger=Ledger())
         self.gate = gate or LogGate()
         self.repair = repair or repair_catalog_files
         self.mono = monotonic
@@ -4551,6 +5276,9 @@ class Scheduler:
             log.warning("scheduler: %s: %s (shown at most every 30 minutes)", what, short_text(err, 160))
 
     def close(self) -> None:
+        close = getattr(self.maintenance, "close", None)
+        if close is not None:
+            close()                                       # what the savings ledger counted since its last save
         drop_session(self.api)
         self.api = None
 
@@ -5242,6 +5970,10 @@ def gather_diagnose(api: Api, catalog: dict, targets: list, now: float, sql=sql_
                      "ORDER BY n DESC" % (modified, int(now - 86400), where), "pihole-FTL.db")
         t["queries"] = rows or []
         t["modified"] = modified
+    # What the scheduler counted for the page's card "What Sinko did for you" (counts only, never a name).
+    ledger = Ledger()
+    lists = ledger.load()["adLists"]
+    facts["ledger"] = ledger_lines(ledger.payload(dt.datetime.fromtimestamp(now), facts["service_ids"], lists or 0), lists)
     return facts
 
 
@@ -5337,7 +6069,7 @@ def render_diagnose(facts: dict, findings: list) -> list:
     groups = facts["groups"]
     add("Blocking: %s" % (facts.get("blocking") or "unknown"))
     add("\nGroups (enabled = the service is blocked)")
-    for name in sorted(n for n in groups if n.startswith("pb-") and n != G_STATE):
+    for name in sorted(n for n in groups if n.startswith("pb-") and n not in (G_STATE, G_LEDGER)):
         if name.startswith(SVC_PREFIX) and name[len(SVC_PREFIX):] not in [t["id"] for t in facts["targets"]]:
             continue
         add("  %-24s %s" % (name, "ENABLED" if groups[name].get("enabled") else "disabled"))
@@ -5376,6 +6108,9 @@ def render_diagnose(facts: dict, findings: list) -> list:
             add("  %-10s %-34s %-26s %-6s %d" % (t["id"], q["client"], QUERY_STATUS.get(q["status"], q["status"]), q["period"], q["n"]))
     if not shown:
         add("  none")
+    if facts.get("ledger"):
+        add("\nWhat the box counted for the family (savings.json, counts only)")
+        add("\n".join(facts["ledger"]))
     if facts["errors"]:
         add("\nCould not read")
         add("\n".join("  " + e for e in facts["errors"]))

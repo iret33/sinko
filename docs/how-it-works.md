@@ -30,6 +30,12 @@ Child's device ──DNS──► │  blocked if the device is in an enabled pb
 - Timer and bedtime settings are stored as JSON in the description of the
   disabled group `pb-state`. The page writes them; `sinko run`
   (a systemd service) enforces them every 15 seconds.
+- *What Sinko did for you* (the card with ads stopped, app tries, nights kept and time off): every 15 minutes the
+  scheduler counts, read-only, what Pi-hole's long-term database says was stopped and by which list (FTL notes it as
+  `list_id`), and it notes itself how long the children's internet was off and whether bedtime was kept. Counts only,
+  kept in `/var/lib/sinko/savings.json` (days for 35 days, running totals after that), and copied for the page into the
+  description of the disabled group `pb-ledger` at most once an hour, so only a signed-in parent can read it. The details
+  are in [`architecture.md`](maintainers/architecture.md#savings-ledger-pb-ledger).
 - Devices are added by MAC address when Pi-hole knows it (stable across IP
   changes), otherwise by IP address. An IPv6-only entry is not offered, because
   phones rotate their IPv6 privacy addresses every day.
@@ -113,7 +119,7 @@ box runs: list fixes reach boxes without a new release, and a box can be pointed
 |---|---|
 | Program, lists, tools, the last downloaded release | `/opt/sinko` (`bin/sinko`, `lists/`, `tools/`, `src/`, `LICENSE`, `NOTICE`) |
 | Settings | `/etc/sinko/config` (`KEY=value`, read by the installer and the program) |
-| Runtime data (root only) | `/var/lib/sinko/` (counter id, the box's own id that box.json shows the app, handled requests, cached releases for rollback, update results and notes, the lock that keeps two block-list refreshes apart, the note of the last self-repair) |
+| Runtime data (root only) | `/var/lib/sinko/` (counter id, the box's own id that box.json shows the app, handled requests, cached releases for rollback, update results and notes, the lock that keeps two block-list refreshes apart, the note of the last self-repair, the counts behind *What Sinko did for you* in `savings.json`) |
 | The parent page | `/var/www/html/index.html` and `/var/www/html/pb/` (includes `pb/box.json`, written by the program) |
 | Services | `sinko.service` (scheduler), `sinko-lists.timer` (nightly list refresh), `sinko-firstboot.service` (ready-made boxes only) |
 | The announcement for the Sinko app | `/etc/avahi/services/sinko.service` (Bonjour, `_sinko._tcp`; not with `SINKO_MDNS=0`) |
