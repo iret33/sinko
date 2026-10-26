@@ -55,6 +55,7 @@ def make_site(live=False, blocked=("youtube", "tiktok"), privacy=0, history=True
     for mac, name in (("AA:BB:CC:00:00:01", "Sara's iPad"), ("AA:BB:CC:00:00:02", "Ali's phone")):
         api.request("POST", "/api/clients", {"client": mac, "comment": name, "groups": pb.kid_groups(gid, CATALOG)})
     api.logout()
+    store.agree_terms()
     if history:
         mock_pihole.seed_history(store)
     if live:
@@ -523,6 +524,7 @@ with sync_playwright() as p:
     api.login()
     pb.Controller(api, CATALOG, os.path.join(ROOT, "lists")).setup(run_gravity=False)
     api.logout()
+    store.agree_terms()
     mock_pihole.seed_history(store)
     ctx, page = open_page(browser, "http://127.0.0.1:%d/" % httpd.server_port)
     expect("No children" in page.inner_text("#liveTitle"), "with no children the picture invites you to add a device: %r" % page.inner_text("#liveTitle"))

@@ -15,8 +15,9 @@ from the start: the box answers a lookup itself when it can, and for any other s
 address**. The project never receives them. The details are in [The sites your family looks up](#lookups).
 
 Sinko sends nothing about your family to the project. The only message it sends to a server that the project runs is
-optional, and it is **off until you say yes**: an anonymous counter that lets the project show how many Sinko boxes are
-in use.
+optional, and **nothing is sent before you answer**: an anonymous counter that lets the project show how many Sinko boxes
+are in use. It is one of the two choices on the [terms of use](terms.md) that the page shows the first time you sign in,
+where it starts switched on; switch it off there, or at any time later in *My box*, if you do not want it.
 
 *Commands that start with `sudo sinko` are for people who built their own box and can log in to it. A ready-made box
 has no login, and nothing in this statement needs one: everything a parent needs is on the parent page (*My box*).*
@@ -47,8 +48,9 @@ Every time a phone asks for a site or an app, it first asks the box "where is th
   already installed keeps its own setting (Pi-hole's default is 91 days); you can change it in Pi-hole's admin page
   (*Settings*, *All settings*, *Database*, `maxDBdays`), or on your own box with
   `sudo pihole-FTL --config database.maxDBdays 30`.
-* **Learning new addresses of blocked apps** is off until you switch it on in *My box* (on your own box, also with
-  `sudo sinko learn on`). When it is on, a small AI model on the box reads that history once a minute. When a device was
+* **Learning new addresses of blocked apps** is the other choice on the [terms of use](terms.md), and starts switched on
+  there. You can switch it off before you agree, or at any time later in *My box* (on your own box, also with
+  `sudo sinko learn off`). When it is on, a small AI model on the box reads that history once a minute. When a device was
   just stopped from opening an app you blocked and then looked up a new name that the model is sure belongs to that app,
   the box blocks that name for that app too. It reads nothing else and sends nothing anywhere. What it learned is kept on
   the box as Pi-hole rules: *My box* lists them, and **Allow again** lets a name through again for good.
@@ -86,17 +88,19 @@ Neither says anything about your children, their devices, your rules, the passwo
 
 ### The optional anonymous counter
 
-**Off until you say yes.** You are asked in one of four places, and you can answer in any of them:
+**Nothing is sent before you answer.** You are asked in one of four places, and you can answer in any of them:
 
-* the installer asks once when you install Sinko yourself and someone is at the keyboard (the suggested answer is no);
-* the first-run checklist on the parent page, after you chose your password;
+* the installer asks once when you install Sinko yourself and someone is at the keyboard (the suggested answer is yes);
+* the [terms of use](terms.md) that the parent page shows the first time you sign in, after you chose your password.
+  The counter starts switched on there (switched off on a box where you already said no to it): switch it off before
+  you agree if you do not want it;
 * the parent page, *My box*, *Count this box* (this is also where you change your mind);
 * the command `sudo sinko telemetry on` (own install).
 
 If the installer cannot ask (nobody is at the keyboard), nothing is decided: the page asks you later, and nothing is
 sent before you answer. A box that was built without a counter address (a copy of Sinko that nobody has set up a counter
 for) can never send anything, so none of the four places asks: the installer says nothing about the counter, and the
-page shows neither the *Count this box* card nor the checklist question.
+page shows neither the *Count this box* card nor the counter choice on the terms of use.
 
 **What is sent.** About every 6 hours (the first time about 5 minutes after the box starts, or soon after you say yes
 if that comes later), the box sends exactly three things and nothing else:
@@ -226,8 +230,10 @@ something new, this statement changes first, with the release that does it.
 عدا ذلك يسأل خدمة DNS خارجية (هي Cloudflare for Families افتراضيًا)، فترى هذه الخدمة **أسماء تلك المواقع وعنوان إنترنت
 بيتك**. ولا يصل شيء من ذلك إلى المشروع. وتجد التفاصيل في [المواقع التي تبحث عنها عائلتك](#lookups-ar).
 
-لا يرسل سينكو إلى المشروع شيئًا عن عائلتك. والرسالة الوحيدة التي يرسلها إلى خادم يشغّله المشروع اختيارية، و**تبقى
-متوقفة حتى توافق أنت**: عدّاد مجهول يساعد المشروع على معرفة عدد صناديق سينكو قيد الاستخدام.
+لا يرسل سينكو إلى المشروع شيئًا عن عائلتك. والرسالة الوحيدة التي يرسلها إلى خادم يشغّله المشروع اختيارية، و**لا يُرسَل
+شيء قبل أن تجيب**: عدّاد مجهول يساعد المشروع على معرفة عدد صناديق سينكو قيد الاستخدام. وهو أحد الخيارين في
+[شروط الاستخدام](terms.md) التي تعرضها الصفحة في أول مرة تسجّل فيها الدخول، ويبدأ هناك مشغّلًا؛ أوقفه هناك، أو في أي وقت
+بعد ذلك من «صندوقي»، إن كنت لا تريده.
 
 *الأوامر التي تبدأ بـ `sudo sinko` لمن بنى صندوقه بنفسه ويستطيع الدخول إليه. أما الصندوق الجاهز فلا يُدخَل إليه، ولا
 يحتاج شيء في هذا البيان إلى ذلك: كل ما يحتاجه الوالدان موجود في صفحة الوالدين («صندوقي»).*
@@ -257,8 +263,9 @@ something new, this statement changes first, with the release that does it.
   ومنه الصندوق الجاهز، يُحفظ السجل 30 يومًا. أما Pi-hole المثبَّت مسبقًا فيُبقي إعداده هو (والافتراضي عند Pi-hole هو 91
   يومًا)، وتستطيع تغييره من صفحة إدارة Pi-hole (*Settings* ثم *All settings* ثم *Database* ثم `maxDBdays`)، أو على صندوقك
   الذي بنيته بنفسك بالأمر `sudo pihole-FTL --config database.maxDBdays 30`.
-* **تعلّم عناوين جديدة للتطبيقات المحظورة** متوقف حتى تشغّله من «صندوقي» (وعلى صندوقك الذي بنيته بنفسك أيضًا بالأمر
-  `sudo sinko learn on`). وعند تشغيله يقرأ نموذج صغير من الذكاء الاصطناعي على الصندوق هذا السجل مرة كل دقيقة: إذا مُنع جهاز
+* **تعلّم عناوين جديدة للتطبيقات المحظورة** هو الخيار الآخر في [شروط الاستخدام](terms.md)، ويبدأ هناك مشغّلًا. ويمكنك
+  إيقافه قبل أن توافق، أو في أي وقت بعد ذلك من «صندوقي» (وعلى صندوقك الذي بنيته بنفسك أيضًا بالأمر `sudo sinko learn off`).
+  وعند تشغيله يقرأ نموذج صغير من الذكاء الاصطناعي على الصندوق هذا السجل مرة كل دقيقة: إذا مُنع جهاز
   للتو من فتح تطبيق حظرته، ثم بحث عن اسم جديد يجزم النموذج بأنه لذلك التطبيق، حظر الصندوق هذا الاسم لذلك التطبيق أيضًا. ولا
   يقرأ شيئًا غير ذلك ولا يرسل شيئًا إلى أي مكان. ويُحفظ ما تعلّمه على الصندوق قواعدَ في Pi-hole: تعرضها «صندوقي»، وزر
   «اسمح به من جديد» يسمح بالاسم نهائيًا.
@@ -294,17 +301,18 @@ something new, this statement changes first, with the release that does it.
 
 ### العدّاد المجهول (اختياري)
 
-**متوقف حتى توافق.** يُطرح عليك السؤال في أربعة أماكن، وتستطيع أن تجيب في أيٍّ منها:
+**لا يُرسَل شيء قبل أن تجيب.** يُطرح عليك السؤال في أربعة أماكن، وتستطيع أن تجيب في أيٍّ منها:
 
-* برنامج التثبيت يسألك مرة واحدة إذا ثبّتّ سينكو بنفسك وكان أحد أمام لوحة المفاتيح (والجواب المقترح «لا»)؛
-* قائمة الإعداد الأولى في صفحة الوالدين، بعد أن تختار كلمة المرور؛
+* برنامج التثبيت يسألك مرة واحدة إذا ثبّتّ سينكو بنفسك وكان أحد أمام لوحة المفاتيح (والجواب المقترح «نعم»)؛
+* [شروط الاستخدام](terms.md) التي تعرضها صفحة الوالدين في أول مرة تسجّل فيها الدخول، بعد أن تختار كلمة المرور. ويبدأ
+  العدّاد هناك مشغّلًا (ومتوقفًا على صندوق سبق أن رفضته عليه): أوقفه قبل أن توافق إن كنت لا تريده؛
 * صفحة الوالدين: «صندوقي» ثم «احتساب هذا الصندوق» (وهنا أيضًا تغيّر رأيك)؛
 * الأمر `sudo sinko telemetry on` (لمن بنى صندوقه بنفسه).
 
 وإن لم يستطع برنامج التثبيت أن يسألك (لأن أحدًا لا يجلس أمام لوحة المفاتيح) فلا يُحسم شيء، وتسألك الصفحة لاحقًا، ولا يُرسَل
 أي شيء قبل أن تجيب. والصندوق الذي بُني بلا عنوان للعدّاد (نسخة من سينكو لم يُعدّ لها أحد عدّادًا) لا يستطيع أن يرسل شيئًا
 أصلًا، ولذلك لا يسأل أيٌّ من الأماكن الأربعة: لا يذكر برنامج التثبيت العدّاد، ولا تعرض الصفحة بطاقة «احتساب هذا الصندوق»
-ولا سؤال قائمة الإعداد.
+ولا خيار العدّاد في شروط الاستخدام.
 
 **ما يُرسَل.** كل 6 ساعات تقريبًا (وأول مرة بعد نحو 5 دقائق من تشغيل الصندوق، أو بعد قولك «نعم» بوقت قصير إن جاء
 ذلك لاحقًا) يرسل الصندوق ثلاثة أشياء بالضبط، ولا شيء غيرها:

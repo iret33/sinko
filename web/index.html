@@ -98,6 +98,42 @@
   </form>
 </main>
 
+<!-- First sign-in: the terms of use, with the two choices that start switched on (see showTerms in app.js). Shown until the parent agrees. -->
+<main id="terms" class="login" hidden>
+  <form id="termsForm" class="login-card terms-card" novalidate>
+    <span class="brand-mark"><svg aria-hidden="true"><use href="#i-sinko"/></svg></span>
+    <div class="login-title">
+      <h1 id="termsTitle" tabindex="-1" data-i18n="termsTitle">Before you start</h1>
+    </div>
+    <p class="muted" data-i18n="termsLead">Please read the terms of use. Choosing “I agree” means you accept them.</p>
+    <ul class="terms-list">
+      <li data-i18n="terms1">Sinko is free software (GPL-3.0-or-later). It comes as it is, without any warranty: the project is not responsible for what a child can still reach, or for any loss from using it.</li>
+      <li data-i18n="terms2">It is a strong everyday filter, not a lock. A phone on mobile data or with a VPN app does not use this box, and some apps can get around it. Use it together with Screen Time or Family Link.</li>
+      <li data-i18n="terms3">Use it only on your own home network, for devices you look after.</li>
+      <li data-i18n="terms4">Your children’s names, devices and rules stay on this box and are never sent to the project. The privacy statement says exactly what is sent, and where.</li>
+    </ul>
+    <p class="terms-links">
+      <a id="termsLinkTerms" class="box-link" target="_blank" rel="noopener noreferrer" hidden><span data-i18n="termsLinkTerms">Full terms of use</span><svg aria-hidden="true"><use href="#i-external"/></svg></a>
+      <a id="termsLinkPrivacy" class="box-link" target="_blank" rel="noopener noreferrer" hidden><span data-i18n="termsLinkPrivacy">Privacy statement</span><svg aria-hidden="true"><use href="#i-external"/></svg></a>
+    </p>
+    <h2 class="terms-choices" data-i18n="termsChoices">Your choices</h2>
+    <label class="box-switch-row">
+      <span class="box-switch-text"><span data-i18n="termsLearn">Learn new addresses of apps I block</span>
+        <span class="box-note" data-i18n="termsLearnNote">A small AI model on this box spots new addresses of the apps you block, and blocks them too. What it learns stays on the box.</span></span>
+      <span class="switch"><input type="checkbox" id="termsLearn" checked><span class="switch-ui" aria-hidden="true"></span></span>
+    </label>
+    <label class="box-switch-row" id="termsCounterRow" hidden>
+      <span class="box-switch-text"><span data-i18n="termsCounter">Count this box in the anonymous Sinko counter</span>
+        <span class="box-note" data-i18n="termsCounterNote">Every few hours the box sends a random code, the Sinko version and the kind of box. Nothing about your family. The counter adds the country and when it first and last heard from the box. Switch it off any time in My box: the box then asks the counter service to forget it.</span></span>
+      <span class="switch"><input type="checkbox" id="termsCounter" checked><span class="switch-ui" aria-hidden="true"></span></span>
+    </label>
+    <p class="muted small" data-i18n="termsChange">You can change your choices at any time in My box.</p>
+    <p class="form-error" id="termsErr" role="alert"></p>
+    <button type="submit" class="btn btn-primary btn-wide" id="termsBtn" data-i18n="termsAgree">I agree, continue</button>
+    <button type="button" class="link lang-toggle" data-act="lang">العربية</button>
+  </form>
+</main>
+
 <div id="app" class="app" hidden>
   <header class="topbar">
     <div class="brand"><span class="brand-mark"><svg aria-hidden="true"><use href="#i-sinko"/></svg></span><span data-i18n="appName">Sinko</span></div>

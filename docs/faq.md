@@ -27,8 +27,9 @@ children or devices:
   to check it (`sudo sinko doctor` does the same by hand);
 * Debian's automatic security updates, and the time from public time servers (the box has no clock battery);
 * when you install Sinko yourself, the downloads the installer needs;
-* the optional anonymous counter, which is off until you say yes, and which tells the project only a random code, the
-  version and the kind of box.
+* the optional anonymous counter, which sends nothing until you answer (it is one of the two choices on the
+  [terms of use](terms.md) at first set-up, where it starts switched on), and which tells the project only a random code,
+  the version and the kind of box.
 
 [`privacy.md`](privacy.md) has the details, including what each of them can see.
 

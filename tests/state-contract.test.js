@@ -36,8 +36,8 @@ test('an empty or missing description gives the default state, and every call ge
 });
 
 test('a read-modify-write of one field keeps every other field the scheduler wrote', () => {
-  // What the scheduler might have stored while an update is running, a bedtime is set, the counter has answered and
-  // learning is on.
+  // What the scheduler might have stored while an update is running, a bedtime is set, the counter has answered,
+  // learning is on and the terms were agreed to.
   const stored = JSON.stringify({
     v: 1, timer: { mode: 'block', until: 1800000500, snapshot: { services: { youtube: true, tiktok: false }, offline: true } },
     schedule: { enabled: true, start: '22:00', end: '06:30', days: [0, 1, 2, 3, 4] }, scheduleActive: true,
@@ -45,7 +45,7 @@ test('a read-modify-write of one field keeps every other field the scheduler wro
       notes: 'https://github.com/iret33/sinko/releases/tag/v3.1.0', checked: 1800000000, status: 'running', from: '3.0.0', to: '3.1.0',
       at: 1800000100, error: null, rolledBack: null },
     power: { request: null, action: null }, telemetry: { on: true }, community: { online: 1234, at: 1800000000 }, setup: { done: true },
-    learn: { on: true }
+    learn: { on: true }, terms: { agreed: 1 }
   });
   const st = C.parseState(stored);
   st.setup.done = false;                                   // the one thing this write edits

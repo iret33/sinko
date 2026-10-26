@@ -15,7 +15,7 @@ concurrency:
 jobs:
   unit:
     name: Unit tests (Python ${{ matrix.python }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04                    # ubuntu-latest (26.04) has no Python 3.9 for setup-python
     strategy:
       fail-fast: false
       matrix:

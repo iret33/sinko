@@ -312,12 +312,13 @@ test('a restore imports only the gravity tables, and says so explicitly (a missi
   assert.deepEqual(JSON.parse(JSON.stringify(r)), r, 'it survives JSON');
 });
 
-test('after a restore the box keeps its own update, power, counter and setup fields, and takes bedtime and the timer from the backup', () => {
+test('after a restore the box keeps its own update, power, counter, setup and terms fields, and takes bedtime and the timer from the backup', () => {
   const before = C.parseState(JSON.stringify({
     update: { auto: true, latest: '3.1.0', notes: 'https://github.com/iret33/sinko/releases/tag/v3.1.0', checked: 1800000000, status: 'ok', from: '3.0.0', to: '3.1.0', at: 1800000100 },
-    telemetry: { on: false }, community: { online: 7, at: 1800000000 }, setup: { done: true },
+    telemetry: { on: false }, community: { online: 7, at: 1800000000 }, setup: { done: true }, terms: { agreed: 1 },
     schedule: { enabled: false, start: '21:00', end: '06:00', days: [0, 1, 2, 3, 4, 5, 6] } }));
-  // The backup was taken long ago on a box that was mid-update, about to restart, with the counter on and a bedtime set.
+  // The backup was taken long ago on a box that was mid-update, about to restart, with the counter on, the terms not yet agreed to and a
+  // bedtime set.
   const imported = JSON.stringify({
     update: { request: 1700000000000, checkRequest: 1700000000001, status: 'running', from: '2.2.0', to: '3.0.0', at: 1700000000 },
     power: { request: 1700000000002, action: 'poweroff' }, telemetry: { on: true }, community: { online: 99, at: 1700000000 }, setup: { done: false },
@@ -329,6 +330,7 @@ test('after a restore the box keeps its own update, power, counter and setup fie
   assert.deepEqual(out.telemetry, { on: false }, 'the counter answer is today\'s');
   assert.deepEqual(out.community, before.community);
   assert.deepEqual(out.setup, { done: true });
+  assert.deepEqual(out.terms, { agreed: 1 }, 'the terms the parent agreed to stay agreed: a restore does not ask again');
   assert.deepEqual(out.schedule, { enabled: true, start: '22:00', end: '06:30', days: [0, 1, 2, 3, 4] }, 'bedtime is part of the rules that were restored');
   assert.equal(out.scheduleActive, true);
   assert.equal(out.timer.mode, 'block');
@@ -345,17 +347,20 @@ test('Sinko\'s groups: a restore of something else is noticed', () => {
 
 test('links: only https links are shown', () => {
   const l = B.safeLinks({ home: 'https://github.com/iret33/sinko', issues: 'http://example.org', releases: 'javascript:alert(1)', privacy: 'https://x.y/p q',
-    license: ' https://github.com/iret33/sinko/blob/master/LICENSE ', support: '', buy: null, extra: 'https://evil.example' });
+    terms: 'ftp://x.y/terms', license: ' https://github.com/iret33/sinko/blob/master/LICENSE ', support: '', buy: null, extra: 'https://evil.example' });
   assert.deepEqual(l, { home: 'https://github.com/iret33/sinko', license: 'https://github.com/iret33/sinko/blob/master/LICENSE' });
+  assert.deepEqual(B.safeLinks({ terms: 'https://github.com/iret33/sinko/blob/master/docs/terms.md' }), { terms: 'https://github.com/iret33/sinko/blob/master/docs/terms.md' });
   assert.deepEqual(B.safeLinks(null), {});
   assert.deepEqual(B.safeLinks('nonsense'), {});
 });
 
-test('the shipped links.json has all seven keys, GitHub links, and nothing for support and buy yet', () => {
+test('the shipped links.json has all eight keys, GitHub links, and nothing for support and buy yet', () => {
   const l = JSON.parse(require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'web', 'links.json'), 'utf8'));
-  assert.deepEqual(Object.keys(l).sort(), ['buy', 'home', 'issues', 'license', 'privacy', 'releases', 'support']);
-  for (const k of ['home', 'issues', 'releases', 'privacy', 'license']) assert.match(l[k], /^https:\/\/github\.com\/iret33\/sinko(\/|#|$)/, k);
+  assert.deepEqual(Object.keys(l).sort(), ['buy', 'home', 'issues', 'license', 'privacy', 'releases', 'support', 'terms']);
+  for (const k of ['home', 'issues', 'releases', 'privacy', 'terms', 'license']) assert.match(l[k], /^https:\/\/github\.com\/iret33\/sinko(\/|#|$)/, k);
   assert.equal(l.privacy, 'https://github.com/iret33/sinko/blob/master/docs/privacy.md', 'the privacy link opens the privacy statement, not a README anchor that does not exist');
+  assert.equal(l.terms, 'https://github.com/iret33/sinko/blob/master/docs/terms.md', 'the terms link opens the terms of use');
+  assert.ok(require('node:fs').existsSync(require('node:path').join(__dirname, '..', 'docs', 'terms.md')), 'and that file exists');
   assert.equal(l.support, '');
   assert.equal(l.buy, '');
 });

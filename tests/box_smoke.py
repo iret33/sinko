@@ -1,4 +1,4 @@
-"""Browser tests of the "My box" sheet, the first-run flows (claim screen, setup list, counter question), the update banner and the
+"""Browser tests of the "My box" sheet, the first-run flows (claim screen, terms of use, setup list), the update banner and the
 branding, on the real parent page against the mock Pi-hole (tests/mock_pihole.py), in English and Arabic (right to left).
 
     python3 tests/box_smoke.py [--shots DIR] [--only PART]        (needs: pip install playwright && playwright install chromium)
@@ -40,7 +40,7 @@ loader.exec_module(pb)
 CATALOG = pb.load_catalog(os.path.join(ROOT, "lists"))
 
 BOX = pbstrings.box_strings()          # {en: {...}, ar: {...}} the My box sheet's words
-FIRST = pbstrings.first_strings()      # the claim screen, setup list, update banner
+FIRST = pbstrings.first_strings()      # the claim screen, terms of use, setup list, update banner
 APP = pbstrings.app_strings()          # sign-in, devices, bedtime
 BRAND = pbstrings.brand()              # the name and tagline the brand tool draws (one tagline everywhere)
 with open(os.path.join(ROOT, "VERSION"), encoding="utf-8") as fh:
@@ -101,8 +101,9 @@ def shot(page, name, full=False):
         page.screenshot(path=os.path.join(args.shots, name), full_page=full)
 
 
-def make_site(installed=True, password=True, setup_done=True, kids=True):
-    """A fresh mock box. Sinko is installed with one child's device (Sara's iPad), the setup list already dismissed."""
+def make_site(installed=True, password=True, setup_done=True, kids=True, terms=True):
+    """A fresh mock box. Sinko is installed with one child's device (Sara's iPad), the setup list already dismissed and the terms of use
+    agreed to (with their two choices left as they were)."""
     httpd, store = mock_pihole.serve(0, WEB)
     servers.append(httpd)
     url = "http://127.0.0.1:%d/" % httpd.server_port
@@ -116,6 +117,8 @@ def make_site(installed=True, password=True, setup_done=True, kids=True):
         api.logout()
         if setup_done:
             store.edit_state(lambda st: st.setdefault("setup", {}).update({"done": True}))
+        if terms:
+            store.agree_terms()
     if not password:
         store.set_password("")
         store.password_changes = 0
@@ -1339,7 +1342,7 @@ def part_learn(browser):
         text = box_text(page)
         for key in ("boxLearnTitle", "boxLearnLead", "boxLearnLimits", "boxLearnNone", "boxLearnWrong"):
             expect(T(lang, key) in text, "[%s] the card says %s" % (lang, key))
-        expect(not page.is_checked("#boxLearn"), "[%s] learning is off until the parent switches it on" % lang)
+        expect(not page.is_checked("#boxLearn"), "[%s] the switch shows learn.on (off on this box)" % lang)
         page.click("#boxLearnCard label.box-switch-row")
         expect(eventually(lambda: store.state().get("learn") == {"on": True}), "[%s] switching it on records learn.on" % lang)
         expect(T(lang, "boxLearnOnToast") in page.inner_text("#boxToast"), "[%s] and says so" % lang)
@@ -1387,7 +1390,7 @@ def part_counter(browser):
         text = box_text(page)
         for key in ("boxCounterLead", "boxCounterSent1", "boxCounterSent2", "boxCounterSent3", "boxCounterKept", "boxCounterForget", "boxCounterNot"):
             expect(T(lang, key) in text, "[%s] the card says %s" % (lang, key))
-        expect(not page.is_checked("#boxCounter") and page.is_hidden("#boxCounterOnline"), "[%s] the counter is off until the parent says yes, and nothing about others is shown" % lang)
+        expect(not page.is_checked("#boxCounter") and page.is_hidden("#boxCounterOnline"), "[%s] the switch shows the parent's No, and nothing about others is shown" % lang)
         page.click("#boxCounterCard label.box-switch-row")
         expect(eventually(lambda: store.state()["telemetry"] == {"on": True}), "[%s] switching it on records the answer" % lang)
         expect(eventually(lambda: page.is_visible("#boxCounterOnline")) and "1,234" in page.inner_text("#boxCounterOnline"), "[%s] 'you are one of N boxes online': %r" % (lang, page.inner_text("#boxCounterOnline")))
@@ -1459,7 +1462,7 @@ def part_about(browser):
         expect(T(lang, "boxAboutTrademark") in text, "[%s] the trademark sentence is there" % lang)
         links = page.evaluate("() => [...document.querySelectorAll('#boxAbout a')].map(a => [a.getAttribute('href'), a.getAttribute('target'), a.getAttribute('rel')])")
         want = json.load(open(os.path.join(WEB, "links.json")))
-        expect([l[0] for l in links] == [want[k] for k in ("home", "issues", "releases", "privacy", "license")], "[%s] the links come from links.json and empty ones are left out: %s" % (lang, [l[0] for l in links]))
+        expect([l[0] for l in links] == [want[k] for k in ("home", "issues", "releases", "privacy", "terms", "license")], "[%s] the links come from links.json and empty ones are left out: %s" % (lang, [l[0] for l in links]))
         expect(all(l[1] == "_blank" and "noopener" in l[2] for l in links), "[%s] they open in a new tab, safely" % lang)
         shot(page, "box-about-%s.png" % lang)
         ctx.close()
@@ -1486,7 +1489,7 @@ def part_about(browser):
 def part_firstrun(browser):
     for lang in ("en", "ar"):
         # --- the claim screen: no password yet, and Sinko is installed
-        url, store = make_site(password=False, setup_done=False, kids=False)
+        url, store = make_site(password=False, setup_done=False, kids=False, terms=False)
         ctx, page = open_page(browser, url, lang, sign_in=False)
         page.wait_for_selector("#claim:not([hidden])")
         if lang == "ar":
@@ -1506,10 +1509,19 @@ def part_firstrun(browser):
         expect(store.password_changes == 0, "[%s] nothing was set yet" % lang)
         page.fill("#claimPw2", "family-first-1")
         page.click("#claimBtn")
-        page.wait_for_selector("#app:not([hidden])")
+        page.wait_for_selector("#terms:not([hidden])")
         expect(store.password_changes == 1 and store.check_password("family-first-1"), "[%s] the password was set" % lang)
         expect(eventually(lambda: bool(page.evaluate("() => sessionStorage.getItem('pb.sid')"))), "[%s] and the parent is signed in with it, no second sign-in" % lang)
-        expect(page.is_hidden("#claim") and page.is_visible("#setup"), "[%s] then the setup list is shown" % lang)
+        expect(page.is_hidden("#claim") and page.is_hidden("#app"), "[%s] then the terms of use come, before the page" % lang)
+        expect(page.inner_text("#termsTitle") == T(lang, "termsTitle") and T(lang, "terms1") in page.inner_text("#terms"), "[%s] in the parent's language" % lang)
+        expect(page.is_checked("#termsLearn") and page.is_checked("#termsCounter"), "[%s] with both choices switched on" % lang)
+        expect(store.state()["telemetry"] == {"on": None} and store.state()["learn"] == {"on": False}, "[%s] and nothing decided before I agree" % lang)
+        shot(page, "terms-%s.png" % lang, full=True)
+        page.click("#termsBtn")
+        page.wait_for_selector("#app:not([hidden])")
+        expect(eventually(lambda: {k: store.state()[k] for k in ("terms", "learn", "telemetry")}
+                          == {"terms": {"agreed": 1}, "learn": {"on": True}, "telemetry": {"on": True}}), "[%s] agreeing records the terms and both choices" % lang)
+        expect(page.is_hidden("#terms") and page.is_visible("#setup"), "[%s] then the setup list is shown" % lang)
         expect(page.input_value("#claimPw") == "", "[%s] no password is left in the form" % lang)
         ctx.close()
 
@@ -1529,15 +1541,11 @@ def part_firstrun(browser):
         ctx, page = open_page(browser, url, lang)
         page.wait_for_selector("#setup:not([hidden])")
         items = lambda: page.evaluate("() => [...document.querySelectorAll('#setupList .setup-item')].map(i => [i.dataset.item, i.classList.contains('is-done')])")
-        expect(items() == [["pw", True], ["router", False], ["child", False], ["counter", False]], "[%s] four steps, the password done: %s" % (lang, items()))
-        expect(page.inner_text("#setupProgress") == T(lang, "setupProgress", n=1, t=4), "[%s] progress: %r" % (lang, page.inner_text("#setupProgress")))
+        expect(items() == [["pw", True], ["router", False], ["child", False]], "[%s] three steps, the password done: %s" % (lang, items()))
+        expect(page.inner_text("#setupProgress") == T(lang, "setupProgress", n=1, t=3), "[%s] progress: %r" % (lang, page.inner_text("#setupProgress")))
         expect(not ARABIC_INDIC_DIGITS.search(page.inner_text("#setup")), "[%s] Latin digits" % lang)
+        expect(T(lang, "termsCounter") not in page.inner_text("#setup"), "[%s] the counter is not asked here: the terms of use asked it" % lang)
         shot(page, "setup-list-%s.png" % lang)
-        expect(T(lang, "setupCounterText") in page.inner_text("#setup"), "[%s] the counter question is asked in plain words" % lang)
-        page.click("[data-act=counterNo]")
-        expect(eventually(lambda: store.state()["telemetry"] == {"on": False}), "[%s] 'Not now' records false" % lang)
-        expect(eventually(lambda: items()[3][1]), "[%s] and the step is ticked" % lang)
-        expect(T(lang, "setupCounterDone") in page.inner_text("#setup"), "[%s] with its answered wording" % lang)
         page.click("[data-act=setupHelp]")
         expect(page.evaluate("() => document.getElementById('help').open"), "[%s] 'show setup help' opens the router help" % lang)
         page.click("#setupList [data-act=openAdd]")
@@ -1555,20 +1563,29 @@ def part_firstrun(browser):
         expect(eventually(lambda: store.state()["setup"] == {"done": True}), "[%s] and is remembered, so it does not come back" % lang)
         ctx.close()
 
-        # a box with no counter address (or no box.json): three steps, and the list can finish without a question nothing keeps
+        # a box with no counter address (or no box.json): the terms do not offer the counter (a promise nothing keeps), and the list
+        # finishes by itself
         for what, change in (("box.json says no counter address is set", {"counter": False}), ("an older box with no box.json", None)):
-            url, store = make_site(setup_done=False, kids=False)
+            url, store = make_site(setup_done=False, kids=False, terms=False)
             if change is None:
                 store.box_info = None
             else:
                 store.box_info.update(change)
             store.devices[:] = [store.devices[0]]
-            ctx, page = open_page(browser, url, lang)
+            ctx, page = open_page(browser, url, lang, sign_in=False)
+            page.wait_for_selector("#login:not([hidden])")
+            if lang == "ar":
+                page.click("#login .lang-toggle")
+            page.fill("#pw", mock_pihole.PASSWORD)
+            page.press("#pw", "Enter")
+            page.wait_for_selector("#terms:not([hidden])")
+            expect(page.is_hidden("#termsCounterRow") and page.is_checked("#termsLearn"), "[%s] %s: the terms offer learning only" % (lang, what))
+            page.click("#termsBtn")
             page.wait_for_selector("#setup:not([hidden])")
+            expect(eventually(lambda: store.state()["terms"] == {"agreed": 1}) and store.state()["telemetry"] == {"on": None},
+                   "[%s] agreeing leaves the counter undecided" % lang)
             three = lambda: page.evaluate("() => [...document.querySelectorAll('#setupList .setup-item')].map(i => [i.dataset.item, i.classList.contains('is-done')])")
-            expect(three() == [["pw", True], ["router", False], ["child", False]], "[%s] %s: three steps, no counter question: %s" % (lang, what, three()))
-            expect(page.inner_text("#setupProgress") == T(lang, "setupProgress", n=1, t=3) and T(lang, "setupCounterText") not in page.inner_text("#setup"),
-                   "[%s] and the progress counts three" % lang)
+            expect(three() == [["pw", True], ["router", False], ["child", False]], "[%s] the same three steps: %s" % (lang, three()))
             page.click("#setupList [data-act=openAdd]")
             page.wait_for_selector("#addDialog[open]")
             page.click("#addForm .manual summary")
@@ -1648,7 +1665,7 @@ def part_branding(browser):
     expect(touch == "/pb/apple-touch-icon.png", "and the iPhone icon: %s" % (touch,))
     expect(page.get_attribute("meta[name=generator]", "content") == "sinko", "the generator marker stays 'sinko' (the installer looks for it)")
     marks = page.evaluate("() => [...document.querySelectorAll('.brand-mark use')].map(u => u.getAttribute('href'))")
-    expect(marks == ["#i-sinko", "#i-sinko", "#i-sinko"], "the sign-in card, the claim card and the top bar all draw the Sinko mark (the house with two sound arcs), not the old outline house: %s" % marks)
+    expect(marks == ["#i-sinko"] * 4, "the sign-in card, the claim card, the terms card and the top bar all draw the Sinko mark (the house with two sound arcs), not the old outline house: %s" % marks)
     expect(page.evaluate("() => !!document.querySelector('symbol#i-sinko path[stroke-linecap=round]')"), "and the symbol has the arcs")
     shot(page, "login-en.png")
     page.click("#login .lang-toggle")
