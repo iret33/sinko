@@ -380,7 +380,7 @@ class SchedulerSim:
         self.offline = offline            # a check cannot reach GitHub: nothing changes
         self.rolled_back = rolled_back    # what a failed run reports: True (the old version is back), False, or None (not known)
         self.handled = {"update": None, "check": None, "power": None}
-        self.log = []                     # ("update", "3.3.0"), ("check", None), ("power", "reboot"), ("power-dropped", "reboot") in order
+        self.log = []                     # ("update", "3.4.0"), ("check", None), ("power", "reboot"), ("power-dropped", "reboot") in order
         store.scheduler = self
 
     def _later(self, seconds, fn, *args):
@@ -1338,7 +1338,7 @@ if __name__ == "__main__":
     ap.add_argument("--open", action="store_true", help="start with no password set, like a fresh Pi-hole (the page offers to choose one)")
     ap.add_argument("--old-box", action="store_true", help="serve no /pb/box.json, like a box from before 3.0")
     ap.add_argument("--update", metavar="VERSION", default=None,
-                    help="play the scheduler: a newer version (e.g. 3.3.0) is available and 'Update now' really runs")
+                    help="play the scheduler: a newer version (e.g. 3.4.0) is available and 'Update now' really runs")
     a = ap.parse_args()
     httpd, store = serve(a.port, a.web)
     if a.setup:

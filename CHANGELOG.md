@@ -3,7 +3,7 @@
 All notable changes to Sinko. Versions follow [Semantic Versioning](https://semver.org); the newest release is at the top.
 Boxes learn about a release from this repository's GitHub releases, whose notes are the section of this file.
 
-## [3.3.0] - Unreleased
+## [3.3.0] - 2026-10-27
 
 ### Changed
 - **A new look for the page, built around one button.** The page now looks like the control panel of a home appliance:
@@ -24,7 +24,7 @@ Boxes learn about a release from this repository's GitHub releases, whose notes 
   phone's Back button closes it.
 
 ### Added
-- **What Sinko did for you.** A new card on the page, for *Today*, *This week* and *since the box started counting*:
+- **What Sinko did for you.** A new card on the page, for *Today*, the *Last 7 days* and *Since* the box started counting:
   how much less you waited for ads, how much data that saved, how many ads and trackers the box stopped, how often each
   blocked app tried to open, how many nights bedtime was kept, how long the children's internet was off, and a chart of
   the ads stopped each day. **How we count** explains every number: about 50 ms of waiting and about 10 KB of data for
@@ -32,7 +32,9 @@ Boxes learn about a release from this repository's GitHub releases, whose notes 
   and the card also says what the data saved was worth; that price stays on your phone.
 - **The box keeps a small daily summary for this card.** Counts only (by app for the blocked apps): no websites,
   addresses or device names. It is kept on the box (and in its backups) for as long as Sinko is installed and never sent
-  anywhere. The privacy statement says exactly what it holds.
+  anywhere; sealing a ready-made box removes it. The box reads Pi-hole's own history every 15 minutes to count, and the
+  page gets a copy about once an hour, after midnight and when an off period or bedtime ends. The privacy statement says
+  exactly what it holds.
 
 ### Fixed
 - After saving a bedtime, later changes made elsewhere (another phone, a timer that ended) now show in the bedtime
