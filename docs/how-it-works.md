@@ -34,8 +34,9 @@ Child's device ──DNS──► │  blocked if the device is in an enabled pb
   scheduler counts, read-only, what Pi-hole's long-term database says was stopped and by which list (FTL notes it as
   `list_id`), and it notes itself how long the children's internet was off and whether bedtime was kept. Counts only,
   kept in `/var/lib/sinko/savings.json` (days for 35 days, running totals after that), and copied for the page into the
-  description of the disabled group `pb-ledger` at most once an hour, so only a signed-in parent can read it. The details
-  are in [`architecture.md`](maintainers/architecture.md#savings-ledger-pb-ledger).
+  description of the disabled group `pb-ledger` about once an hour, and when the day changes, an off period ends or
+  bedtime ends, so only a signed-in parent can read it. The details are in
+  [`architecture.md`](maintainers/architecture.md#savings-ledger-pb-ledger).
 - Devices are added by MAC address when Pi-hole knows it (stable across IP
   changes), otherwise by IP address. An IPv6-only entry is not offered, because
   phones rotate their IPv6 privacy addresses every day.

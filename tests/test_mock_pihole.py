@@ -1,6 +1,7 @@
 """The mock Pi-hole's "My box" half: password changes, open mode, the Teleporter archive, /api/info/*, /api/config, and the
 scheduler simulation. The browser tests lean on all of it, so its behaviour (and its resemblance to FTL, whose shapes come from the
 OpenAPI specs) is pinned here."""
+import datetime as dt
 import http.client
 import io
 import json
@@ -765,6 +766,31 @@ class StopsAndLedgerTests(unittest.TestCase):
         self.assertTrue(6 <= months <= 8, data["since"])
         self.assertGreater(data["tot"]["ads"], 2500000)
         self.assertEqual(data["keptSince"], data["since"])
+        # Bedtime was off on this box (as after `sinko setup`): the demo switched it on, so the page shows the bedtime whose
+        # nights the card counts, and the nights before the week are of the same bedtime (one a day, a few not known).
+        self.assertEqual(mock_pihole.bedtime_of(self.store), {"enabled": True, "start": "21:30", "end": "06:30",
+                                                              "days": [0, 1, 2, 3, 4, 5, 6]})
+        all_days = (dt.date(2026, 10, 21) - dt.date.fromisoformat(data["since"])).days + 1
+        self.assertTrue(0.9 * all_days <= data["tot"]["nights"] <= all_days, (data["tot"]["nights"], all_days))
+        self.assertTrue(54 * 3600 <= data["tot"]["offSec"] / all_days * 7 <= 66 * 3600, "about 60 hours a week, then as now")
+
+    def test_the_demo_week_follows_the_bedtime_the_box_has(self):
+        # The screenshots' family has bedtime on school nights only (Sunday to Thursday): no night of Friday or Saturday is
+        # kept or missed, and the time before the week has as many nights as that bedtime had.
+        school = {"enabled": True, "start": "21:30", "end": "06:30", "days": [0, 1, 2, 3, 4]}
+        self.store.edit_state(lambda st: st.update(schedule=dict(school)))
+        data = mock_pihole.seed_ledger(self.store, now=self.now)
+        self.assertEqual(mock_pihole.bedtime_of(self.store), school, "the box's own bedtime stays as it is")
+        for d in data["days"]:
+            if dt.date.fromisoformat(d["d"]).weekday() in (4, 5):          # Friday and Saturday
+                self.assertIsNone(d["kept"], d)
+        self.assertIn(0, [d["kept"] for d in data["days"]], "one school night of the week was not kept")
+        all_days = (dt.date(2026, 10, 21) - dt.date.fromisoformat(data["since"])).days + 1
+        school_nights = all_days * 5 / 7
+        self.assertTrue(0.9 * school_nights <= data["tot"]["nights"] <= school_nights + 1, (data["tot"]["nights"], school_nights))
+        self.assertLess(data["tot"]["offSec"] / all_days * 7, 50 * 3600)
+        import test_savings
+        test_savings.check_contract(self, json.dumps(data, separators=(",", ":")))
 
     def test_the_demo_week_is_the_same_every_time_and_needs_no_setup(self):
         first = mock_pihole.seed_ledger(self.store, now=self.now)

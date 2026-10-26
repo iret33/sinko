@@ -1236,10 +1236,11 @@ def seed_ledger(store, now=None, seed=3):
     The stops of each day go through the classifier as rows of FTL's database would (status, list_id, count): 10 to 17 thousand
     by the general ad list (added to the store), tries of TikTok, Roblox and YouTube in the hundreds a week, a few of other apps,
     stops of the block-everything rule and upstream refusals (neither is an ad). The time off and the bedtime nights go through the
-    scheduler's own counting, a pass every two minutes over the week: bedtime 21:30 to 06:30 every night (the store's own when it
-    has one switched on), one night the internet was switched back on at 23:00 (not kept), and an hour of homework time with the
-    internet off on four afternoons: about 60 hours a week. "since" is about seven months ago, and the totals of the time before
-    the week are the same family's. Deterministic for a given `now` and seed. Returns what was published, as data."""
+    scheduler's own counting, a pass every two minutes over the week: the store's bedtime (one that is switched off is switched on
+    first, 21:30 to 06:30 every night, so that the page's bedtime and the card's nights agree), one night the internet was switched
+    back on at 23:00 (not kept), and an hour of homework time with the internet off on four afternoons: about 60 hours a week with
+    a bedtime every night. "since" is about seven months ago, and the totals of the time before the week are the same family's,
+    with the same bedtime. Deterministic for a given `now` and seed. Returns what was published, as data."""
     pb = load_cli()
     rng = random.Random(seed)
     now = time.time() if now is None else now
@@ -1273,9 +1274,17 @@ def seed_ledger(store, now=None, seed=3):
         rows += [{"status": rng.choice((1, 1, 1, 9)), "list_id": ids["pb:" + sid], "n": int(n * share)} for sid, n in tries.items()]
         got = pb.classify_stops([r for r in rows if r["n"] > 0], adlists, rules, services)
         stops[day.isoformat()] = {"ads": got["ads"], "apps": got["apps"], "whole": back > 0}
-    sched = bedtime_of(store) or {"enabled": True, "start": "21:30", "end": "06:30", "days": [0, 1, 2, 3, 4, 5, 6]}
+    sched = bedtime_of(store)
+    if sched is None:
+        sched = {"enabled": True, "start": "21:30", "end": "06:30", "days": [0, 1, 2, 3, 4, 5, 6]}
+        if store.state_group() is not None:       # a set-up box: its page shows the bedtime whose nights the card counts
+            store.edit_state(lambda st: st.update(schedule=dict(sched)))
+
+    def bedtime_on(day):                           # a night of the bedtime (its days are JavaScript's, 0 = Sunday)
+        return (day.weekday() + 1) % 7 in sched["days"]
     first = pb.day_start(today - datetime.timedelta(days=6))
-    spoilt = (today - datetime.timedelta(days=3)).isoformat()                    # the night the internet came back at 23:00
+    # The night the internet came back at 23:00: one of the week's bedtime nights, not the last ones (on now, or to come).
+    spoilt = next((d.isoformat() for d in (today - datetime.timedelta(days=b) for b in (3, 4, 2, 5, 6)) if bedtime_on(d)), None)
     homework = {(today - datetime.timedelta(days=d)).isoformat() for d in (1, 2, 4, 5)}
     t = first
     while t <= now:
@@ -1289,10 +1298,15 @@ def seed_ledger(store, now=None, seed=3):
     data = ledger.load()
     days = 205                                   # the time before the week, from "since" (about seven months ago)
     data["since"] = data["keptSince"] = (today - datetime.timedelta(days=days + 7)).isoformat()
+    # The same bedtime then as now: its nights a week, a few of them not known (the box was off), and about one in two weeks
+    # not kept (the internet came back on for a while); plus the homework hour on four afternoons a week.
+    night = ((int(sched["end"][:2]) - int(sched["start"][:2])) * 60 + int(sched["end"][3:]) - int(sched["start"][3:])) % 1440 * 60
+    nights = days * len(set(sched["days"])) // 7 - days // 30
+    kept = nights - nights // 14
     data["before"] = {"ads": days * 13600 + rng.randint(0, 90000),
                       "apps": {"tiktok": days * 61 + rng.randint(0, 400), "roblox": days * 44 + rng.randint(0, 300),
                                "youtube": days * 53 + rng.randint(0, 300), "instagram": days * 5, "snapchat": days * 3},
-                      "off": days * 8.6 * 3600, "nights": days - 9, "kept": days - 23}
+                      "off": kept * night + (nights - kept) * night / 4 + days * 4 // 7 * 3600, "nights": nights, "kept": kept}
     payload = ledger.payload(when, services, ad_lists)
     text = pb.ledger_text(payload)
     with store.lock:
@@ -1351,11 +1365,13 @@ if __name__ == "__main__":
         store.box_info = None
     if a.open:
         store.pwhash = ""
+    if a.setup or a.live:
+        # The card "What Sinko did for you" has a week to show. First: on a set-up box it switches bedtime on, so that the
+        # page's bedtime is the one the card counted nights of, and the history below has its bedtime stops.
+        seed_ledger(store)
     if a.live:
         seed_history(store)
         start_live(store)
-    if a.setup or a.live:
-        seed_ledger(store)                         # the card "What Sinko did for you" has a week to show
     print("mock Pi-hole on http://127.0.0.1:%d  (%s)" % (a.port, "no password set" if a.open else "password: " + PASSWORD))
     try:
         while True:

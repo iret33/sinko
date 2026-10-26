@@ -347,9 +347,13 @@ Pi-hole shows that the shape and the ids are what the program expects. All of th
       WHERE timestamp >= strftime('%s','now','localtime','start of day','utc') AND status IN (1,4,5,6,7,8,9,10,11,15,16,18)
       GROUP BY status, list_id"`, and write down the seconds and the day's number of lookups
       (`SELECT COUNT(*) FROM query_storage WHERE timestamp >= ...`). A lookup from a phone during it is answered at once.
-- [ ] **The pause of one group write.** Every write of `pb-ledger` (at most once an hour) makes Pi-hole reload its lists. From
-      another computer, ask the box every tenth of a second (`while :; do dig +short +time=1 @<box> example.org >/dev/null ||
-      date +%T.%N; sleep 0.1; done`) while `sudo systemctl restart sinko` makes the first write: write down the longest gap.
+- [ ] **The pause of one group write.** Every write of `pb-ledger` (about once an hour, and when the day changes, an off period
+      ends or bedtime ends) makes Pi-hole reload its lists. From another computer, ask the box every tenth of a second
+      (`while :; do dig +short +time=1 @<box> example.org >/dev/null || date +%T.%N; sleep 0.1; done`) while
+      `sudo systemctl restart sinko` makes the first write: write down the longest gap.
+- [ ] **The new day.** Keep the page open on *Today* across midnight: until about 5 minutes after midnight it says the box has
+      not counted the new day yet, and within a minute after that it shows the new day's numbers (a count, never "not known"),
+      while the bar of the day before is that whole day.
 - [ ] **A power cut loses at most a quarter of an hour.** Switch the internet off on the page, wait 40 minutes, pull the plug,
       start the box again: `sudo cat /var/lib/sinko/savings.json` holds at least 25 minutes of that day's `off`, and the card
       shows the time off again within a few minutes of the start.

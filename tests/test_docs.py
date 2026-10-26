@@ -399,30 +399,67 @@ class TheUpdateTrafficIsDescribedCompletely(unittest.TestCase):
 
 
 class TheLedgerIsDescribedWithTheProgramsNumbers(unittest.TestCase):
-    """What the box counts for the card "What Sinko did for you": privacy.md (both languages) and how-it-works.md say how long the
-    daily counts are kept and how often they are counted and copied for the page; the numbers are the program's."""
+    """What the box counts for the card "What Sinko did for you": privacy.md (both languages), how-it-works.md, architecture.md and
+    the hardware checklist say how long the daily counts are kept, how often they are counted and copied for the page, and what a
+    tester should see; the numbers are the program's."""
 
     @classmethod
     def setUpClass(cls):
         cls.eng = flat(english(read("docs/privacy.md")))
         cls.ara = flat(arabic(read("docs/privacy.md")))
         cls.how = flat(read("docs/how-it-works.md"))
+        cls.arch = flat(read("docs/maintainers/architecture.md"))
+        cls.check = flat(read("docs/hardware-test-checklist.md"))
 
     def test_the_numbers_in_the_text_are_the_numbers_in_the_program(self):
         # If one of these changes, the sentences below (and their Arabic) are wrong: change them in the same commit.
         self.assertEqual(constant("bin/sinko", "LEDGER_KEEP_DAYS"), 35)              # "kept for 35 days"
-        self.assertEqual(constant("bin/sinko", "LEDGER_REFRESH"), 15 * 60)          # "every 15 minutes"
-        self.assertEqual(constant("bin/sinko", "LEDGER_PUBLISH_EVERY"), 60 * 60)     # "at most once an hour"
+        self.assertEqual(constant("bin/sinko", "LEDGER_REFRESH"), 15 * 60)          # "every 15 minutes", "a quarter of an hour"
+        self.assertEqual(constant("bin/sinko", "LEDGER_PUBLISH_EVERY"), 60 * 60)     # "about once an hour", "within an hour"
+        self.assertEqual(constant("bin/sinko", "LEDGER_SETTLE"), 5 * 60)            # "about 5 minutes after midnight"
 
     def test_both_languages_say_them_and_what_is_kept(self):
-        for needle in ("kept for 35 days", "Every 15 minutes", "at most once an hour", "`pb-ledger`", "/var/lib/sinko/savings.json",
-                       "Counts only", "No site names", "Never sent anywhere", "Pi-hole backup", "when a ready-made box is prepared"):
+        for needle in ("kept for 35 days", "Every 15 minutes", "about once an hour", "`pb-ledger`", "/var/lib/sinko/savings.json",
+                       "Counts only", "No site names", "Never sent anywhere", "Pi-hole backup", "when a ready-made box is prepared",
+                       "when the day changes, when the children's internet comes back on and when bedtime ends",
+                       "/etc/pihole/gravity_backups"):
             self.assertIn(needle, self.eng)
-        for needle in ("35 يومًا", "كل 15 دقيقة", "مرة في الساعة على الأكثر", "`pb-ledger`", "/var/lib/sinko/savings.json",
-                       "أعداد فقط", "لا أسماء مواقع", "لا تُرسَل إلى أي مكان أبدًا", "النسخة الاحتياطية", "عند تجهيز الصندوق الجاهز"):
+        for needle in ("35 يومًا", "كل 15 دقيقة", "نحو مرة في الساعة", "`pb-ledger`", "/var/lib/sinko/savings.json",
+                       "أعداد فقط", "لا أسماء مواقع", "لا تُرسَل إلى أي مكان أبدًا", "النسخة الاحتياطية", "عند تجهيز الصندوق الجاهز",
+                       "وكذلك عند بداية يوم جديد وعند عودة الإنترنت إلى الأطفال وعند انتهاء وقت النوم", "/etc/pihole/gravity_backups"):
             self.assertIn(needle, self.ara)
-        for needle in ("every 15 minutes", "for 35 days", "at most once an hour", "`pb-ledger`"):
+        for needle in ("every 15 minutes", "for 35 days", "about once an hour, and when the day changes", "`pb-ledger`"):
             self.assertIn(needle, self.how)
+        # The copy is also written when the day changes and when an off period or a bedtime night ends: "at most once an hour"
+        # was once said and is not true.
+        ledger = self.arch.split("## Savings ledger (pb-ledger)")[1].split(" ## ")[0]     # flat: " ## " starts the next
+        checks = self.check.split("## H. What Sinko did for you")[1]
+        for text in (self.eng, self.how, ledger, checks):
+            self.assertNotIn("at most once an hour", text)
+        self.assertNotIn("مرة في الساعة على الأكثر", self.ara)
+
+    def test_the_maintainers_and_testers_read_the_same_numbers(self):
+        refresh, keep = constant("bin/sinko", "LEDGER_REFRESH") // 60, constant("bin/sinko", "LEDGER_KEEP_DAYS")
+        # Every "`LEDGER_X` (n unit)" in architecture.md is the program's value.
+        quoted = re.findall(r"`(LEDGER_[A-Z_]+)` \((\d+)( minutes| s\b|\))", self.arch)
+        self.assertGreaterEqual(len(quoted), 6)
+        for name, number, unit in quoted:
+            self.assertEqual(constant("bin/sinko", name), int(number) * (60 if unit == " minutes" else 1), name)
+        for name, share in (("LEDGER_NIGHT_SEEN", "0.9 × planned"), ("LEDGER_NIGHT_OFF", "0.97 × watched")):
+            value = re.search(r"(?<!\w)%s\s*=\s*([0-9.]+)" % name, read("bin/sinko")).group(1)
+            self.assertIn(value + share[share.index(" "):], self.arch, name)
+        for needle in ("daily counts for %d days" % keep, "Rows older than %d days" % keep,
+                       "every %d minutes should that job hang" % refresh, "a power cut loses at most %d minutes" % refresh):
+            self.assertIn(needle, self.arch)
+        # The checklist: what the scheduler runs every 15 minutes; a power cut 40 minutes into an off period keeps at least
+        # 40 - 15 of them (savings.json is written with each read); the new day after LEDGER_SETTLE; a restored backup is
+        # put right within LEDGER_PUBLISH_EVERY.
+        self.assertEqual(refresh, 15, "the checklist says \"a quarter of an hour\"")
+        for needle in ("time what the scheduler runs every %d minutes" % refresh, "loses at most a quarter of an hour",
+                       "wait 40 minutes", "at least %d minutes of that day's `off`" % (40 - refresh), "about once an hour",
+                       "until about %d minutes after midnight" % (constant("bin/sinko", "LEDGER_SETTLE") // 60),
+                       "within an hour the card shows today's numbers again"):
+            self.assertIn(needle, self.check)
 
     def test_the_files_every_device_can_read_still_say_nothing_about_the_family(self):
         # privacy.md promises that /pb/ says nothing about the children or the rules: the ledger's copy is a group, never a file there.

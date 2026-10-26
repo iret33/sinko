@@ -105,13 +105,17 @@ keeps a small tally of its own:
 * **How long.** The numbers of each day are kept for 35 days; after that they are added to running totals, which stay
   until Sinko is removed.
 * **Where.** In a file on the box that only its administrator account can read (`/var/lib/sinko/savings.json`), and in a
-  copy for the page that the box updates at most once an hour, inside Pi-hole as a switched-off group named `pb-ledger`:
-  only someone signed in with the parent password (on the page, or on Pi-hole's admin page) can read it. It is never in
-  the files that every device at home can read without the password (above).
+  copy for the page that the box updates about once an hour, and also when the day changes, when the children's internet
+  comes back on and when bedtime ends, inside Pi-hole as a switched-off group named `pb-ledger`: only someone signed in
+  with the parent password (on the page, or on Pi-hole's admin page) can read it. It is never in the files that every
+  device at home can read without the password (above).
 * **Never sent anywhere.** It is part of a Pi-hole backup (*My box*, *Backup and restore*), as the group `pb-ledger`: one
   more reason to keep that file private, as the page says.
 * **Removed** when Sinko is removed (`sudo /opt/sinko/uninstall.sh` on your own box), and when a ready-made box is prepared
-  for sale, so that every new box starts with nothing counted.
+  for sale, so that every new box starts with nothing counted. Pi-hole itself, which stays on your own box, keeps a few
+  older copies of its list database (in `/etc/pihole/gravity_backups`) and replaces them one by one each time it refreshes
+  its lists; until then they still hold the last copy of `pb-ledger`, as they hold Sinko's other groups. To remove them
+  at once: `sudo rm -f /etc/pihole/gravity_backups/*`.
 
 ### The optional anonymous counter
 
@@ -344,13 +348,15 @@ something new, this statement changes first, with the release that does it.
   الإنترنت ووقت النوم فيسجّلهما بنفسه في أثناء حدوثهما.
 * **مدة الاحتفاظ.** تُحفظ أرقام كل يوم 35 يومًا، ثم تُضاف إلى مجاميع متراكمة تبقى حتى يُزال سينكو.
 * **أين تُحفظ.** في ملف على الصندوق لا يقرؤه إلا حساب مديره (`/var/lib/sinko/savings.json`)، وفي نسخة للصفحة يحدّثها الصندوق
-  مرة في الساعة على الأكثر، داخل Pi-hole في مجموعة متوقفة اسمها `pb-ledger`: لا يقرؤها إلا من سجّل الدخول بكلمة مرور
-  الوالدين (في الصفحة، أو في صفحة إدارة Pi-hole). ولا تكون أبدًا في الملفات التي يستطيع كل جهاز في البيت قراءتها دون كلمة
-  المرور (انظر أعلاه).
+  نحو مرة في الساعة، وكذلك عند بداية يوم جديد وعند عودة الإنترنت إلى الأطفال وعند انتهاء وقت النوم، داخل Pi-hole في مجموعة
+  متوقفة اسمها `pb-ledger`: لا يقرؤها إلا من سجّل الدخول بكلمة مرور الوالدين (في الصفحة، أو في صفحة إدارة Pi-hole). ولا
+  تكون أبدًا في الملفات التي يستطيع كل جهاز في البيت قراءتها دون كلمة المرور (انظر أعلاه).
 * **لا تُرسَل إلى أي مكان أبدًا.** وهي جزء من النسخة الاحتياطية لـ Pi-hole («صندوقي» ثم «النسخ الاحتياطي والاستعادة»)، في
   المجموعة `pb-ledger`: سبب آخر لتحتفظ بذلك الملف لنفسك، كما تقول الصفحة.
 * **تُحذف** عند إزالة سينكو (بالأمر `sudo /opt/sinko/uninstall.sh` على صندوقك الذي بنيته بنفسك)، وعند تجهيز الصندوق الجاهز
-  للبيع، فيبدأ كل صندوق جديد ولا شيء محسوب فيه.
+  للبيع، فيبدأ كل صندوق جديد ولا شيء محسوب فيه. أما Pi-hole نفسه، الذي يبقى على صندوقك، فيحتفظ ببضع نسخ أقدم من قاعدة
+  بيانات قوائمه (في `/etc/pihole/gravity_backups`) ويستبدلها واحدة بعد أخرى كلما حدّث قوائمه؛ وإلى أن يحدث ذلك تبقى فيها
+  آخر نسخة من `pb-ledger`، كما تبقى فيها مجموعات سينكو الأخرى. ولحذفها فورًا: `sudo rm -f /etc/pihole/gravity_backups/*`.
 
 ### العدّاد المجهول (اختياري)
 

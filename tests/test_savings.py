@@ -29,6 +29,23 @@ def is_int(value):
     return isinstance(value, int) and not isinstance(value, bool)
 
 
+def in_zone(test, zone):
+    """The rest of the test runs with the box's clock in `zone` (the local time that datetime and the program read)."""
+    if not os.path.exists(os.path.join("/usr/share/zoneinfo", zone)):
+        test.skipTest("no time zone data for %s" % zone)
+    old = os.environ.get("TZ")
+
+    def back():
+        if old is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = old
+        time.tzset()
+    test.addCleanup(back)
+    os.environ["TZ"] = zone
+    time.tzset()
+
+
 def check_contract(test, text, services=None):
     """Everything the page checks before it shows pb-ledger, checked here so that the box never publishes what the page would
     refuse (architecture.md, "Savings ledger (pb-ledger)"). Returns the data."""
@@ -529,18 +546,39 @@ class BackfillTests(DatabaseCase):
         ledger.merge(self.read(windows=[window(self.today, now=self.now)]), self.now)
         self.assertEqual([w[0] for w in ledger.windows(self.now)], [self.today.isoformat()])
 
+    def test_a_first_read_just_after_midnight_still_fills_yesterday(self):
+        # Yesterday cannot be read whole in the first LEDGER_SETTLE after midnight, and the days before it can: once those are
+        # counted, yesterday (from before the ledger began) is still read as soon as it can be, not left a gap for good.
+        self.fill(20)
+        ledger = self.ledger()
+        yesterday = (self.today - dt.timedelta(days=1)).isoformat()
+        for at in (dt.datetime.combine(self.today, dt.time(0, 2)), dt.datetime.combine(self.today, dt.time(0, 17))):
+            ledger.observe(at, at.timestamp(), False, False, False, OffTimeTests.SCHED)     # the scheduler's pass sets keptSince
+            ledger.merge(self.read(windows=ledger.windows(at)), at)
+            if at.minute == 2:
+                self.assertNotIn(yesterday, ledger.load()["days"])
+                self.assertEqual(ledger.load()["since"], (self.today - dt.timedelta(days=6)).isoformat())
+        days = ledger.load()["days"]
+        self.assertEqual(sorted(days), [(self.today - dt.timedelta(days=b)).isoformat() for b in range(6, -1, -1)])
+        self.assertEqual((days[yesterday]["ads"], days[yesterday]["final"]), (3, True))
+        later = dt.datetime.combine(self.today, dt.time(0, 32))
+        self.assertEqual([w[0] for w in ledger.windows(later)], [self.today.isoformat()], "and then nothing more")
+
 
 class OffTimeTests(LedgerCase):
     SCHED = {"enabled": True, "start": "21:00", "end": "06:00", "days": [0, 1, 2, 3, 4, 5, 6]}
 
-    def run_passes(self, start, seconds, every=15, offline=lambda t: False, kids=True, active=None, mono=0.0):
-        """Passes of the scheduler from `start` for `seconds`, every `every` seconds. Returns what observe() said."""
+    def run_passes(self, start, seconds, every=15, offline=lambda t: False, kids=True, active=None, mono=0.0, sched=None):
+        """Passes of the scheduler from `start` for `seconds` of real time, every `every` seconds (the box's clock is read as
+        the scheduler reads it, so a pass across a clock change sees the clock jump). Returns what observe() said."""
+        sched = sched or self.SCHED
         events = []
         t = 0
+        first = start.timestamp()
         while t <= seconds:
-            at = start + dt.timedelta(seconds=t)
-            on = pb.in_schedule(self.SCHED, at) if active is None else active(at)
-            events.append(self.ledger.observe(at, mono + t, offline(at), kids, on, self.SCHED))
+            at = dt.datetime.fromtimestamp(first + t)
+            on = pb.in_schedule(sched, at) if active is None else active(at)
+            events.append(self.ledger.observe(at, mono + t, offline(at), kids, on, sched))
             t += every
         return events
 
@@ -614,6 +652,53 @@ class OffTimeTests(LedgerCase):
         self.ledger = pb.Ledger()                                # the scheduler started again a minute later
         self.run_passes(start + dt.timedelta(hours=4, minutes=1), 7 * 3600, offline=lambda t: pb.in_schedule(self.SCHED, t), mono=50000)
         self.assertEqual(self.row(start.date())["kept"], 1)
+
+    def test_the_nights_the_clocks_change_are_measured_in_real_time(self):
+        in_zone(self, "Europe/London")          # 29 March 2026 01:00 becomes 02:00, 25 October 02:00 becomes 01:00
+        self.assertEqual(pb.bedtime_seconds(self.SCHED, "2026-03-27"), 9 * 3600)
+        self.assertEqual(pb.bedtime_seconds(self.SCHED, "2026-03-28"), 8 * 3600, "21:00 to 06:00 lasts 8 hours that night")
+        self.assertEqual(pb.bedtime_seconds(self.SCHED, "2026-10-24"), 10 * 3600)
+        self.assertEqual(pb.bedtime_seconds({"start": "13:00", "end": "15:00"}, "2026-03-29"), 2 * 3600, "a window inside a day")
+        self.ledger = pb.Ledger.in_memory()
+        self.run_passes(dt.datetime(2026, 3, 28, 20, 0), 11 * 3600, offline=lambda t: pb.in_schedule(self.SCHED, t))
+        self.assertEqual(self.row(dt.date(2026, 3, 28))["kept"], 1, "a night kept from start to end is kept, an hour short or not")
+        self.run_passes(dt.datetime(2026, 10, 24, 20, 0), 12 * 3600, offline=lambda t: pb.in_schedule(self.SCHED, t), mono=10 ** 6)
+        self.assertEqual(self.row(dt.date(2026, 10, 24))["kept"], 1)
+        self.run_passes(dt.datetime(2026, 3, 30, 20, 0), 11 * 3600, offline=lambda t: pb.in_schedule(self.SCHED, t) and t.hour != 3,
+                        mono=2 * 10 ** 6)
+        self.assertEqual(self.row(dt.date(2026, 3, 30))["kept"], 0, "an hour on in the night is not kept")
+
+    def test_a_tick_a_moment_ahead_at_the_end_of_bedtime_makes_no_second_night(self):
+        # The tick decides bedtime (and switches pb-offline) with its own clock, a moment before this pass reads the time: at
+        # 06:00:00 it may still have said "on" at 05:59:59.4. That is the end of Wednesday's night, not a night of Thursday.
+        start = dt.datetime(2026, 10, 21, 20, 0)
+        tick = lambda t: pb.in_schedule(self.SCHED, t - dt.timedelta(seconds=0.6))
+        events = self.run_passes(start, 11 * 3600, offline=tick, active=tick)
+        self.assertEqual(sum(events), 1, "one end, so one copy for the page (each one makes Pi-hole reload its lists)")
+        self.assertEqual(self.row(start.date())["kept"], 1)
+        self.assertIsNone(self.row(start.date() + dt.timedelta(days=1))["kept"])
+        self.assertIsNone(self.ledger.load()["night"])
+        # A bedtime the page still says is on while the clock says it is not opens no night either (the parent has just
+        # edited the times): the next tick puts scheduleActive right.
+        self.ledger = pb.Ledger.in_memory()
+        self.assertFalse(self.ledger.observe(dt.datetime(2026, 10, 22, 12, 0), 0, True, True, True, self.SCHED))
+        self.assertIsNone(self.ledger.load()["night"])
+
+    def test_a_night_that_began_before_anything_was_counted_is_not_judged(self):
+        # The first start ever (or a corrupt savings.json replaced) at 00:05, in the middle of a bedtime of 23:30 to 07:00:
+        # 6 h 55 of 7 h 30 are watched, enough to call it kept, but the nights are counted from keptSince, the 22nd.
+        sched = {"enabled": True, "start": "23:30", "end": "07:00", "days": [0, 1, 2, 3, 4, 5, 6]}
+        events = self.run_passes(dt.datetime(2026, 10, 22, 0, 5), 8 * 3600, offline=lambda t: pb.in_schedule(sched, t), sched=sched)
+        self.assertTrue(any(events))
+        data = self.ledger.load()
+        self.assertEqual(data["keptSince"], "2026-10-22")
+        self.assertNotIn("2026-10-21", data["days"], "nothing is said of the 21st")
+        p = self.ledger.payload(dt.datetime(2026, 10, 22, 12, 0), SERVICES, 1)
+        self.assertEqual((p["tot"]["nights"], p["tot"]["nightsKept"]), (0, 0))
+        check_contract(self, pb.ledger_text(p), SERVICES)
+        self.run_passes(dt.datetime(2026, 10, 22, 22, 0), 10 * 3600, offline=lambda t: pb.in_schedule(sched, t), sched=sched,
+                        mono=10 ** 6)
+        self.assertEqual(self.row(dt.date(2026, 10, 22))["kept"], 1, "the next night is")
 
     def test_the_page_sees_off_time_only_from_kept_since_and_the_nights_in_the_totals(self):
         self.ledger.merge(self.result({3: 100, 2: 100, 1: 100}, whole={3, 2, 1}), self.now)    # the first run's backfill
@@ -776,16 +861,111 @@ class PublishTests(PublishFixture):
             self.lpass()
         self.assertEqual(len(self.ledger_writes), 1, "every group write makes Pi-hole reload its lists")
 
-    def test_a_new_day_is_published_at_once(self):
-        self.now = dt.datetime(2026, 10, 21, 23, 50)
+    def until(self, end, every=15):
+        """Passes every `every` seconds until the box's clock reaches `end`; the times (H:M:S) at which pb-ledger was written."""
+        times = []
+        while self.now < end:
+            self.advance(every)
+            before = len(self.ledger_writes)
+            self.lpass()
+            if len(self.ledger_writes) != before:
+                times.append(self.now.strftime("%H:%M:%S"))
+        return times
+
+    def test_a_new_day_is_published_once_its_first_read_is_back(self):
+        # A copy made at midnight, before any read of the new day, would say that today's stops are not known (null), and the
+        # card would show that until the next write, an hour later. The day's first read is the one that can also read
+        # yesterday whole (LEDGER_SETTLE after midnight), and the new day is published as soon as it is back; nothing before
+        # it, not even the hourly write that falls due a moment after midnight.
+        self.now = dt.datetime(2026, 10, 21, 23, 0)
         self.lpass()
         self.advance(15)
         self.lpass()
         self.assertEqual(len(self.ledger_writes), 1)
-        self.advance(15 * 60)
+        self.stop_calls.clear()
+        self.assertEqual(self.until(dt.datetime(2026, 10, 22, 1, 30)), ["00:05:15"])
+        data = check_contract(self, self.ledger_writes[1][0])
+        self.assertEqual(data["today"], "2026-10-22")
+        self.assertEqual(data["days"][-1]["ads"], 1200, "today is counted, not unknown")
+        self.assertEqual(data["days"][-2]["d"], "2026-10-21")
+        self.assertTrue(self.lm.ledger.load()["days"]["2026-10-21"]["final"], "and yesterday was read whole")
+        reads = [(dt.datetime.fromtimestamp(windows[0][2]).strftime("%H:%M"), windows) for windows, _s in self.stop_calls]
+        self.assertEqual([t for t, _w in reads], ["23:15", "23:30", "23:45", "00:05", "00:20", "00:35", "00:50", "01:05", "01:20"],
+                         "no read at midnight, the first of the new day at 00:05, then every LEDGER_REFRESH again")
+        self.assertEqual(reads[3][1][1][:4], ("2026-10-21", pb.day_start(dt.date(2026, 10, 21)), pb.day_start(dt.date(2026, 10, 22)),
+                                              True), "it reads yesterday whole")
+
+    def test_a_new_day_that_cannot_be_read_is_published_all_the_same(self):
+        self.now = dt.datetime(2026, 10, 21, 23, 0)
         self.lpass()
-        self.assertEqual(len(self.ledger_writes), 2)
+        self.advance(15)
+        self.lpass()
+        # Pi-hole's database is off from now on: the read comes back with nothing, which is an answer (today is not known).
+        self.lm.stops = lambda windows, services: {"days": {w[0]: {"ads": None, "apps": None, "whole": w[3]} for w in windows
+                                                            if not w[4]}, "adLists": 1, "why": "Pi-hole keeps no history"}
+        self.assertEqual(self.until(dt.datetime(2026, 10, 22, 0, 30)), ["00:05:15"])
+        self.assertIsNone(self.published()["days"][-1]["ads"])
+
+    def test_a_read_that_never_comes_back_holds_the_new_day_only_for_a_while(self):
+        self.now = dt.datetime(2026, 10, 21, 23, 0)
+        self.lpass()
+        self.advance(15)
+        self.lpass()
+
+        class Hung(tm.InlineJob):                # a read that started and never ends
+            def start(self, fn):
+                self._busy = True
+                return True
+        self.lm._jobs["savings"] = Hung("savings")
+        self.assertEqual(self.until(dt.datetime(2026, 10, 22, 0, 40)), ["00:20:00"],
+                         "LEDGER_REFRESH after the read was due, the copy goes without it")
         self.assertEqual(self.published()["today"], "2026-10-22")
+
+    def test_a_clock_not_believed_over_midnight_is_published_once_the_day_is_read(self):
+        self.now = dt.datetime(2026, 10, 21, 23, 0)
+        self.lpass()
+        self.advance(15)
+        self.lpass()
+        self.clock_trusted = False
+        self.until(dt.datetime(2026, 10, 22, 0, 30))
+        self.clock_trusted = True
+        self.assertEqual(self.until(dt.datetime(2026, 10, 22, 1, 0)), ["00:30:30"], "read at once, published as soon as it is back")
+        self.assertEqual(self.published()["days"][-1]["ads"], 1200)
+
+    def test_a_write_that_failed_is_tried_again_on_the_next_pass(self):
+        failing = []
+        for name in ("add_group", "put_group"):
+            real = getattr(self.api, name)
+
+            def flaky(group, comment, enabled, *a, _real=real, **k):
+                if group == pb.G_LEDGER and failing:
+                    failing.pop()
+                    raise pb.ApiError(400, "database is locked")     # the nightly list rebuild holds gravity.db
+                return _real(group, comment, enabled, *a, **k)
+            setattr(self.api, name, flaky)
+        self.add_kid()
+        self.lpass()
+        self.advance(15)
+        failing.append(1)
+        with self.assertLogs("sinko", level="WARNING"):
+            self.lpass()
+        self.assertIsNone(self.published(), "the first write after the start failed")
+        self.advance(15)
+        self.lpass()
+        self.assertIsNotNone(self.published(), "and it is tried again on the next pass, not an hour later")
+        self.internet_off(True)
+        for _ in range(8):
+            self.advance(15)
+            self.lpass()
+        self.internet_off(False)
+        writes = len(self.ledger_writes)
+        failing.append(1)
+        self.advance(15)
+        self.lpass()                                            # the end of the off period: the write fails
+        self.advance(15)
+        self.lpass()
+        self.assertEqual(len(self.ledger_writes), writes + 1, "what made it due stays due")
+        self.assertGreater(self.published()["days"][-1]["offSec"], 100)
 
     def test_the_end_of_an_off_period_and_of_a_bedtime_night_are_published_at_once(self):
         self.add_kid()

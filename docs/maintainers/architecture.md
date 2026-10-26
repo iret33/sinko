@@ -307,8 +307,9 @@ level of 1 or more (names hidden) that is impossible and the day is `null`. `nul
 `null` never overwrites a count, and a day's count only grows (a smaller one means Pi-hole lost rows: a flush, its days limit).
 **First run** (nothing counted yet): the `LEDGER_BACKFILL` (6) whole days before today are read too, each only when the
 database holds the whole day (its oldest timestamp is before that day's midnight), so the week is full on the first day;
-`since` is the earliest day counted. A past day the ledger holds without counts (only its time off) is read the same way. A
-day the box has nothing for is a gap.
+`since` is the earliest day counted. Such a day that is still missing later and came before `keptSince` is offered again (a
+first run in the `LEDGER_SETTLE` after midnight must leave yesterday for its next read, and the days before it set `since`).
+A past day the ledger holds without counts (only its time off) is read the same way. A day the box has nothing for is a gap.
 
 **Time off and nights** (`Ledger.observe`, on every pass whose tick worked while `ClockGuard` believes the clock). `dt` is the
 monotonic time since the last counted pass, at most `LEDGER_STEP_MAX` (120 s; the first pass after a start counts nothing),
@@ -316,10 +317,15 @@ shared between two days when it crosses midnight. It is added to the day's watch
 `pb-offline` is enabled and at least one client is in `pb-kids` (asked of Pi-hole once a minute while it matters). While
 `scheduleActive` is true, the night is the day bedtime started (`in_schedule`'s rule: a window that crosses midnight belongs to
 the day it starts); `dt` is added to its watched seconds while a child's device exists, and to its off seconds while
-`pb-offline` is enabled. The night closes when `scheduleActive` turns false or the night's day changes: planned = (end − start)
-mod 24 h; `kept` = 1 when watched ≥ 0.9 × planned and off ≥ 0.97 × watched, 0 when watched ≥ 0.9 × planned, else `null`. An
-open night is kept in the file across a restart. `keptSince` is the first day this counting ran. (A night needs a child's
-device: with none, bedtime kept nobody's internet off, and the card would claim kept nights for an empty home.)
+`pb-offline` is enabled. `scheduleActive` is the tick's decision, made with its own clock a moment before the pass's: while it
+is true and `in_schedule` says the window is already over (the last second of a bedtime, or times the parent has just edited),
+the open night goes on under its own day, and no night is opened. The night closes when `scheduleActive` turns false or the
+night's day changes: planned = the real seconds from that day's start time to the end time (`bedtime_seconds`: the night the
+clocks go forward is an hour shorter than end − start, the night they go back an hour longer); `kept` = 1 when watched ≥ 0.9 ×
+planned and off ≥ 0.97 × watched, 0 when watched ≥ 0.9 × planned, else `null`. A night that began before `keptSince` (the
+first start ever came in the middle of it) is closed without a verdict. An open night is kept in the file across a restart.
+`keptSince` is the first day this counting ran. (A night needs a child's device: with none, bedtime kept nobody's internet
+off, and the card would claim kept nights for an empty home.)
 
 **`/var/lib/sinko/savings.json`** (root only, 0600, `atomic_write`; a corrupt or foreign file is logged and replaced, it never
 stops the scheduler). Written with each read of the stops (or every 15 minutes should that job hang) and on a clean stop
@@ -350,7 +356,14 @@ ever joins it). It is written only when what it would say differs from what the 
 stops are in), or the box's day changed, or an off period or a bedtime night just ended. Every group write makes Pi-hole reload
 its lists: never more often. Because it compares with the group itself, a restored backup or a hand edit is put right at the
 next such moment (at once after a start). Never while an update runs (`update.status` running or the update lock held, as for
-`box.json`), never after `sinko remove` (the `removed` flag). The comment, compact JSON, version 1:
+`box.json`), never after `sinko remove` (the `removed` flag). **After midnight** nothing is written, whatever made it due,
+until a read of the stops that began in the new day is back (one that fails or finds the database off counts too): a copy
+made earlier would say that today's stops are `null` (not known), and the card would show that until the next write, an hour
+later. The day's first read is made due for `LEDGER_SETTLE` after midnight, so it also reads yesterday whole and the new day's
+first copy has both; should it not come back, the copy goes `LEDGER_REFRESH` after it was due. Meanwhile the page still has
+the copy of the day before (`today` is yesterday) and says that today's numbers are not in yet. A write that fails (Pi-hole
+busy, its database locked by a list rebuild) changes none of this bookkeeping: it is tried again on the next pass. The
+comment, compact JSON, version 1:
 
 ```jsonc
 {
@@ -385,8 +398,11 @@ contract (`BOX_API` is unchanged): the page that reads it is installed with the 
 **Lifecycle.** A Pi-hole backup carries `pb-ledger` like every group; `sinko remove` deletes it with every `pb-` group;
 `uninstall.sh` deletes the state folder; `tools/seal.sh` removes `savings.json` (named in its plan even before the stopping
 scheduler writes it, and checked at the end) and resets Sinko's objects in Pi-hole with `remove` and `setup`, so a ready-made
-box does not ship the golden unit's history. `sinko diagnose` prints a summary (counts only). `tests/mock_pihole.py`
-`seed_ledger()` makes a demo week through the same classifier, ledger and serialiser.
+box does not ship the golden unit's history. Pi-hole's own older copies of `gravity.db` (`gravity_backups`, renewed one by one
+at each list refresh) still hold the group after an uninstall, which leaves Pi-hole's files alone: `docs/privacy.md` says so
+and how to delete them; `seal` empties that folder. `sinko diagnose` prints a summary (counts only). `tests/mock_pihole.py`
+`seed_ledger()` makes a demo week through the same classifier, ledger and serialiser (on a set-up store whose bedtime is off it
+switches the demo bedtime on, so the page and the card agree; the totals before the week follow the store's bedtime).
 
 ## Terms of use
 

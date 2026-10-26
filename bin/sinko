@@ -3557,9 +3557,15 @@ def bedtime_night(sched: dict, now: dt.datetime) -> str:
     return day.isoformat()
 
 
-def bedtime_seconds(sched: dict) -> int:
-    """How long a bedtime night is planned to be."""
-    return ((_hhmm_minutes(sched["end"]) - _hhmm_minutes(sched["start"])) % 1440) * 60
+def bedtime_seconds(sched: dict, night: str) -> int:
+    """How long the bedtime night that starts on the day `night` is planned to be, in real seconds, which is what the
+    scheduler counts: the night the clocks go forward is an hour shorter than its times say, and the night they go back an
+    hour longer (a day with a clock change is 23 or 25 hours long, as in day_start)."""
+    start, end = _hhmm_minutes(sched["start"]), _hhmm_minutes(sched["end"])
+    day = dt.date.fromisoformat(night)
+    begins = dt.datetime.combine(day, dt.time(start // 60, start % 60))
+    ends = dt.datetime.combine(day + dt.timedelta(days=1) if start > end else day, dt.time(end // 60, end % 60))
+    return max(int(round(ends.timestamp() - begins.timestamp())), 0)
 
 
 def stop_source(status, list_id, adlists: dict, rules: dict, services) -> tuple:
@@ -3902,15 +3908,20 @@ class Ledger:
                 row["off"] += secs
         ended = self._was_off and not off
         self._was_off = off
-        key = bedtime_night(sched, now) if active else None
         night = data["night"]
+        key = None
+        if active:
+            # scheduleActive is what the tick decided with its own clock, a moment before this pass's `now`: in the last
+            # second of a bedtime it can still say "on" while `now` is past the end (or the parent has just edited the
+            # times). That is still the night that is open, never a new one of today's date that ends 15 seconds later.
+            key = bedtime_night(sched, now) if in_schedule(sched, now) else (night["d"] if night is not None else None)
         if night is not None and night["d"] != key:
             self._close_night()
             ended, night = True, None
         if key is not None:
             if night is None:
                 night = data["night"] = {"d": key, "seen": 0.0, "off": 0.0, "planned": 0}
-            night["planned"] = bedtime_seconds(sched)
+            night["planned"] = bedtime_seconds(sched, key)
             if kids:                                    # a night with no child's device kept nobody's bedtime
                 night["seen"] += step
                 if offline:
@@ -3926,6 +3937,10 @@ class Ledger:
         back on, a free-time timer); not known when it saw too little (the box was off, there was no child's device)."""
         data = self.load()
         night, data["night"] = data["night"], None
+        if data["keptSince"] is None or night["d"] < data["keptSince"]:
+            # A night that began before the scheduler counted anything (the first start ever came after midnight, in the
+            # middle of it): the nights are counted from "keptSince", and the page reads one before it as not known.
+            return
         planned = night["planned"]
         kept = None
         if planned > 0 and night["seen"] >= LEDGER_NIGHT_SEEN * planned:
@@ -3938,8 +3953,10 @@ class Ledger:
     def windows(self, now: dt.datetime) -> list:
         """What read_stops should count: [(day, start, end, whole, gap)]. Today so far; every day of the last week the ledger
         holds and has not read whole since it ended (yesterday only LEDGER_SETTLE after midnight, when FTL has written its
-        end); and, until anything was counted at all, the LEDGER_BACKFILL days before today as gaps (counted only when the
-        database holds the whole day), so that the week is full on the first day."""
+        end); and the LEDGER_BACKFILL days before today that the ledger has nothing for and that came before it began
+        counting (keptSince; until anything was counted at all, all of them) as gaps, counted only when the database holds
+        the whole day, so that the week is full on the first day. Not only on the first read: a first read in the
+        LEDGER_SETTLE after midnight has to leave yesterday for later, and must not leave it a gap for good."""
         data = self.load()
         today = now.date()
         out = [(today.isoformat(), day_start(today), now.timestamp(), False, False)]
@@ -3953,7 +3970,8 @@ class Ledger:
             if row is not None and not row["final"]:
                 # A day with no counts yet is read only when the database holds the whole of it, like a gap.
                 out.append(whole + (row["ads"] is None,))
-            elif row is None and data["since"] is None and back <= LEDGER_BACKFILL:
+            elif row is None and back <= LEDGER_BACKFILL and (
+                    data["since"] is None or (data["keptSince"] is not None and day.isoformat() < data["keptSince"])):
                 out.append(whole + (True,))
         return out
 
@@ -4150,8 +4168,10 @@ class Maintenance:
         self._next_learn = started
         self._next_ledger = started       # the stops are read right after the start, then every LEDGER_REFRESH
         self._next_ledger_save = started + LEDGER_REFRESH
-        self._ledger_read = False         # the first read of the stops is back (the first copy for the page waits for it)
-        self._ledger_written = None       # when pb-ledger was last written (or first looked at after the start)
+        self._ledger_read_at = None       # the box's time when the last read of the stops that is back began (None: none yet)
+        self._ledger_today = None         # the box's day at the last pass that counted (a new one makes the read due)
+        self._ledger_hold = None          # until when a copy waits for the first read of a new day (monotonic)
+        self._ledger_written = None       # when pb-ledger was last written (or first found to say the same after the start)
         self._ledger_day = None           # the box's day at that moment
         self._ledger_event = False        # an off period or a bedtime night ended since then
         self._ledger_why = None           # why the stops cannot be counted, as last logged
@@ -4707,6 +4727,15 @@ class Maintenance:
         kids = self._kids_present() if offline or active else False
         if self.ledger.observe(now, self.mono(), offline, kids, active, st["schedule"]):
             self._ledger_event = True
+        today = now.date()
+        if self._ledger_today is not None and today != self._ledger_today:
+            # A new day. Until a read of it is back, a copy for the page would say that today's stops are not known, and the
+            # next write could be an hour away: _publish_ledger waits for that read (at most _ledger_hold). It is the one
+            # LEDGER_SETTLE after midnight, which also reads yesterday whole, rather than whichever of every LEDGER_REFRESH.
+            wait = max(0.0, day_start(today) + LEDGER_SETTLE - now.timestamp())
+            self._next_ledger = self.mono() + wait
+            self._ledger_hold = self.mono() + wait + LEDGER_REFRESH
+        self._ledger_today = today
         if self.mono() >= self._next_ledger:
             windows, services = self.ledger.windows(now), self._services()
             if self._spawn("savings", lambda: self.stops(windows, services),
@@ -4719,7 +4748,7 @@ class Maintenance:
     def _ledger_done(self, outcome, at) -> None:
         """The stops were read (`at` is the box's time when the read began: the days it names are of that time)."""
         status, value = outcome
-        self._ledger_read = True
+        self._ledger_read_at = at.timestamp()          # also when it failed: the copy that waits for it says "not known"
         if status == "error":
             self._complain("savings ledger", value)
         else:
@@ -4774,27 +4803,29 @@ class Maintenance:
         after the start (when the first stops are in), then when LEDGER_PUBLISH_EVERY has passed since the last write, the
         box's day has changed, or an off period or a bedtime night has ended. The group is compared with what the ledger
         says, so a restored backup or a hand edit is put right at the next such moment. Never while an update runs (the
-        installer restarts Pi-hole), nor after Sinko was removed on purpose."""
-        if os.path.exists(state_path("removed")) or self._update_going():
+        installer restarts Pi-hole), nor after Sinko was removed on purpose; and after midnight not before the first read of
+        the new day is back (see _ledger), whatever the reason to write. A write that fails is tried again on the next pass:
+        what made it due stays due."""
+        if os.path.exists(state_path("removed")) or self._update_going() or self._ledger_read_at is None:
             return
         mono, today = self.mono(), now.date().isoformat()
-        if self._ledger_written is None:
-            if not self._ledger_read:
-                return
-        elif not (mono - self._ledger_written >= LEDGER_PUBLISH_EVERY or today != self._ledger_day or self._ledger_event):
+        if (self._ledger_read_at < day_start(now.date()) and self._ledger_hold is not None and mono < self._ledger_hold):
             return
-        if self._ledger_written is None:
-            self._ledger_written = mono       # what the group already says counts as the last write
-        self._ledger_day, self._ledger_event = today, False
+        if self._ledger_written is not None and not (mono - self._ledger_written >= LEDGER_PUBLISH_EVERY
+                                                     or today != self._ledger_day or self._ledger_event):
+            return
         text = ledger_text(self.ledger.payload(now, self._services(), self._ad_lists_now()))
         group = self._groups.get(G_LEDGER)
         if group is not None and not group.get("enabled") and same_ledger(parse_ledger(group.get("comment")), json.loads(text)):
-            return
-        if group is None:
-            self.api.add_group(G_LEDGER, text, False)
+            if self._ledger_written is None:
+                self._ledger_written = mono   # what the group already says after a start counts as the last write
         else:
-            self.api.put_group(G_LEDGER, text, False)
-        self._ledger_written = mono
+            if group is None:
+                self.api.add_group(G_LEDGER, text, False)
+            else:
+                self.api.put_group(G_LEDGER, text, False)
+            self._ledger_written = mono
+        self._ledger_day, self._ledger_event = today, False
 
     def close(self) -> None:
         """The scheduler stops cleanly: keep what the ledger counted since its last save."""
