@@ -2,7 +2,7 @@
 
 *For people who want to understand, check or change it. Parents do not need any of this.*
 
-Contents: [The pieces](#the-pieces) · [The live picture](#the-live-picture) · [Block lists](#block-lists) · [Files on the box](#files-on-the-box) · [Going deeper](#going-deeper)
+Contents: [The pieces](#the-pieces) · [The control panel](#the-control-panel) · [What Sinko did for you](#what-sinko-did-for-you) · [The live picture](#the-live-picture) · [Block lists](#block-lists) · [Files on the box](#files-on-the-box) · [Going deeper](#going-deeper)
 
 ## The pieces
 
@@ -30,6 +30,13 @@ Child's device ──DNS──► │  blocked if the device is in an enabled pb
 - Timer and bedtime settings are stored as JSON in the description of the
   disabled group `pb-state`. The page writes them; `sinko run`
   (a systemd service) enforces them every 15 seconds.
+- *What Sinko did for you* (the card with ads stopped, app tries, nights kept and time off): every 15 minutes the
+  scheduler counts, read-only, what Pi-hole's long-term database says was stopped and by which list (FTL notes it as
+  `list_id`), and it notes itself how long the children's internet was off and whether bedtime was kept. Counts only,
+  kept in `/var/lib/sinko/savings.json` (days for 35 days, running totals after that), and copied for the page into the
+  description of the disabled group `pb-ledger` about once an hour, and when the day changes, an off period ends or
+  bedtime ends, so only a signed-in parent can read it. The details are in
+  [`architecture.md`](maintainers/architecture.md#savings-ledger-pb-ledger).
 - Devices are added by MAC address when Pi-hole knows it (stable across IP
   changes), otherwise by IP address. An IPv6-only entry is not offered, because
   phones rotate their IPv6 privacy addresses every day.
@@ -48,12 +55,43 @@ exception follows from how Pi-hole works: it allows only one deny rule per patte
 rule, Sinko adds its two groups to it and leaves everything else about it alone, and never deletes it; while "internet
 off" or "pause" is on, whatever your own rule allows still resolves.
 
+## The control panel
+
+The top of the page is one panel: a sentence that says whether the children's internet is on or off, and one big key
+that does the opposite. **Turn internet off** enables `pb-offline`; **Turn it back on** disables it (and, during a break,
+ends the break too, so it really comes back on, also in bedtime). The three smaller keys start an offline break, the same
+timer the page always had (`timer.mode = "block"` in `pb-state`): 30 minutes, an hour, and in the evening and at night
+*until the morning*, which ends when bedtime ends, or at 07:00 on the box's clock when there is no bedtime (in the
+daytime that key is a two-hour break instead). The panel's "when it comes back" follows the scheduler's own rules
+(`Controller.tick` in `bin/sinko`, mirrored by `comesBack` in `web/pb-core.js` and tested on both sides of midnight): a
+break that ends inside bedtime stays off until bedtime ends; free time ends early when bedtime starts; and an internet
+switched off by hand comes back on when the next bedtime window ends.
+
+## What Sinko did for you
+
+The card reads a small daily summary the box keeps for itself and copies, hourly at most, into the description of the
+disabled Pi-hole group `pb-ledger` (behind the parent password, like every group; never a file under `/pb/`, which any
+device at home can read). What it holds and how it is counted is in
+[`docs/maintainers/architecture.md`](maintainers/architecture.md), *Savings ledger*. On the card:
+
+- **Ads and trackers stopped** are the box's stops by its general ad lists (any block list that is not Sinko's own), on
+  every device at home. A stop is one "no" from the box: a phone often asks again, so this counts stops, not ads seen.
+  A box with no ad list says so instead of showing zero.
+- **Less waiting for ads**: 50 ms for each stop, Brave's published estimate of the time one blocked ad or tracker costs
+  (the page's `WAIT_MS_PER_STOP`). **Data saved**: 10 KB for each, a deliberately low guess (`BYTES_PER_STOP`). Both
+  are estimates and the card says "about". The money figure is the data saved times the price per GB the parent types;
+  that price stays in the phone's browser storage and never reaches the box.
+- **App tries** are stops by the family's app lists (`pb:<id>`) and by learned rules, on the children's devices.
+- **Bedtime nights kept** and **children's internet off** are counted by the scheduler itself, every pass, from the day
+  the box started keeping them.
+
 ## The live picture
 
-The card under the big button draws what Pi-hole is doing, in words a parent can follow:
+**See it live** opens the picture over the page (a plain full-screen layer, not a dialog: the picture pauses for any
+open dialog). It draws what Pi-hole is doing, in words a parent can follow:
 devices on top, the family box in the middle, the internet at the bottom. A request
 goes to the box; a stopped one comes back as a dead end (a red packet with a cross), an
-allowed one goes on to the internet and back (a teal packet with a tick), and one the box
+allowed one goes on to the internet and back (a green light), and one the box
 remembered turns around at the box. A dotted line around the box shows that after a yes the
 device connects by itself: videos and messages never pass through the box.
 *Show me how it works* plays a five-step tour with clearly labelled **Example** packets from
@@ -63,8 +101,8 @@ shows busy hours, the apps stopped most, and explains the technical words (DNS, 
 What it reads, and how often: `/api/stats/summary` every 15 s (the three numbers: checked,
 stopped, share; *whole home, last 24 hours*), `/api/queries` every 3.5 s with a small `length` and
 `from` taken from the box's own clock, and `/api/history` plus `/api/stats/top_domains` only while the
-detail sheet is open. Nothing is read while the page is hidden, a dialog is open, or the picture is folded
-away (the chevron remembers its state). At most about 3 packets a second are drawn; the rest are only counted.
+detail sheet is open. Nothing is read until the parent opens the picture, nor while it is closed again, the page is
+hidden or a dialog is open over it. At most about 3 packets a second are drawn; the rest are only counted.
 The picture never changes a rule.
 
 - **Names.** An app is named only when its domain is in `pb/domains.json` (made at install time from the
@@ -113,7 +151,7 @@ box runs: list fixes reach boxes without a new release, and a box can be pointed
 |---|---|
 | Program, lists, tools, the last downloaded release | `/opt/sinko` (`bin/sinko`, `lists/`, `tools/`, `src/`, `LICENSE`, `NOTICE`) |
 | Settings | `/etc/sinko/config` (`KEY=value`, read by the installer and the program) |
-| Runtime data (root only) | `/var/lib/sinko/` (counter id, the box's own id that box.json shows the app, handled requests, cached releases for rollback, update results and notes, the lock that keeps two block-list refreshes apart, the note of the last self-repair) |
+| Runtime data (root only) | `/var/lib/sinko/` (counter id, the box's own id that box.json shows the app, handled requests, cached releases for rollback, update results and notes, the lock that keeps two block-list refreshes apart, the note of the last self-repair, the counts behind *What Sinko did for you* in `savings.json`) |
 | The parent page | `/var/www/html/index.html` and `/var/www/html/pb/` (includes `pb/box.json`, written by the program) |
 | Services | `sinko.service` (scheduler), `sinko-lists.timer` (nightly list refresh), `sinko-firstboot.service` (ready-made boxes only) |
 | The announcement for the Sinko app | `/etc/avahi/services/sinko.service` (Bonjour, `_sinko._tcp`; not with `SINKO_MDNS=0`) |

@@ -1,7 +1,7 @@
 """The page's strings, read out of the source files, for the copy test and the browser tests.
 
-web/app.js keeps the live picture's words in `var LIVE_STR = {...}` and the first-run words in `var FIRST_STR = {...}`; web/pb-box.js
-exports the My box sheet's as `strings`. Each is evaluated by node on its own literal, so nothing here needs a browser.
+web/app.js keeps the live picture's words in `var LIVE_STR = {...}`, the first-run words in `var FIRST_STR = {...}` and the savings
+card's in `var SAVE_STR = {...}`; web/pb-box.js exports the My box sheet's as `strings`. Each is evaluated by node on its own literal, so nothing here needs a browser.
 """
 import ast
 import json
@@ -30,6 +30,11 @@ def live_strings():
 
 def first_strings():
     return _literal(read("app.js"), "FIRST_STR", "Object.keys(FIRST_STR.en)")
+
+
+def save_strings():
+    """The savings card ("What Sinko did for you"), the price sheet and the live view's frame."""
+    return _literal(read("app.js"), "SAVE_STR", "Object.keys(SAVE_STR.en)")
 
 
 def box_strings():

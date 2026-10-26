@@ -8,22 +8,22 @@ Parental controls that live on a small box in your home, in Arabic and English.<
 <a href="https://iret33.github.io/sinko/">Website</a> · <a href="docs/install.md">Install</a> · <a href="docs/faq.md">FAQ</a> · <a href="docs/privacy.md">Privacy · الخصوصية</a></p>
 
 <p align="center">
-  <a href="https://github.com/iret33/sinko/releases"><img alt="Total downloads" src="https://img.shields.io/github/downloads/iret33/sinko/total?label=downloads&logo=github&color=0F766E"></a>
-  <a href="https://github.com/iret33/sinko/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/iret33/sinko?color=0F766E&label=release"></a>
-  <a href="https://github.com/iret33/sinko/releases/latest"><img alt="Downloads of the latest release" src="https://img.shields.io/github/downloads/iret33/sinko/latest/total?label=this%20release&color=0F766E"></a>
-  <a href="https://github.com/iret33/sinko/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/iret33/sinko?style=flat&color=0F766E"></a>
+  <a href="https://github.com/iret33/sinko/releases"><img alt="Total downloads" src="https://img.shields.io/github/downloads/iret33/sinko/total?label=downloads&logo=github&color=1B1B19&style=flat-square"></a>
+  <a href="https://github.com/iret33/sinko/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/iret33/sinko?color=1B1B19&style=flat-square&label=release"></a>
+  <a href="https://github.com/iret33/sinko/releases/latest"><img alt="Downloads of the latest release" src="https://img.shields.io/github/downloads/iret33/sinko/latest/total?label=this%20release&color=1B1B19&style=flat-square"></a>
+  <a href="https://github.com/iret33/sinko/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/iret33/sinko?color=1B1B19&style=flat-square"></a>
 </p>
 <p align="center">
   <a href="https://github.com/iret33/sinko/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/iret33/sinko/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="https://github.com/iret33/sinko/commits/master"><img alt="Last commit" src="https://img.shields.io/github/last-commit/iret33/sinko?color=0F766E"></a>
-  <a href="COPYING.md"><img alt="Licence: GPL-3.0-or-later" src="https://img.shields.io/badge/licence-GPL--3.0--or--later-0F766E"></a>
-  <img alt="Pi-hole v6" src="https://img.shields.io/badge/Pi--hole-v6-96060C?logo=pihole&logoColor=white">
-  <img alt="Orange Pi Zero 3" src="https://img.shields.io/badge/Orange%20Pi-Zero%203-F26B21">
+  <a href="https://github.com/iret33/sinko/commits/master"><img alt="Last commit" src="https://img.shields.io/github/last-commit/iret33/sinko?color=1B1B19&style=flat-square"></a>
+  <a href="COPYING.md"><img alt="Licence: GPL-3.0-or-later" src="https://img.shields.io/badge/licence-GPL--3.0--or--later-1B1B19?style=flat-square"></a>
+  <img alt="Pi-hole v6" src="https://img.shields.io/badge/Pi--hole-v6-96060C?style=flat-square&logo=pihole&logoColor=white">
+  <img alt="Orange Pi Zero 3" src="https://img.shields.io/badge/Orange%20Pi-Zero%203-F26B21?style=flat-square">
   <img alt="Languages: Arabic and English" src="docs/img/badge-languages.svg">
-  <a href="CONTRIBUTING.md"><img alt="Contributions welcome" src="https://img.shields.io/badge/contributions-welcome-0F766E"></a>
+  <a href="CONTRIBUTING.md"><img alt="Contributions welcome" src="https://img.shields.io/badge/contributions-welcome-1B1B19?style=flat-square"></a>
 </p>
 <p align="center">
-  <a href="docs/privacy.md"><img alt="Boxes online" src="https://img.shields.io/endpoint?url=https://sinko-counter.sabdulla.workers.dev/badge/online.json"></a>
+  <a href="docs/privacy.md"><img alt="Boxes online" src="https://img.shields.io/endpoint?url=https://sinko-counter.sabdulla.workers.dev/badge/online.json&style=flat-square&color=1B1B19"></a>
 </p>
 
 <p align="center">
@@ -34,17 +34,17 @@ Parental controls that live on a small box in your home, in Arabic and English.<
 </p>
 
 <p align="center">
-  <img src="docs/img/desktop-en.png" alt="The main page on a computer. Left: Children are online, 3 of 19 apps blocked, a Turn internet off button, a note that a newer Sinko is ready, and the live picture drawn as a circuit board, with Sara's iPad, Ali's phone and everyone else above the family box, a black hole beside it and the internet below. Right: the quick modes Homework, Free time and Offline break, and the apps and sites, with TikTok, YouTube and Roblox blocked" width="720"><br>
-  <sub>The main page on a computer: what is happening now and the live picture on the left, quick modes and the apps on the right</sub>
+  <img src="docs/img/desktop-en.png" alt="The main page on a computer, in three columns. Left: the control panel says Children’s internet is on, with a green dot, an orange Turn internet off key and smaller keys for 30 minutes, an hour or until the morning; under it the Homework and Free time keys and the card What Sinko did for you, with the last 7 days’ numbers and a chart of the ads stopped each day. Middle: every app with an Allow and a Block key, the blocked ones filled in. Right: the children’s devices with Pause keys, and bedtime in one sentence" width="760"><br>
+  <sub>The main page on a computer: the one big key, what Sinko did in the last 7 days, the apps, the devices and bedtime</sub>
 </p>
 
 <p align="center">
-  <img src="docs/img/panel-en.png" alt="Phone: the main page in English. Children are online, 3 of 19 apps blocked, a Turn internet off button, a note that a newer Sinko is ready, and the top of the live picture" height="460">
+  <img src="docs/img/panel-en.png" alt="Phone: the main page in English. Children’s internet is on; the orange Turn internet off key, with Off for 30 min, Off for 1 hour and Off until the morning beside it; Homework and Free time; and the top of What Sinko did for you" height="460">
   &nbsp;
-  <img src="docs/img/live-en.png" alt="Phone: the live picture card. A circuit board with Sara's iPad, Ali's phone and everyone else at the top, the family box in the middle with a black hole beside it, and the internet at the bottom; under it, how many checks the box made and stopped for the whole home in the last 24 hours" height="460">
+  <img src="docs/img/live-en.png" alt="Phone: the live picture, opened with See it live. A circuit board with Sara’s iPad, Ali’s phone and everyone else at the top, the family box in the middle with a black hole beside it, and the internet at the bottom; under it, how many checks the box made and stopped for the whole home in the last 24 hours" height="460">
   &nbsp;
   <img src="docs/img/panel-ar.png" alt="Phone: the same main page in Arabic, laid out right to left" height="460"><br>
-  <sub>On a phone: the main page, the live picture with the last 24 hours, and the main page in Arabic</sub>
+  <sub>On a phone: the main page, the live picture behind <b>See it live</b>, and the main page in Arabic</sub>
 </p>
 
 <details align="center"><summary><b>My box</b>: updates, health and addresses (tap to see)</summary>
@@ -52,23 +52,47 @@ Parental controls that live on a small box in your home, in Arabic and English.<
 &nbsp;<img src="docs/img/box-ar.png" alt="The same My box sheet in Arabic, laid out right to left" width="300"></p>
 </details>
 
-<p align="center"><sub>The pictures come from a demo box (<a href="tools/make-screenshots.py"><code>tools/make-screenshots.py</code></a>): the names, the numbers and the update on offer are examples.</sub></p>
+<p align="center"><sub>The pictures come from a demo box (<a href="tools/make-screenshots.py"><code>tools/make-screenshots.py</code></a>): the names, the numbers, the savings and the update on offer are examples.</sub></p>
 
 Sinko is a simple page for parents, on top of [Pi-hole](https://pi-hole.net) v6. Every phone, tablet and console at home
-asks a small box in your house "where is this app?" first, and the box says yes or no. From your phone you can:
+asks a small box in your house "where is this app?" first, and the box says yes or no. The page looks like the control
+panel of a home appliance, and the first thing on it is one big key. From your phone you can:
 
-- **block or allow apps** (YouTube, TikTok, Roblox, Instagram, Snapchat, …) with one tap;
-- switch on **Homework** mode, a timed **Free time**, or a timed **Offline break**;
+- **turn the children's internet off** with that key, and back on with the same key; or off **for 30 minutes**, **an
+  hour** or **until the morning**. The panel always says, in one sentence, whether it is on or off and when it comes back;
+- **allow or block apps** (YouTube, TikTok, Roblox, Instagram, Snapchat, …): every app has an **Allow** and a **Block** key;
+- switch on **Homework** mode, or a timed **Free time**;
 - **pause** one child's device;
 - set a **Bedtime** that turns the internet off at night and back on in the morning;
-- watch **the live picture**: what the box is checking and stopping, in words a parent can follow;
+- see **What Sinko did for you**: the ads and trackers it stopped, the waiting and the data that saved, how often blocked
+  apps tried to open, and how many nights bedtime was kept: today, over the last 7 days and since the box started counting
+  ([how it counts](#what-sinko-did-for-you));
+- **See it live**: a picture of what the box is checking and stopping, in words a parent can follow;
 - let the box **learn new addresses** of the apps you block: a small AI model on the box spots an app you blocked trying a
   new address, and blocks that too (optional: it starts switched on when you agree to the terms at first set-up, and you
   can switch it off there or in **My box**, where you can also allow any of them again);
 - look after the box from the same page (**My box**): update it, see its health, change the password, back up, restart.
 
 Timers and bedtime run on the box itself, so they keep working after you close the page. Nothing needs a computer
-after the first set-up.
+after the first set-up. Light and dark, in Arabic and English.
+
+## What Sinko did for you
+
+A card on the page shows what the box did for your family: **Today**, the **Last 7 days**, or **Since** it started counting.
+
+| On the card | Where the number comes from |
+|---|---|
+| Ads and trackers stopped | Pi-hole's own records, which the box reads every 15 minutes: every time an ad list said no, on every device at home |
+| Less waiting for ads | About **50 ms** for each one stopped (the estimate the Brave browser publishes) |
+| Data saved | About **10 KB** for each one stopped (a deliberately low guess); in money too, if you type what 1 GB costs you |
+| *App* tried to open | How often each blocked app tried, on the children's devices |
+| Internet off at bedtime | Nights the internet stayed off for practically the whole of bedtime |
+| Children's internet off | Every minute it was off for the children: bedtime, breaks and when you switched it off |
+
+Every estimate says "about", and **How we count** on the card explains each figure. The numbers are counts the box keeps
+for itself (no websites, addresses or device names); they stay on the box and are never sent to the project. The price
+you type stays on your phone. Ads are counted from the ad lists on the box (Pi-hole's installer offers one); a box without
+one says so on the card, and the apps, bedtime and time off are still counted.
 
 ## See it work
 
@@ -77,7 +101,7 @@ after the first set-up.
 </p>
 
 Every app first asks the box "where is this?". If your rules allow it, the box asks the internet and passes the answer back. If
-not, the box says no and the app simply does not open. The **live picture** in the page shows these answers as they happen.
+not, the box says no and the app simply does not open. **See it live** on the page shows these answers as they happen.
 
 <p align="center">
   <a href="https://iret33.github.io/sinko/how-it-blocks.html"><img src="docs/img/how-it-blocks.png" alt="How Sinko blocks an app, drawn as a bench in thin lines: question tokens from the children's devices slide along a track under the Sinko box, which checks each one against a row of switches, one for each app, and a mode knob; a yes rides on to the router, a no drops through a trap into a black hole" width="560"></a><br>
@@ -160,7 +184,7 @@ Use it together with Screen Time (iPhone) or Family Link (Android). More in the 
 | [`docs/faq.md`](docs/faq.md) | Questions and answers |
 | [`docs/privacy.md`](docs/privacy.md) | What is sent, where, and how to turn it off (English and Arabic) |
 | [`docs/terms.md`](docs/terms.md) | The terms of use a parent agrees to at first set-up, with its two choices (English and Arabic) |
-| [`docs/how-it-works.md`](docs/how-it-works.md) | Pi-hole groups, the live picture, the block lists, files on the box |
+| [`docs/how-it-works.md`](docs/how-it-works.md) | Pi-hole groups, the control panel, how the savings are counted, the live picture, the block lists, files on the box |
 | [`docs/product-image.md`](docs/product-image.md), [`docs/selling.md`](docs/selling.md) | Making and selling ready-made boxes |
 | [`docs/hardware-test-checklist.md`](docs/hardware-test-checklist.md) | What to test on a real box before a release or a sale |
 | [`hardware/case/`](hardware/case/README.md) | A case to print for the Orange Pi Zero 3 (version 1.1), with the parts list (English and Arabic) |

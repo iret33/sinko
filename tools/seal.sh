@@ -376,7 +376,10 @@ build_plan() {
   BOX_JSON="$(ftl_path webserver.paths.webroot /var/www/html)/pb/box.json"
   mapfile -t gone < <(existing "$STATE_DIR/install-id" "$STATE_DIR/box-id" "$BOX_JSON" "$STATE_DIR/handled.json" "$STATE_DIR/update-result.json" \
                                "$R/etc/sinko/initial-password")
-  (( ${#gone[@]} == 0 )) || add_action "Remove the counter's install id, the box's own id (and the page's box.json, which shows it) and what the scheduler remembered: $(join_list "${gone[@]}")" act_remove_paths "${gone[@]}"
+  # What the scheduler counted for the golden unit's family (the page's "What Sinko did for you") must not be every buyer's
+  # history. It is named whether or not it is there yet: the scheduler writes it when it stops, and that is the first step.
+  gone+=("$STATE_DIR/savings.json")
+  add_action "Remove the counter's install id, the box's own id (and the page's box.json, which shows it), what the scheduler remembered and what it counted for this family: $(join_list "${gone[@]}")" act_remove_paths "${gone[@]}"
   local -a files=()
   local h f
   while IFS= read -r h; do
@@ -691,6 +694,7 @@ verify_core() {
   systemctl is-enabled --quiet sinko-firstboot.service 2>/dev/null || problem "the first-start service is not enabled"
   compgen -G "$R/etc/ssh/ssh_host_*" >/dev/null && problem "SSH host keys are still there"
   [[ ! -e "$STATE_DIR/box-id" && ! -e "$BOX_JSON" ]] || problem "the box id (or the page's box.json, which shows it) is still there: every box would share it"
+  [[ ! -e "$STATE_DIR/savings.json" ]] || problem "what the scheduler counted for this family (savings.json) is still there: every box would show it"
   [[ ! -s "$R/etc/machine-id" ]] || problem "the machine id is not empty"
   [[ -z "$(existing "$TLS_CERT" "${TLS_CERT%.pem}.crt" "${TLS_CERT%.pem}_ca.crt")" ]] || problem "Pi-hole's HTTPS private key or certificate is still there"
   local backups

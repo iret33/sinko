@@ -45,7 +45,7 @@ APP = pbstrings.app_strings()          # sign-in, devices, bedtime
 BRAND = pbstrings.brand()              # the name and tagline the brand tool draws (one tagline everywhere)
 with open(os.path.join(ROOT, "VERSION"), encoding="utf-8") as fh:
     VERSION = fh.read().strip()
-NOTES = "https://github.com/iret33/sinko/releases/tag/v3.3.0"
+NOTES = "https://github.com/iret33/sinko/releases/tag/v3.4.0"
 ARABIC_INDIC_DIGITS = re.compile("[٠-٩۰-۹]")
 
 failures = []
@@ -125,9 +125,9 @@ def make_site(installed=True, password=True, setup_done=True, kids=True, terms=T
     return url, store
 
 
-def offer_update(store, latest="3.3.0", checked_ago=3 * 3600):
+def offer_update(store, latest="3.4.0", checked_ago=3 * 3600):
     store.edit_state(lambda st: st.setdefault("update", {}).update(
-        {"latest": latest, "notes": NOTES if latest == "3.3.0" else None, "checked": int(time.time()) - checked_ago}))
+        {"latest": latest, "notes": NOTES if latest == "3.4.0" else None, "checked": int(time.time()) - checked_ago}))
 
 
 def watch(page):
@@ -199,7 +199,7 @@ def dialog_overflow(page):
 
 
 def sim_for(store, **kw):
-    return mock_pihole.SchedulerSim(store, **dict(dict(version=VERSION, latest="3.3.0", notes=NOTES, run_seconds=2.0), **kw))
+    return mock_pihole.SchedulerSim(store, **dict(dict(version=VERSION, latest="3.4.0", notes=NOTES, run_seconds=2.0), **kw))
 
 
 def reloaded(page, marker="__before"):
@@ -288,34 +288,34 @@ def part_update(browser):
         ctx, page = open_page(browser, url, lang)
         page.evaluate("() => { window.__before = 1; PBBox.timing.longDown = 600000; }")
         open_box(page)
-        expect(T(lang, "boxAvailable", v="3.3.0") in live(page), "[%s] a newer version is offered: %r" % (lang, live(page)))
+        expect(T(lang, "boxAvailable", v="3.4.0") in live(page), "[%s] a newer version is offered: %r" % (lang, live(page)))
         link = page.locator("#boxUpdates a.box-link")
         expect(link.get_attribute("href") == NOTES and link.get_attribute("target") == "_blank" and "noopener" in link.get_attribute("rel"),
                "[%s] release notes open the link the scheduler gave, in a new tab, safely" % lang)
         shot(page, "box-update-available-%s.png" % lang)
         page.click("#boxUpdateBtn")
         expect(active_id(page) == "boxUpdLive", "[%s] focus moves to the status when the button is gone (got %s)" % (lang, active_id(page)))
-        expect(live(page) in (T(lang, "boxStarting"), T(lang, "boxRunning", v="3.3.0")), "[%s] it says at once that the update is starting: %r" % (lang, live(page)))
+        expect(live(page) in (T(lang, "boxStarting"), T(lang, "boxRunning", v="3.4.0")), "[%s] it says at once that the update is starting: %r" % (lang, live(page)))
         expect(page.locator("#boxUpdates .box-bar[role=progressbar]").count() == 1 and page.locator("#boxUpdateBtn").count() == 0,
                "[%s] a calm progress bar replaces the buttons" % lang)
-        expect(eventually(lambda: sim.log and sim.log[0] == ("update", "3.3.0") and store.state()["update"]["request"] is None),
+        expect(eventually(lambda: sim.log and sim.log[0] == ("update", "3.4.0") and store.state()["update"]["request"] is None),
                "[%s] the scheduler took the request marker (%s)" % (lang, sim.log))
         waited = eventually(lambda: page.locator("#boxUpdates .is-waiting").count() == 1, 6)
         expect(waited, "[%s] while the box restarts its services the page says it is waiting, calmly" % lang)
         expect(page.is_hidden("#login") and "did not work" not in page.inner_text("#toast"), "[%s] no sign-in screen and no error while the box is silent" % lang)
         shot(page, "box-update-waiting-%s.png" % lang)
-        ok = eventually(lambda: T(lang, "boxRunning", v="3.3.0") in live(page), 8)
-        expect(ok, "[%s] once the box answers again it says it is updating to 3.3.0: %r" % (lang, live(page)))
+        ok = eventually(lambda: T(lang, "boxRunning", v="3.4.0") in live(page), 8)
+        expect(ok, "[%s] once the box answers again it says it is updating to 3.4.0: %r" % (lang, live(page)))
         shot(page, "box-update-running-%s.png" % lang)
-        expect(eventually(lambda: store.version == "3.3.0", 12), "[%s] the update finishes" % lang)
+        expect(eventually(lambda: store.version == "3.4.0", 12), "[%s] the update finishes" % lang)
         expect(eventually(lambda: reloaded(page), 12), "[%s] the page reloads itself because the box now has a newer version" % lang)
         page.wait_for_selector(".tile")
         expect(page.is_hidden("#login"), "[%s] and the parent is still signed in" % lang)
-        expect(page.inner_text("#version") == "v3.3.0", "[%s] the footer shows v3.3.0 (%r)" % (lang, page.inner_text("#version")))
-        expect(eventually(lambda: T(lang, "boxUpdatedToast", v="3.3.0") in clean(page.inner_text("#toast"))), "[%s] a toast says what happened: %r" % (lang, page.inner_text("#toast")))
+        expect(page.inner_text("#version") == "v3.4.0", "[%s] the footer shows v3.4.0 (%r)" % (lang, page.inner_text("#version")))
+        expect(eventually(lambda: T(lang, "boxUpdatedToast", v="3.4.0") in clean(page.inner_text("#toast"))), "[%s] a toast says what happened: %r" % (lang, page.inner_text("#toast")))
         expect(store.state()["update"]["status"] == "ok", "[%s] the state says ok" % lang)
         open_box(page)
-        expect("3.3.0" in box_text(page) and T(lang, "boxAvailable", v="3.3.0") not in box_text(page), "[%s] after the reload nothing is on offer any more" % lang)
+        expect("3.4.0" in box_text(page) and T(lang, "boxAvailable", v="3.4.0") not in box_text(page), "[%s] after the reload nothing is on offer any more" % lang)
         shot(page, "box-update-done-%s.png" % lang)
         ctx.close()
 
@@ -369,7 +369,7 @@ def part_update(browser):
         page.click("#updateBanner")
         page.wait_for_selector("#boxUpdateBtn")
         page.click("#boxUpdateBtn")
-        expect(eventually(lambda: store.version == "3.3.0", 10), "[%s] trying again works" % lang)
+        expect(eventually(lambda: store.version == "3.4.0", 10), "[%s] trying again works" % lang)
         ctx.close()
 
         # --- the box forgets the session while it updates (Pi-hole restarted)
@@ -379,7 +379,7 @@ def part_update(browser):
         ctx, page = open_page(browser, url, lang)
         open_box(page)
         page.click("#boxUpdateBtn")
-        eventually(lambda: T(lang, "boxRunning", v="3.3.0") in live(page))
+        eventually(lambda: T(lang, "boxRunning", v="3.4.0") in live(page))
         store.sessions.clear()
         expect(eventually(lambda: page.locator("#boxSignInBtn").count() == 1, 8), "[%s] a lost session during an update is explained, not a silent bounce" % lang)
         expect(page.is_hidden("#login") and T(lang, "boxSignedOut") in box_text(page), "[%s] with a button to sign in again" % lang)
@@ -416,11 +416,11 @@ def part_update(browser):
         expect(eventually(lambda: T(lang, "boxStarting") in live(page)), "[%s] it starts by saying it is starting" % lang)
         expect(eventually(lambda: store.state()["update"]["request"] is None, 15), "[%s] a request nobody picks up is withdrawn, so it cannot fire later by surprise" % lang)
         expect(eventually(lambda: T(lang, "boxUpdateStuck") in box_text(page)), "[%s] and the card says to unplug the box and plug it back in" % lang)
-        expect(eventually(lambda: page.locator("#boxUpdateBtn").count() == 1 and not page.is_disabled("#boxUpdateBtn")) and T(lang, "boxAvailable", v="3.3.0") in live(page),
+        expect(eventually(lambda: page.locator("#boxUpdateBtn").count() == 1 and not page.is_disabled("#boxUpdateBtn")) and T(lang, "boxAvailable", v="3.4.0") in live(page),
                "[%s] with the card back at 'available', not a progress bar for ever: %r" % (lang, live(page)))
         shot(page, "box-update-stuck-%s.png" % lang)
         page.click("#boxDialog [data-act=boxClose]")
-        expect(eventually(lambda: page.inner_text("#updateBanner") == T(lang, "updateReady", v="3.3.0")), "[%s] and the main page is back to 'ready' instead of 'updating'" % lang)
+        expect(eventually(lambda: page.inner_text("#updateBanner") == T(lang, "updateReady", v="3.4.0")), "[%s] and the main page is back to 'ready' instead of 'updating'" % lang)
         ctx.close()
         # the same from the main page alone: a request left by an earlier visit, the sheet never opened
         url, store = make_site()
@@ -432,7 +432,7 @@ def part_update(browser):
         time.sleep(2.0)
         page.evaluate("() => document.dispatchEvent(new Event('visibilitychange'))")
         expect(eventually(lambda: store.state()["update"]["request"] is None, 10), "[%s] and withdraws it once it has watched it go unanswered, without My box ever being opened" % lang)
-        expect(eventually(lambda: page.inner_text("#updateBanner") == T(lang, "updateReady", v="3.3.0")), "[%s] then offers the update again" % lang)
+        expect(eventually(lambda: page.inner_text("#updateBanner") == T(lang, "updateReady", v="3.4.0")), "[%s] then offers the update again" % lang)
         expect(eventually(lambda: T(lang, "boxUpdateStuck") in clean(page.inner_text("#toast"))), "[%s] and says what to do" % lang)
         ctx.close()
         # a request that IS picked up is left alone, however long the scheduler takes to finish
@@ -460,10 +460,10 @@ def part_update(browser):
         expect(not ARABIC_INDIC_DIGITS.search(live(page)), "[%s] Latin digits in the time" % lang)
         shot(page, "box-update-current-%s.png" % lang)
         page.click("#boxCheckBtn")
-        expect(eventually(lambda: T(lang, "boxAvailable", v="3.3.0") in live(page), 8), "[%s] check again finds 3.3.0" % lang)
+        expect(eventually(lambda: T(lang, "boxAvailable", v="3.4.0") in live(page), 8), "[%s] check again finds 3.4.0" % lang)
         ctx.close()
         url, store = make_site()
-        sim = sim_for(store, offline=True, latest="3.3.0")
+        sim = sim_for(store, offline=True, latest="3.4.0")
         ctx, page = open_page(browser, url, lang)
         page.evaluate("() => { PBBox.timing.checkOffline = 1500; }")
         open_box(page)
@@ -489,8 +489,8 @@ def part_update(browser):
         url, store = make_site()
         ctx, page = open_page(browser, url, lang)
         page.evaluate("() => { window.__before = 1; }")
-        store.version = "3.3.0"
-        store.edit_state(lambda st: st.setdefault("update", {}).update({"status": "ok", "from": VERSION, "to": "3.3.0", "at": int(time.time()) - 30, "checked": int(time.time())}))
+        store.version = "3.4.0"
+        store.edit_state(lambda st: st.setdefault("update", {}).update({"status": "ok", "from": VERSION, "to": "3.4.0", "at": int(time.time()) - 30, "checked": int(time.time())}))
         page.click(".topbar [data-act=box]")
         expect(eventually(lambda: reloaded(page), 10), "[%s] a page older than the box reloads when My box is opened (an automatic update ran at night)" % lang)
         ctx.close()
@@ -524,7 +524,7 @@ def six(version):
     return sorted("/pb/%s?v=%s" % (a, version) for a in ASSETS)
 
 
-def installed_behind_the_pages_back(store, to="3.3.0"):
+def installed_behind_the_pages_back(store, to="3.4.0"):
     """The box has been updated (the night's automatic update, or another phone) and no page open anywhere has been told."""
     store.version = to
     store.edit_state(lambda st: st.setdefault("update", {}).update({"status": "ok", "from": VERSION, "to": to, "at": int(time.time()) - 30, "checked": int(time.time())}))
@@ -534,7 +534,7 @@ def part_stale(browser):
     """After an update the page the parent sees is the new release in every file. Pi-hole's web server lets a browser keep a file for an
     hour (civetweb's default), and a reload only revalidates the page itself: without a new version in the scripts' addresses the phone ran the
     new page with the old scripts, and said 'Updated'. The mock plays that web server and the installer's stamp (stamped_site)."""
-    new_scripts = {s: "3.3.0" for s in SCRIPTS}
+    new_scripts = {s: "3.4.0" for s in SCRIPTS}
     old_scripts = {s: VERSION for s in SCRIPTS}
     for lang in ("en", "ar"):
         # --- the phone that pressed Update now
@@ -557,17 +557,17 @@ def part_stale(browser):
         page.evaluate("() => { window.__before = 1; }")
         open_box(page)
         page.click("#boxUpdateBtn")
-        expect(eventually(lambda: store.version == "3.3.0", 12), "[%s] the update finishes" % lang)
+        expect(eventually(lambda: store.version == "3.4.0", 12), "[%s] the update finishes" % lang)
         expect(eventually(lambda: reloaded(page), 12), "[%s] the page reloads itself" % lang)
         page.wait_for_selector(".tile")
-        expect(eventually(lambda: running_scripts(page) == new_scripts), "[%s] and every script it runs now is release 3.3.0, none left from the old one: %s" % (lang, running_scripts(page)))
-        expect(asset_hits(store, "3.3.0") == six("3.3.0"), "[%s] each of the six files was fetched once, at its new address: %s" % (lang, asset_hits(store, "3.3.0")))
-        expect(page.inner_text("#version") == "v3.3.0" and page.get_attribute("meta[name=sinko-version]", "content") == "3.3.0",
-               "[%s] the footer and the stamp say 3.3.0 (%r)" % (lang, page.inner_text("#version")))
+        expect(eventually(lambda: running_scripts(page) == new_scripts), "[%s] and every script it runs now is release 3.4.0, none left from the old one: %s" % (lang, running_scripts(page)))
+        expect(asset_hits(store, "3.4.0") == six("3.4.0"), "[%s] each of the six files was fetched once, at its new address: %s" % (lang, asset_hits(store, "3.4.0")))
+        expect(page.inner_text("#version") == "v3.4.0" and page.get_attribute("meta[name=sinko-version]", "content") == "3.4.0",
+               "[%s] the footer and the stamp say 3.4.0 (%r)" % (lang, page.inner_text("#version")))
         expect(page.is_hidden("#login"), "[%s] the parent is still signed in" % lang)
-        expect(eventually(lambda: T(lang, "boxUpdatedToast", v="3.3.0") in clean(page.inner_text("#toast"))), "[%s] and a toast says what happened" % lang)
+        expect(eventually(lambda: T(lang, "boxUpdatedToast", v="3.4.0") in clean(page.inner_text("#toast"))), "[%s] and a toast says what happened" % lang)
         time.sleep(1.5)
-        expect(asset_hits(store, "3.3.0") == six("3.3.0") and len([h for h in store.static_hits if h == "/"]) == pages_asked + 1,
+        expect(asset_hits(store, "3.4.0") == six("3.4.0") and len([h for h in store.static_hits if h == "/"]) == pages_asked + 1,
                "[%s] and nothing reloads again (the page itself was asked for once more, by the one reload)" % lang)
         ctx.close()
 
@@ -581,10 +581,10 @@ def part_stale(browser):
     expect(running_scripts(other) == old_scripts, "(set-up: the browser still holds the old page and its scripts, as on a phone that looked at the page within the hour: %s)" % running_scripts(other))
     other.fill("#pw", mock_pihole.PASSWORD)
     other.press("#pw", "Enter")
-    expect(eventually(lambda: running_scripts(other) == new_scripts and other.is_hidden("#login"), 12), "the old page notices the box has 3.3.0 and reloads: every script is the new one: %s" % running_scripts(other))
+    expect(eventually(lambda: running_scripts(other) == new_scripts and other.is_hidden("#login"), 12), "the old page notices the box has 3.4.0 and reloads: every script is the new one: %s" % running_scripts(other))
     other.wait_for_selector(".tile")
-    expect(other.inner_text("#version") == "v3.3.0" and asset_hits(store, "3.3.0") == six("3.3.0"), "and the footer and the files fetched are the new release's")
-    expect(eventually(lambda: T("en", "boxUpdatedToast", v="3.3.0") in clean(other.inner_text("#toast"))), "with a toast that the page was updated")
+    expect(other.inner_text("#version") == "v3.4.0" and asset_hits(store, "3.4.0") == six("3.4.0"), "and the footer and the files fetched are the new release's")
+    expect(eventually(lambda: T("en", "boxUpdatedToast", v="3.4.0") in clean(other.inner_text("#toast"))), "with a toast that the page was updated")
     ctx.close()
 
     # --- coming back to a page that has been open for days: looked at when the phone returns, but never in the middle of something
@@ -592,7 +592,7 @@ def part_stale(browser):
     ctx, page = open_page(browser, url, "en")
     page.evaluate("() => { window.__before = 1; PBBox.timing.staleEvery = 0; }")
     installed_behind_the_pages_back(store)
-    page.evaluate("() => document.getElementById('bedOn').dispatchEvent(new Event('change', { bubbles: true }))")        # a bedtime is being edited
+    page.evaluate("() => document.getElementById('bedStart').dispatchEvent(new Event('change', { bubbles: true }))")     # a bedtime is being edited (the switch saves at once)
     page.evaluate("() => document.dispatchEvent(new Event('visibilitychange'))")
     time.sleep(1.5)
     expect(not reloaded(page), "a bedtime that is being typed is not thrown away by a reload")
@@ -601,12 +601,12 @@ def part_stale(browser):
     ctx, page = open_page(browser, url, "en")
     page.evaluate("() => { window.__before = 1; PBBox.timing.staleEvery = 0; }")
     open_box(page)
-    store.version = "3.3.0"                       # the update ran while the sheet was open, with no word of it in the state
+    store.version = "3.4.0"                       # the update ran while the sheet was open, with no word of it in the state
     page.evaluate("() => document.dispatchEvent(new Event('visibilitychange'))")
     time.sleep(1.5)
     expect(page.evaluate("() => window.__before === 1") and page.is_visible("#boxDialog"), "while My box is open the page is left as it is")
     page.click("#boxDialog [data-act=boxClose]")
-    store.edit_state(lambda st: st["update"].update({"status": "running", "from": VERSION, "to": "3.3.0", "at": int(time.time())}))
+    store.edit_state(lambda st: st["update"].update({"status": "running", "from": VERSION, "to": "3.4.0", "at": int(time.time())}))
     page.evaluate("() => document.dispatchEvent(new Event('visibilitychange'))")
     time.sleep(1.5)
     expect(page.evaluate("() => window.__before === 1"), "and while an update runs (the files are being replaced) it does not reload either")
@@ -623,10 +623,10 @@ def part_stale(browser):
     ctx.close()
 
     # --- it never reloads for ever
-    # (a) a box that keeps saying 3.3.0 while its page says 3.0.0 (stamped wrongly, a cache in between): once, then it lets be
+    # (a) a box that keeps saying 3.4.0 while its page says 3.0.0 (stamped wrongly, a cache in between): once, then it lets be
     url, store = stamped_site()
     store.stamp_pages = VERSION
-    store.version = "3.3.0"
+    store.version = "3.4.0"
     ctx, page = open_page(browser, url, "en", sign_in=False)
     page.wait_for_selector("#login:not([hidden])")
     page.fill("#pw", mock_pihole.PASSWORD)
@@ -637,12 +637,12 @@ def part_stale(browser):
     page.wait_for_selector(".tile")
     time.sleep(1.2)                                                              # the toast of an update comes a moment after the page is up
     expect(page.inner_text("#version") == "v" + VERSION, "the footer still says what the page is, not what the box has (%r)" % page.inner_text("#version"))
-    expect(T("en", "boxUpdatedToast", v="3.3.0") not in clean(page.inner_text("#toast")), "and no toast says 'Updated to 3.3.0' about a page that is not (%r)" % page.inner_text("#toast"))
+    expect(T("en", "boxUpdatedToast", v="3.4.0") not in clean(page.inner_text("#toast")), "and no toast says 'Updated to 3.4.0' about a page that is not (%r)" % page.inner_text("#toast"))
     ctx.close()
     # (b) a tab that cannot remember anything (private mode): no reload at all, since it could not tell it had already reloaded
     url, store = stamped_site()
     store.stamp_pages = VERSION
-    store.version = "3.3.0"
+    store.version = "3.4.0"
     ctx, page = open_page(browser, url, "en", sign_in=False,
                           init_script="Storage.prototype.setItem = function () { throw new Error('storage is off'); };")
     page.wait_for_selector("#login:not([hidden])")
@@ -659,7 +659,7 @@ def part_stale(browser):
     page.evaluate("() => { window.__before = 1; PBBox.timing.staleEvery = 0; }")
     expect(page.get_attribute("meta[name=sinko-version]", "content") == "@VERSION@", "(set-up: the page is as it is in the repository, the placeholder still there)")
     expect(eventually(lambda: page.inner_text("#version") == "v" + VERSION), "the footer shows the box's version file: %r" % page.inner_text("#version"))
-    store.version = "3.3.0"
+    store.version = "3.4.0"
     page.evaluate("() => document.dispatchEvent(new Event('visibilitychange'))")
     time.sleep(1.5)
     expect(page.evaluate("() => window.__before === 1") and page.inner_text("#version") == "v" + VERSION, "an unstamped page has nothing to compare, so it does not reload when the box changes")
@@ -1053,7 +1053,7 @@ def part_backup(browser):
         store.edit_state(lambda st: st.setdefault("update", {}).update({"status": "running", "request": 1700000000000, "from": "2.2.0", "to": "3.0.0", "at": 1700000000}))
         old_zip = store.export_zip()
         store.edit_state(lambda st: (st.update({"power": {"request": None, "action": None}}), st["update"].update(
-            {"status": "ok", "request": None, "from": "3.0.0", "to": "3.3.0", "at": 1800000100, "auto": True, "latest": None, "notes": None})))
+            {"status": "ok", "request": None, "from": "3.0.0", "to": "3.4.0", "at": 1800000100, "auto": True, "latest": None, "notes": None})))
         store.edit_state(lambda st: st.update({"telemetry": {"on": False}, "community": {"online": 3, "at": 1800000000}}))
         gid = store.gid("pb-kids")
         store.clients.append({"id": 900, "client": "AA:BB:CC:00:00:09", "comment": "Ali's phone", "groups": [0, gid], "name": None})
@@ -1095,7 +1095,7 @@ def part_backup(browser):
         expect([c["comment"] for c in store.clients] == ["Sara's iPad"], "[%s] the second child's device is gone, as in the backup: %s" % (lang, [c["comment"] for c in store.clients]))
         st = store.state()
         expect(st["power"] == {"request": None, "action": None}, "[%s] a restart that was pending in the backup does not happen" % lang)
-        expect(st["update"]["status"] == "ok" and st["update"]["auto"] is True and st["update"]["request"] is None and st["update"]["to"] == "3.3.0",
+        expect(st["update"]["status"] == "ok" and st["update"]["auto"] is True and st["update"]["request"] is None and st["update"]["to"] == "3.4.0",
                "[%s] the update fields are today's, not the backup's 'running': %s" % (lang, st["update"]))
         expect(st["telemetry"] == {"on": False} and st["community"]["online"] == 3, "[%s] the counter answer is today's" % lang)
         expect("Ali" not in page.inner_text("#devices") and "Sara" in page.inner_text("#devices"), "[%s] the page behind shows the restored devices" % lang)
@@ -1235,7 +1235,7 @@ def part_power(browser):
         expect(eventually(lambda: not page.is_disabled("#boxRestartBtn") and page.inner_text("#boxPowerMsg") == "", 8), "[%s] when the update has finished the buttons are open again" % lang)
         ctx.close()
         # an update that another phone started, or one the scheduler has not picked up yet, counts too (this page never saw it begin)
-        for what, change in (("running, started elsewhere", {"status": "running", "from": VERSION, "to": "3.3.0", "at": int(time.time())}),
+        for what, change in (("running, started elsewhere", {"status": "running", "from": VERSION, "to": "3.4.0", "at": int(time.time())}),
                              ("asked for, not picked up yet", {"request": 1700000000000})):
             url, store = make_site()
             store.edit_state(lambda st: st.setdefault("update", {}).update(change))
@@ -1254,7 +1254,7 @@ def part_power(browser):
         confirm_text(page)
         page.click("#confirmYes")
         expect(eventually(lambda: store.state()["power"]["request"] is not None), "[%s] (set-up: the request waits in the state)" % lang)
-        store.edit_state(lambda st: st.setdefault("update", {}).update({"status": "running", "from": VERSION, "to": "3.3.0", "at": int(time.time())}))
+        store.edit_state(lambda st: st.setdefault("update", {}).update({"status": "running", "from": VERSION, "to": "3.4.0", "at": int(time.time())}))
         expect(eventually(lambda: store.state()["power"] == {"request": None, "action": None}, 20), "[%s] the update started: the page takes the request back (the box would only drop it)" % lang)
         # Only now does the box go silent, as the installer restarts the box's services a while after the update began. Both at once would leave it
         # to chance which the page meets first, the update or the silence, and silence right after a restart request is, rightly, read as 'restarting'.
@@ -1277,7 +1277,7 @@ def part_power(browser):
         confirm_text(page)
         page.click("#confirmYes")
         eventually(lambda: store.state()["power"]["request"] is not None)
-        store.edit_state(lambda st: (st.setdefault("update", {}).update({"status": "running", "from": VERSION, "to": "3.3.0", "at": int(time.time())}),
+        store.edit_state(lambda st: (st.setdefault("update", {}).update({"status": "running", "from": VERSION, "to": "3.4.0", "at": int(time.time())}),
                                      st["power"].update({"request": None, "action": None})))
         time.sleep(2.0)
         msg = clean(page.inner_text("#boxPowerMsg"))
@@ -1311,7 +1311,7 @@ def part_power(browser):
         open_box(page)
         page.evaluate("() => Object.defineProperty(document, 'visibilityState', { get: () => 'hidden', configurable: true })")
         time.sleep(0.6)                                                          # polling stops while the page is hidden: nothing refreshes what it knows
-        store.edit_state(lambda st: st.setdefault("update", {}).update({"status": "running", "from": VERSION, "to": "3.3.0", "at": int(time.time())}))
+        store.edit_state(lambda st: st.setdefault("update", {}).update({"status": "running", "from": VERSION, "to": "3.4.0", "at": int(time.time())}))
         page.click("#boxRestartBtn")
         confirm_text(page)
         page.click("#confirmYes")
@@ -1628,11 +1628,11 @@ def part_banner(browser):
         offer_update(store)
         ctx, page = open_page(browser, url, lang)
         page.wait_for_selector("#updateBanner:not([hidden])")
-        expect(page.inner_text("#updateBanner") == T(lang, "updateReady", v="3.3.0"), "[%s] the banner: %r" % (lang, page.inner_text("#updateBanner")))
+        expect(page.inner_text("#updateBanner") == T(lang, "updateReady", v="3.4.0"), "[%s] the banner: %r" % (lang, page.inner_text("#updateBanner")))
         shot(page, "banner-%s.png" % lang)
         page.click("#updateBanner")
         page.wait_for_selector("#boxDialog[open]")
-        expect(T(lang, "boxAvailable", v="3.3.0") in live(page), "[%s] it opens My box where the update is" % lang)
+        expect(T(lang, "boxAvailable", v="3.4.0") in live(page), "[%s] it opens My box where the update is" % lang)
         ctx.close()
         # nothing on offer, or a 'latest' that is not a version: no banner
         for latest in (None, "1.0.0", VERSION):
@@ -1737,7 +1737,8 @@ def contrast(page, roots, label, minimum=3):
 
 def part_contrast(browser):
     """Every component that was added or changed for My box, the first run and the update banner, measured in light and dark, in both languages."""
-    main_roots = ["#updateBanner", "#setup", "#banner", "#devices", "#services", ".help", ".foot"]
+    # the control panel and the savings card have flat backgrounds since 3.3, so every word on them can be measured too
+    main_roots = ["#hero", "#saved", "#updateBanner", "#setup", "#banner", "#devices", "#services", ".help", ".foot"]
     for scheme in ("light", "dark"):
         for lang in ("en", "ar"):
             tag = "[%s %s]" % (scheme, lang)
@@ -1745,16 +1746,42 @@ def part_contrast(browser):
             url, store = make_site(setup_done=False)
             offer_update(store)
             store.box_info_age = 25 * 60
+            mock_pihole.seed_ledger(store)                          # the savings card with a week of numbers, its chart and notes
+            # the demo week switches bedtime on; off again, so the break below has its countdown whatever the time of day
+            store.edit_state(lambda st: st["schedule"].update(enabled=False))
             ctx, page = open_page(browser, url, lang, color_scheme=scheme)
-            page.click("[data-id=youtube]")
+            page.click("#priceBtn")                                  # and a price, so the money line is measured too
+            page.fill("#priceValue", "0.5")
+            page.fill("#priceCurrency", "BHD")
+            page.press("#priceValue", "Enter")
+            page.locator("#priceDialog[open]").wait_for(state="detached")
+            page.wait_for_selector("#savedBody .fig-note")
+            page.click("[data-id=youtube] [data-want=block]")
             page.wait_for_selector("[data-id=youtube].tile-blocked")
             page.click("[data-act=pause]")
             page.wait_for_selector(".device .tag")
             page.evaluate("() => { PBBox.timing.heartbeatGrace = 1; }")
             eventually(lambda: (page.evaluate("() => document.dispatchEvent(new Event('visibilitychange'))"), page.is_visible("#banner"))[1], 8)
-            contrast(page, main_roots, tag + " main page (update banner, setup list, banner, blocked app, paused tag)", 12)
+            contrast(page, main_roots, tag + " main page (control panel, savings card, update banner, setup list, banner, blocked app, paused tag)", 12)
+            page.click("#heroBtn")                                  # the dark panel: internet off
+            page.wait_for_selector("#hero.is-off")
+            contrast(page, ["#hero"], tag + " the control panel with the internet off", 3)
+            page.click("#heroBtn")
+            page.wait_for_selector("#hero:not(.is-off)")
+            page.click("#off30")                                     # an offline break: the dark panel with its countdown
+            page.wait_for_selector("#hero.is-off #heroClock:not([hidden])")
+            contrast(page, ["#hero"], tag + " the control panel during an offline break", 4)
+            page.click("#heroBtn")
+            page.wait_for_selector("#hero:not(.is-off)")
+            page.click("[data-act=timer][data-mode=free]")           # free time: the light panel with its countdown
+            page.click("#timerChips .chip >> nth=1")
+            page.click("[data-act=startTimer]")
+            page.wait_for_selector("#hero:not(.is-off) #heroClock:not([hidden])")
+            contrast(page, ["#hero", "#services"], tag + " the control panel and the locked apps during free time", 4)
+            page.click("#heroBtn")
+            page.wait_for_selector("#heroClock[hidden]", state="attached")
             shot(page, "contrast-main-%s-%s.png" % (scheme, lang), full=True)
-            store.edit_state(lambda st: st["update"].update({"status": "failed", "to": "3.3.0", "latest": "3.3.0", "at": int(time.time()), "error": "x", "rolledBack": False}))
+            store.edit_state(lambda st: st["update"].update({"status": "failed", "to": "3.4.0", "latest": "3.4.0", "at": int(time.time()), "error": "x", "rolledBack": False}))
             page.evaluate("() => document.dispatchEvent(new Event('visibilitychange'))")
             eventually(lambda: page.is_visible("#updateBanner") and page.get_attribute("#updateBanner", "data-phase") == "failed")
             contrast(page, ["#updateBanner"], tag + " the 'last update did not work' banner", 1)
@@ -1774,7 +1801,7 @@ def part_contrast(browser):
             contrast(page, ["#boxDialog"], tag + " My box: update on offer, filtering off, hot box, 3 hours off, universal time, counter online", 25)
             shot(page, "contrast-box-%s-%s.png" % (scheme, lang))
             for rolled in (False, None, True):
-                store.edit_state(lambda st: st["update"].update({"status": "failed", "to": "3.3.0", "latest": "3.3.0", "at": int(time.time()) - 5,
+                store.edit_state(lambda st: st["update"].update({"status": "failed", "to": "3.4.0", "latest": "3.4.0", "at": int(time.time()) - 5,
                                                                   "error": "The installer stopped with an error (exit status 1).", "rolledBack": rolled}))
                 page.keyboard.press("Escape")
                 open_box(page)
@@ -1782,7 +1809,7 @@ def part_contrast(browser):
                     page.click("#boxUpdates details summary")
                 contrast(page, ["#boxUpdates"], tag + " a failed update (rolledBack %s)" % rolled, 4)
                 shot(page, "contrast-failed-%s-%s-%s.png" % (str(rolled).lower(), scheme, lang))
-            store.edit_state(lambda st: st["update"].update({"status": "running", "to": "3.3.0", "at": int(time.time()), "error": None, "rolledBack": None}))
+            store.edit_state(lambda st: st["update"].update({"status": "running", "to": "3.4.0", "at": int(time.time()), "error": None, "rolledBack": None}))
             page.keyboard.press("Escape")
             open_box(page)
             contrast(page, ["#boxUpdates", "#boxPower"], tag + " an update running, with the power buttons waiting", 6)
@@ -1877,7 +1904,7 @@ def part_narrow(browser):
                 page.evaluate("() => document.getElementById('boxHealth').scrollIntoView()")
                 shot(page, "narrow-box-health-%d-%s-%s.png" % (width, scheme, lang))
                 for rolled in (True, False, None):
-                    store.edit_state(lambda st: st["update"].update({"status": "failed", "to": "3.3.0", "latest": "3.3.0", "at": int(time.time()) - 5,
+                    store.edit_state(lambda st: st["update"].update({"status": "failed", "to": "3.4.0", "latest": "3.4.0", "at": int(time.time()) - 5,
                                                                       "error": "The installer stopped with an error (exit status 1).", "rolledBack": rolled}))
                     page.keyboard.press("Escape")
                     open_box(page)
@@ -1885,7 +1912,7 @@ def part_narrow(browser):
                         page.click("#boxUpdates details summary")
                     expect(max(sideways()) <= 1, "%s a failed update (rolledBack %s) has nothing to scroll sideways" % (tag, rolled))
                     shot(page, "narrow-failed-%s-%d-%s-%s.png" % (str(rolled).lower(), width, scheme, lang))
-                store.edit_state(lambda st: st["update"].update({"status": "running", "to": "3.3.0", "at": int(time.time()), "error": None, "rolledBack": None}))
+                store.edit_state(lambda st: st["update"].update({"status": "running", "to": "3.4.0", "at": int(time.time()), "error": None, "rolledBack": None}))
                 page.keyboard.press("Escape")
                 open_box(page)
                 page.evaluate("() => document.getElementById('boxPower').scrollIntoView()")

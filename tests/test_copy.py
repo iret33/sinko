@@ -1,11 +1,12 @@
 """The page's words: complete in both languages, with the same placeholders, and plain for parents.
 
-Three groups of strings are checked, all read out of the source by tests/pbstrings.py:
+Four groups of strings are checked, all read out of the source by tests/pbstrings.py:
 
 * the live picture (LIVE_STR in web/app.js): the spec bans technical words from the default view: DNS, query, request, upstream,
   gravity, resolver, packet, latency, Pi-hole, cache. They may appear only in the "How it works" sheet (keys lvDetailTitle ...
   lvTopEmpty), each explained;
 * the first run (FIRST_STR in web/app.js): the claim screen, the terms of use, the setup list, the update banner;
+* the savings card, the price sheet and the live view's frame (SAVE_STR in web/app.js);
 * the My box sheet (BOX_STR in web/pb-box.js).
 
 The last two follow the same rule with no "How it works" sheet to hide behind: no technical word anywhere. The unavoidable exceptions
@@ -187,6 +188,70 @@ class FirstRunCopy(Copy, unittest.TestCase):
         self.assertRegex(en["terms1"], r"(?i)without any warranty")
         self.assertIn("دون أي ضمان", ar["terms1"])
         self.assertRegex(en["terms2"], r"(?i)not a lock")
+
+
+class IndexFallbacks(unittest.TestCase):
+    """index.html carries English text inside every data-i18n element, shown before the script runs: it must be the table's own."""
+    def test_every_fallback_is_the_english_in_its_table(self):
+        tables = {}
+        for get in (pbstrings.app_strings, pbstrings.first_strings, pbstrings.save_strings, pbstrings.box_strings, pbstrings.live_strings):
+            tables.update(get()["en"])
+        checked = 0
+        for key, text in re.findall(r'data-i18n="(\w+)">([^<]*)<', INDEX):
+            if key in tables and isinstance(tables[key], str):
+                self.assertEqual(text.replace("&amp;", "&"), tables[key], key)
+                checked += 1
+        self.assertGreater(checked, 40)
+
+
+class ControlPanelCopy(unittest.TestCase):
+    """The main table (STR) holds the control panel's sentences: they must not promise more than the box does."""
+    def test_free_time_does_not_say_everything_is_allowed(self):
+        # The general block lists stay on in free time (lvFreeSub says so): only the app rules are lifted.
+        s = pbstrings.app_strings()
+        for lang in ("en", "ar"):
+            for key, text in s[lang].items():
+                if isinstance(text, str):
+                    self.assertNotRegex(text, r"(?i)everything (is )?allowed|كل شيء مسموح|السماح بكل شيء", key)
+                    self.assertNotRegex(text, OVERCLAIM, "%s overclaims" % key)
+
+
+class SavingsCopy(Copy, unittest.TestCase):
+    """The card "What Sinko did for you", the price sheet and the live view's frame (SAVE_STR in web/app.js)."""
+    @classmethod
+    def setUpClass(cls):
+        cls.strings = pbstrings.save_strings()
+
+    def test_no_technical_words(self):
+        for key, text in self.table()["en"].items():
+            self.assertIsNone(BANNED.search(text), "%s uses a technical word: %r" % (key, text))
+            self.assertIsNone(JARGON.search(text), "%s uses jargon: %r" % (key, text))
+
+    def test_every_string_is_used(self):
+        used = quoted(APP) | keys_used(INDEX)
+        dynamic = ({"size" + u for u in ("MB", "GB", "TB")} | {"savedHow%d" % i for i in range(1, 7)}
+                   | {k + f for k in ("savedTimes", "savedNightsOf") for f in ("One", "Two", "Few")})
+        self.assertEqual(set(self.table()["en"]) - used - dynamic, set(), "defined but never used")
+
+    def test_the_estimates_are_said_with_the_numbers_the_page_uses(self):
+        # "How we count" quotes the two estimates; they must be the ones pb-core.js multiplies by (and say they are estimates).
+        core = pbstrings.read("pb-core.js")
+        ms = re.search(r"var WAIT_MS_PER_STOP = (\d+);", core).group(1)
+        kb = str(int(re.search(r"var BYTES_PER_STOP = (\d+);", core).group(1)) // 1000)
+        en, ar = self.table()["en"]["savedHow3"], self.table()["ar"]["savedHow3"]
+        self.assertIn("%s ms" % ms, en)
+        self.assertIn("%s KB" % kb, en)
+        self.assertIn(ms, ar)
+        self.assertIn(kb + " كيلوبايت", ar)
+        self.assertRegex(en, r"(?i)\babout\b")
+        for key in ("savedWait", "savedData"):
+            self.assertNotIn("exact", self.table()["en"][key].lower())
+
+    def test_the_money_figure_is_only_the_parents_own_price(self):
+        en = self.table()["en"]
+        self.assertIn("at your price", en["savedMoney"])
+        self.assertRegex(en["priceLead"], r"(?i)stays on this phone")
+        self.assertRegex(en["savedHow1"], r"(?i)never sent")
 
 
 class BoxCopy(Copy, unittest.TestCase):

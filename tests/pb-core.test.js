@@ -336,3 +336,192 @@ test('learned rules are read exactly as the box reads them (tests/fixtures/learn
   assert.equal(C.regexZone('(^|\\.)tiktok-minis\\.us$'), 'tiktok-minis.us');
   assert.equal(C.regexZone('^.*$'), null);
 });
+
+// ------------------------------------------------------------------ the savings card (pb-ledger, docs/maintainers/architecture.md)
+const IDS = ['tiktok', 'roblox', 'youtube', 'netflix'];
+const ledgerJSON = (over) => JSON.stringify(Object.assign({
+  v: 1, at: 1793050000, today: '2026-10-26', since: '2026-03-02', keptSince: '2026-10-26', adLists: 1,
+  days: [
+    { d: '2026-10-20', ads: 13102, apps: { tiktok: 50, roblox: 40 }, offSec: 36000, kept: 1 },
+    { d: '2026-10-26', ads: 14208, apps: { tiktok: 61, youtube: 27 }, offSec: 3600, kept: null },
+    { d: '2026-10-23', ads: 16920, apps: { roblox: 30 }, offSec: null, kept: 0 },
+  ],
+  tot: { ads: 3100000, apps: { tiktok: 12840, roblox: 9115 }, offSec: 6854400, nights: 238, nightsKept: 231 },
+}, over || {}));
+
+test('parseLedger: a good ledger, days oldest first, gaps stay gaps', () => {
+  const L = C.parseLedger(ledgerJSON(), IDS);
+  assert.deepEqual(L.days.map((r) => r.d), ['2026-10-20', '2026-10-23', '2026-10-26']);
+  assert.equal(L.today, '2026-10-26');
+  assert.equal(L.since, '2026-03-02');
+  assert.equal(L.adLists, 1);
+  assert.deepEqual(L.days[1], { d: '2026-10-23', ads: 16920, apps: { roblox: 30 }, offSec: null, kept: 0 });
+  assert.deepEqual(L.tot, { ads: 3100000, apps: { tiktok: 12840, roblox: 9115 }, offSec: 6854400, nights: 238, nightsKept: 231 });
+});
+
+test('parseLedger: anything unexpected is dropped, never shown', () => {
+  for (const bad of [undefined, '', 'nope', '[]', '{"v":2}', ledgerJSON({ v: '1' }), ledgerJSON({ at: 0 }), ledgerJSON({ today: '2026-02-30' }), ledgerJSON({ today: 'today' })]) {
+    assert.equal(C.parseLedger(bad, IDS), null, String(bad));
+  }
+  const L = C.parseLedger(ledgerJSON({
+    since: 'last year', keptSince: '2026-13-01', adLists: -1,
+    days: [
+      { d: '2026-10-27', ads: 5 },                                  // after today
+      { d: '2026-10-19', ads: 5 },                                  // more than a week back
+      { d: '2026-10-25', ads: 1.5, apps: { tiktok: -2, roblox: '9', evil: 9, toString: 3, youtube: 4 }, offSec: -1, kept: true },
+      { d: '2026-10-25', ads: 99 },                                 // the same day twice: the first one counts
+      'garbage', null,
+    ],
+    tot: { ads: 1e13, apps: [], nights: 3, nightsKept: 9 },
+  }), IDS);
+  assert.equal(L.since, null);
+  assert.equal(L.keptSince, null);
+  assert.equal(L.adLists, null);
+  assert.deepEqual(L.days, [{ d: '2026-10-25', ads: null, apps: { youtube: 4 }, offSec: null, kept: null }]);
+  assert.deepEqual(L.tot, { ads: null, apps: {}, offSec: null, nights: 3, nightsKept: 3 }, 'kept nights never exceed nights');
+});
+
+test('parseLedger: at most 8 apps, biggest first', () => {
+  const ids = 'abcdefghij'.split('');
+  const apps = {}; ids.forEach((k, i) => { apps[k] = i + 1; });
+  const L = C.parseLedger(ledgerJSON({ days: [{ d: '2026-10-26', ads: 1, apps }] }), ids);
+  assert.deepEqual(Object.keys(L.days[0].apps), ['j', 'i', 'h', 'g', 'f', 'e', 'd', 'c']);
+});
+
+test('savings: today, the week and since, with the estimates', () => {
+  const L = C.parseLedger(ledgerJSON(), IDS);
+  const today = C.savings(L, 'today');
+  assert.equal(today.ads, 14208);
+  assert.deepEqual(today.apps, [{ app: 'tiktok', count: 61 }, { app: 'youtube', count: 27 }]);
+  assert.equal(today.waitSec, 14208 * 50 / 1000);
+  assert.equal(today.bytes, 14208 * 10000);
+  assert.equal(today.days, 1);
+  const week = C.savings(L, 'week');
+  assert.equal(week.ads, 13102 + 16920 + 14208);
+  assert.equal(week.offSec, 36000 + 3600, 'an unknown day does not count as zero, it just adds nothing');
+  assert.deepEqual(week.apps.slice(0, 2), [{ app: 'tiktok', count: 111 }, { app: 'roblox', count: 70 }]);
+  assert.deepEqual([week.nights, week.nightsKept], [2, 1]);
+  assert.equal(week.days, 3);
+  const since = C.savings(L, 'since');
+  assert.equal(since.ads, 3100000);
+  assert.deepEqual([since.nights, since.nightsKept], [238, 231]);
+  assert.equal(C.savings(null, 'week').ads, null);
+  const unknown = C.savings(C.parseLedger(ledgerJSON({ days: [{ d: '2026-10-26', ads: null }] }), IDS), 'today');
+  assert.equal(unknown.ads, null);
+  assert.equal(unknown.waitSec, null, 'no ads number, no estimate');
+});
+
+test('ledgerWeek: seven days ending today, missing ones are null', () => {
+  const L = C.parseLedger(ledgerJSON(), IDS);
+  const w = C.ledgerWeek(L);
+  assert.deepEqual(w.map((x) => x.d), ['2026-10-20', '2026-10-21', '2026-10-22', '2026-10-23', '2026-10-24', '2026-10-25', '2026-10-26']);
+  assert.deepEqual(w.map((x) => x.ads), [13102, null, null, 16920, null, null, 14208]);
+  assert.equal(C.weekday('2026-10-26'), 1, 'a Monday');
+  assert.equal(C.weekday('2026-10-25'), 0, 'a Sunday');
+  assert.equal(C.weekday('nope'), -1);
+  assert.deepEqual(C.ledgerWeek(null), []);
+});
+
+test('durationParts and sizeParts', () => {
+  assert.deepEqual(C.durationParts(29), { m: 0 });
+  assert.deepEqual(C.durationParts(12 * 60), { m: 12 });
+  assert.deepEqual(C.durationParts(82 * 60), { h: 1, m: 22 });
+  assert.deepEqual(C.durationParts(9 * 3600 + 59 * 60), { h: 9, m: 59 });
+  assert.deepEqual(C.durationParts(43.4 * 3600), { h: 43 });
+  assert.equal(C.durationParts(null), null);
+  assert.deepEqual(C.sizeParts(142e6), { value: 142, unit: 'MB' });
+  assert.deepEqual(C.sizeParts(984e6), { value: 1, unit: 'GB' });
+  assert.deepEqual(C.sizeParts(3.24e9), { value: 3.2, unit: 'GB' });
+  assert.deepEqual(C.sizeParts(31e9), { value: 31, unit: 'GB' });
+  assert.deepEqual(C.sizeParts(2.5e12), { value: 2.5, unit: 'TB' });
+  assert.deepEqual(C.sizeParts(0), { value: 0, unit: 'MB' });
+  assert.equal(C.sizeParts(-1), null);
+});
+
+test('moneyFor: only with a price the parent typed', () => {
+  assert.equal(C.moneyFor(2e9, 0.5), 1);
+  assert.equal(C.moneyFor(2e9, '0,5'), 1, 'a comma works as the decimal mark');
+  for (const p of [0, -1, 'abc', '', null, undefined, 1e7]) assert.equal(C.moneyFor(2e9, p), null, String(p));
+  assert.equal(C.moneyFor(null, 1), null);
+});
+
+test('parseAmount: any keypad, any decimal mark', () => {
+  const cases = [['0.5', 0.5], ['0,5', 0.5], ['٠٫٥', 0.5], ['۰٫۵', 0.5], ['0٫5', 0.5], ['١', 1], ['1٫5', 1.5], ['1,000', 1000], ['10,000', 10000],
+    ['1.000,5', 1000.5], ['1,000.5', 1000.5], ['1٬000', 1000], [' 2 ', 2], ['0,125', 0.125], ['2,5', 2.5], ['1,2,3', 123], ['abc', null], ['', null],
+    ['-1', null], ['1e3', null], [3, 3], [null, null]];
+  for (const [input, want] of cases) assert.equal(C.parseAmount(input), want, JSON.stringify(input));
+  assert.equal(C.moneyFor(2e9, '٠٫٥'), 1, 'an Arabic-Indic price works');
+  assert.equal(C.moneyFor(1e9, '1,000'), 1000, 'a thousands comma is not a decimal mark');
+});
+
+test('nextWallTime: the next time the box clock shows HH:MM', () => {
+  const at = (iso) => Date.parse(iso) / 1000;
+  // The box is in Bahrain (+03:00). 21:40 there; morning is 06:30 the next day.
+  assert.equal(C.nextWallTime(at('2026-10-26T18:40:00Z'), '06:30', 180), at('2026-10-27T03:30:00Z'));
+  // 02:00 at night: 06:30 is later the same night.
+  assert.equal(C.nextWallTime(at('2026-10-26T23:00:00Z'), '06:30', 180), at('2026-10-27T03:30:00Z'));
+  // Less than a minute away counts as tomorrow.
+  assert.equal(C.nextWallTime(at('2026-10-27T03:29:30Z'), '06:30', 180), at('2026-10-28T03:30:00Z'));
+  assert.equal(C.nextWallTime(at('2026-10-26T18:40:00Z'), '6:30', 180), null);
+  assert.equal(C.utcOffsetMinutes('+03:00'), 180);
+  assert.equal(C.utcOffsetMinutes('-0530'), -330);
+  assert.equal(C.utcOffsetMinutes('Z'), 0);
+  assert.equal(C.utcOffsetMinutes('+25:00'), null);
+  assert.equal(C.utcOffsetMinutes(null), null);
+});
+
+// ------------------------------------------------------------------ bedtime as the box sees it (bin/sinko in_schedule, Controller.tick)
+const SC = { enabled: true, start: '21:00', end: '06:30', days: [0, 1, 2, 3, 4] };     // Sunday to Thursday nights
+const BH = 180;                                                                          // the box in Bahrain, UTC+03:00
+const at = (iso) => Date.parse(iso) / 1000;                                             // ISO with the box's own +03:00
+
+test('inBedtime follows in_schedule: a night belongs to the day it starts', () => {
+  assert.equal(C.inBedtime(SC, at('2026-10-26T22:00:00+03:00'), BH), true, 'Monday 22:00');
+  assert.equal(C.inBedtime(SC, at('2026-10-27T05:00:00+03:00'), BH), true, 'Tuesday 05:00 is Monday night');
+  assert.equal(C.inBedtime(SC, at('2026-10-27T06:30:00+03:00'), BH), false, 'the end minute is not bedtime');
+  assert.equal(C.inBedtime(SC, at('2026-10-30T22:00:00+03:00'), BH), false, 'Friday night is not a bedtime night');
+  assert.equal(C.inBedtime(SC, at('2026-10-31T05:00:00+03:00'), BH), false, 'nor is early Saturday');
+  assert.equal(C.inBedtime(SC, at('2026-10-30T05:00:00+03:00'), BH), true, 'early Friday is Thursday night');
+  assert.equal(C.inBedtime(Object.assign({}, SC, { enabled: false }), at('2026-10-26T22:00:00+03:00'), BH), false);
+  assert.equal(C.inBedtime(Object.assign({}, SC, { start: '06:30' }), at('2026-10-26T22:00:00+03:00'), BH), false, 'start == end is never');
+  const day = { enabled: true, start: '13:00', end: '15:00', days: [1] };
+  assert.equal(C.inBedtime(day, at('2026-10-26T14:00:00+03:00'), BH), true, 'a window inside one day');
+  assert.equal(C.inBedtime(day, at('2026-10-26T15:00:00+03:00'), BH), false);
+});
+
+test('comesBack: what the panel promises is what the box will do', () => {
+  const now = at('2026-10-26T20:30:00+03:00');          // Monday evening, bedtime at 21:00
+  // a break that ends inside bedtime stays off until bedtime ends
+  assert.deepEqual(C.comesBack('break', SC, now, now + 3600, BH), { at: at('2026-10-27T06:30:00+03:00'), bedtime: true });
+  // a break that ends before bedtime ends when it says
+  assert.deepEqual(C.comesBack('break', SC, now, now + 1200, BH), { at: now + 1200, bedtime: false });
+  // free time cut short by bedtime
+  assert.deepEqual(C.comesBack('free', SC, now, now + 7200, BH), { at: at('2026-10-26T21:00:00+03:00'), bedtime: true });
+  assert.deepEqual(C.comesBack('free', SC, now, now + 600, BH), { at: now + 600, bedtime: false });
+  // switched off by hand: the box turns it on when the next bedtime window ends
+  assert.deepEqual(C.comesBack('off', SC, now, null, BH), { at: at('2026-10-27T06:30:00+03:00'), bedtime: true });
+  assert.deepEqual(C.comesBack('off', Object.assign({}, SC, { enabled: false }), now, null, BH), { at: null, bedtime: false });
+  // during bedtime, a break that ends after bedtime ends at its own time
+  const night = at('2026-10-27T05:00:00+03:00');
+  assert.deepEqual(C.comesBack('break', SC, night, night + 7200, BH), { at: night + 7200, bedtime: false });
+  // Friday evening: the next window is Sunday night
+  const fri = at('2026-10-30T20:00:00+03:00');
+  assert.deepEqual(C.comesBack('off', SC, fri, null, BH), { at: at('2026-11-02T06:30:00+03:00'), bedtime: true });
+});
+
+test('ledgerLate: judged by the box\'s day, not by when the numbers last changed', () => {
+  const L = (today) => ({ today: today, at: at('2026-10-26T09:00:00+03:00') });
+  // a quiet box: numbers unchanged since 09:00, but the copy is today's
+  assert.equal(C.ledgerLate(L('2026-10-26'), at('2026-10-26T23:00:00+03:00'), BH), false);
+  // just after midnight the new day is not written yet: not late
+  assert.equal(C.ledgerLate(L('2026-10-26'), at('2026-10-27T00:30:00+03:00'), BH), false);
+  // two hours after midnight it should have been
+  assert.equal(C.ledgerLate(L('2026-10-26'), at('2026-10-27T02:30:00+03:00'), BH), true);
+  // more than a day behind, whatever the hour
+  assert.equal(C.ledgerLate(L('2026-10-25'), at('2026-10-27T00:10:00+03:00'), BH), true);
+  // the box's day, not UTC's: 01:00 in Bahrain is still the 26th in UTC
+  assert.equal(C.ledgerLate(L('2026-10-26'), at('2026-10-27T01:00:00+03:00'), BH), false);
+  // a copy dated ahead (the clock was set back) or with no date is not called late
+  assert.equal(C.ledgerLate(L('2026-10-28'), at('2026-10-27T12:00:00+03:00'), BH), false);
+  assert.equal(C.ledgerLate(null, at('2026-10-27T12:00:00+03:00'), BH), false);
+});

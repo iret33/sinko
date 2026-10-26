@@ -2,13 +2,13 @@
 <title id="t">How Sinko answers a question from a phone</title>
 <desc id="d">An animation. A phone asks the Sinko box where youtube.com is; the box checks its rules, asks the internet, and the phone gets the answer, so the app works. Then the phone asks for tiktok.com; the box has it blocked and answers no, so the app does not open. A live list below records both.</desc>
 <style>
-svg{--bg:#F1F4F2;--card:#FFFFFF;--line:#C4D2CE;--ink:#17302E;--ink2:#4D625F;--ok:#0F766E;--oksoft:#E1F1EE;--no:#C7432F;--nosoft:#FBE9E5;--night:#1E2547;font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Arabic",sans-serif}
-@media (prefers-color-scheme:dark){svg{--bg:#0E1615;--card:#15201E;--line:#33453F;--ink:#E3ECE9;--ink2:#9DB0AC;--ok:#2BA597;--oksoft:#12302C;--no:#F0735E;--nosoft:#3A1E19;--night:#262E5A}}
+svg{--bg:#E9E7E1;--card:#F6F5F1;--line:#C9C5BA;--ink:#1B1B19;--ink2:#5E5B53;--ok:#1F6B30;--oksoft:#E0DDD5;--no:#B42318;--nosoft:#F3DEDA;--night:#1B1B19;--box:#1B1B19;font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Arabic",sans-serif}
+@media (prefers-color-scheme:dark){svg{--bg:#161614;--card:#22221F;--line:#46443E;--ink:#ECEAE4;--ink2:#A9A59B;--ok:#2B8A3E;--oksoft:#1B1B19;--no:#B42318;--nosoft:#3A1E19;--night:#0B0B0A;--box:#0B0B0A}}
 .bg{fill:var(--bg)} .card{fill:var(--card);stroke:var(--line);stroke-width:2}
 .wire{stroke:var(--line);stroke-width:3;stroke-dasharray:2 9;stroke-linecap:round;fill:none}
 .t{fill:var(--ink);font-size:17px;font-weight:700}.s{fill:var(--ink2);font-size:14px}
 .pill-ok{fill:var(--ok)}.pill-no{fill:var(--no)}.pt{fill:#fff;font-size:13px;font-weight:700}
-.box{fill:var(--ok)}.led{fill:#fff}
+.box{fill:var(--box);stroke:var(--line);stroke-width:2}.led{fill:#fff}
 .p{opacity:0;animation-duration:10s;animation-iteration-count:infinite;animation-timing-function:ease-in-out}
 .a1{animation-name:a1}.a2{animation-name:a2}.a3{animation-name:a3}.a4{animation-name:a4}
 .b1{animation-name:b1}.b2{animation-name:b2}
@@ -47,8 +47,8 @@ svg{--bg:#F1F4F2;--card:#FFFFFF;--line:#C4D2CE;--ink:#17302E;--ink2:#4D625F;--ok
 <rect x="414" y="108" width="72" height="12" rx="6" fill="#fff" opacity=".28"/>
 <circle class="led" cx="424" cy="190" r="5"/><circle class="led" cx="440" cy="190" r="5" opacity=".5"/>
 <rect class="fade scan" x="406" y="124" width="88" height="3" rx="1.5" fill="#fff"/>
-<circle class="fade ledok" cx="476" cy="190" r="7" fill="#9DF2C9"/>
-<circle class="fade ledno" cx="476" cy="190" r="7" fill="#FFB4A6"/>
+<circle class="fade ledok" cx="476" cy="190" r="7" fill="#3FA556"/>
+<circle class="fade ledno" cx="476" cy="190" r="7" fill="#F0846F"/>
 <text class="t" x="450" y="252" text-anchor="middle">Sinko box</text>
 <text class="s" x="450" y="272" text-anchor="middle">checks your rules</text>
 <!-- internet -->

@@ -65,6 +65,7 @@ Sinko itself never sends any of these to the project, or to anyone else:
 * the language you chose or your time zone;
 * the history of lookups that Pi-hole keeps on the box. (Pi-hole, not Sinko, passes on the names of sites it cannot
   answer itself, as described above.)
+* the counts behind *What Sinko did for you* (see [What the box counts for you](#counts)).
 
 There is no Sinko account, no sign-in on a server, no advertising and no tracking. The parent page does not load
 anything from other websites (the fonts are on the box); it links to this project's GitHub page, and only when you
@@ -84,7 +85,37 @@ the Sinko app can find the box and know which box it is. Neither leaves your hom
   computer: if it says something about your family (your surname, say), every device at home can read it here, as it
   could already through the `.local` name.
 
-Neither says anything about your children, their devices, your rules, the password or what anybody looks up.
+Neither says anything about your children, their devices, your rules, the password or what anybody looks up, and neither
+holds the counts described next.
+
+<a id="counts"></a>
+
+### What the box counts for you
+
+The parent page's card *What Sinko did for you* shows how many ads and trackers the box stopped, how often a blocked app
+tried to open, how long the children's internet was off and on how many nights bedtime was kept. Pi-hole keeps its history
+of lookups only for a limited time (see [The sites your family looks up](#lookups)) and does not note the rest, so the box
+keeps a small tally of its own:
+
+* **Counts only.** For each day: how many lookups a general block list stopped, how many each blocked app's list stopped
+  (per app), how many seconds the children's internet was off, and whether that night's bedtime was kept. No site names,
+  no names or addresses of devices, no times of day.
+* **How it is made.** Every 15 minutes the box counts what Pi-hole's history on the box says (it only reads it); the time
+  off and bedtime it notes itself while they happen.
+* **How long.** The numbers of each day are kept for 35 days; after that they are added to running totals, which stay
+  until Sinko is removed.
+* **Where.** In a file on the box that only its administrator account can read (`/var/lib/sinko/savings.json`), and in a
+  copy for the page that the box updates about once an hour, and also when the day changes, when the children's internet
+  comes back on and when bedtime ends, inside Pi-hole as a switched-off group named `pb-ledger`: only someone signed in
+  with the parent password (on the page, or on Pi-hole's admin page) can read it. It is never in the files that every
+  device at home can read without the password (above).
+* **Never sent anywhere.** It is part of a Pi-hole backup (*My box*, *Backup and restore*), as the group `pb-ledger`: one
+  more reason to keep that file private, as the page says.
+* **Removed** when Sinko is removed (`sudo /opt/sinko/uninstall.sh` on your own box), and when a ready-made box is prepared
+  for sale, so that every new box starts with nothing counted. Pi-hole itself, which stays on your own box, keeps a few
+  older copies of its list database (in `/etc/pihole/gravity_backups`) and replaces them one by one each time it refreshes
+  its lists; until then they still hold the last copy of `pb-ledger`, as they hold Sinko's other groups. To remove them
+  at once: `sudo rm -f /etc/pihole/gravity_backups/*`.
 
 ### The optional anonymous counter
 
@@ -280,6 +311,7 @@ something new, this statement changes first, with the release that does it.
 * اللغة التي اخترتها أو منطقتك الزمنية؛
 * سجل الطلبات الذي يحتفظ به Pi-hole على الصندوق. (والذي يمرّر أسماء المواقع التي لا يستطيع الإجابة عنها بنفسه هو
   Pi-hole لا سينكو، كما شرحنا أعلاه.)
+* الأعداد التي تعرضها بطاقة «ما فعله سينكو لك» (انظر [ما يحصيه الصندوق لك](#counts-ar)).
 
 ليس في سينكو حساب، ولا تسجيل دخول على خادم، ولا إعلانات، ولا أدوات تتبّع. وصفحة الوالدين لا تحمّل شيئًا من
 مواقع أخرى (فالخطوط محفوظة على الصندوق نفسه)، وفيها رابط إلى صفحة المشروع على GitHub لا يُفتح إلا إذا ضغطت عليه.
@@ -297,7 +329,34 @@ something new, this statement changes first, with the release that does it.
   الذي أعددته بنفسك، يكون الاسم هو الذي أعطيته للجهاز: فإن دلّ على عائلتك (كاسم العائلة مثلًا) استطاع كل جهاز في البيت أن
   يقرأه هنا، كما كان يستطيع من قبل عبر الاسم الذي ينتهي بـ `.local`.
 
-ولا يذكر أيٌّ منهما شيئًا عن أطفالك أو أجهزتهم أو قواعدك أو كلمة المرور أو ما يبحث عنه أحد.
+ولا يذكر أيٌّ منهما شيئًا عن أطفالك أو أجهزتهم أو قواعدك أو كلمة المرور أو ما يبحث عنه أحد، ولا يحمل أيٌّ منهما الأعداد
+الموصوفة في القسم التالي.
+
+<a id="counts-ar"></a>
+
+### ما يحصيه الصندوق لك
+
+تعرض بطاقة «ما فعله سينكو لك» في صفحة الوالدين عدد الإعلانات وأدوات التتبّع التي أوقفها الصندوق، وكم مرة حاول تطبيق
+محظور أن يُفتح، وكم من الوقت كان الإنترنت مقطوعًا عن الأطفال، وفي كم ليلة التُزم بوقت النوم. ولأن Pi-hole لا يحتفظ بسجل
+الطلبات إلا مدة محدودة (انظر [المواقع التي تبحث عنها عائلتك](#lookups-ar)) ولا يسجّل الباقي أصلًا، يحتفظ الصندوق بإحصاء صغير
+خاص به:
+
+* **أعداد فقط.** لكل يوم: كم طلبًا أوقفته قائمة حظر عامة، وكم طلبًا أوقفته قائمة كل تطبيق محظور (لكل تطبيق على حدة)، وكم
+  ثانية كان الإنترنت مقطوعًا عن الأطفال، وهل التُزم بوقت النوم في تلك الليلة. لا أسماء مواقع، ولا أسماء أجهزة ولا عناوينها،
+  ولا أوقات من اليوم.
+* **كيف تُحسب.** كل 15 دقيقة يحصي الصندوق ما يقوله سجل Pi-hole على الصندوق (يقرؤه فقط ولا يغيّر فيه شيئًا)، أما وقت انقطاع
+  الإنترنت ووقت النوم فيسجّلهما بنفسه في أثناء حدوثهما.
+* **مدة الاحتفاظ.** تُحفظ أرقام كل يوم 35 يومًا، ثم تُضاف إلى مجاميع متراكمة تبقى حتى يُزال سينكو.
+* **أين تُحفظ.** في ملف على الصندوق لا يقرؤه إلا حساب مديره (`/var/lib/sinko/savings.json`)، وفي نسخة للصفحة يحدّثها الصندوق
+  نحو مرة في الساعة، وكذلك عند بداية يوم جديد وعند عودة الإنترنت إلى الأطفال وعند انتهاء وقت النوم، داخل Pi-hole في مجموعة
+  متوقفة اسمها `pb-ledger`: لا يقرؤها إلا من سجّل الدخول بكلمة مرور الوالدين (في الصفحة، أو في صفحة إدارة Pi-hole). ولا
+  تكون أبدًا في الملفات التي يستطيع كل جهاز في البيت قراءتها دون كلمة المرور (انظر أعلاه).
+* **لا تُرسَل إلى أي مكان أبدًا.** وهي جزء من النسخة الاحتياطية لـ Pi-hole («صندوقي» ثم «النسخ الاحتياطي والاستعادة»)، في
+  المجموعة `pb-ledger`: سبب آخر لتحتفظ بذلك الملف لنفسك، كما تقول الصفحة.
+* **تُحذف** عند إزالة سينكو (بالأمر `sudo /opt/sinko/uninstall.sh` على صندوقك الذي بنيته بنفسك)، وعند تجهيز الصندوق الجاهز
+  للبيع، فيبدأ كل صندوق جديد ولا شيء محسوب فيه. أما Pi-hole نفسه، الذي يبقى على صندوقك، فيحتفظ ببضع نسخ أقدم من قاعدة
+  بيانات قوائمه (في `/etc/pihole/gravity_backups`) ويستبدلها واحدة بعد أخرى كلما حدّث قوائمه؛ وإلى أن يحدث ذلك تبقى فيها
+  آخر نسخة من `pb-ledger`، كما تبقى فيها مجموعات سينكو الأخرى. ولحذفها فورًا: `sudo rm -f /etc/pihole/gravity_backups/*`.
 
 ### العدّاد المجهول (اختياري)
 

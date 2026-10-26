@@ -1,7 +1,8 @@
 # Brand images
 
 What each file is, how it was made, and how to make it again. The product mark is a house with two sound arcs
-rising from its roof, in white on the page's teal (`#0F766E`). Nothing here needs a font or the network.
+rising from its roof, in white on the brand's teal (`#0F766E`). The parent page itself is warm grey and ink since 3.3; the
+teal stays the brand's colour (the icons, the wordmarks, the website). Nothing here needs a font or the network.
 
 | File | What it is |
 |---|---|
@@ -31,8 +32,8 @@ Files in `web/` (the installer copies the whole folder to the page's `/pb/`):
 
 ### One-colour glyph for the page's icon sprite
 
-For places that colour the mark with `currentColor` (the page's top bar and login card draw their own tile, so they
-only need the glyph). A 24 grid symbol in the style of the page's other sprite icons; the doorway is cut into the
+For places that colour the mark with `currentColor` (the page's top bar and login card draw their own tile, in ink since
+3.3, so they only need the glyph). A 24 grid symbol in the style of the page's other sprite icons; the doorway is cut into the
 house's single outline, so it needs no second colour. It was rendered over `icon.svg`'s glyph and no pixel differs
 visibly.
 
