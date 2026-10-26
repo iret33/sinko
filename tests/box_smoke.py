@@ -1746,7 +1746,16 @@ def part_contrast(browser):
             url, store = make_site(setup_done=False)
             offer_update(store)
             store.box_info_age = 25 * 60
+            mock_pihole.seed_ledger(store)                          # the savings card with a week of numbers, its chart and notes
+            # the demo week switches bedtime on; off again, so the break below has its countdown whatever the time of day
+            store.edit_state(lambda st: st["schedule"].update(enabled=False))
             ctx, page = open_page(browser, url, lang, color_scheme=scheme)
+            page.click("#priceBtn")                                  # and a price, so the money line is measured too
+            page.fill("#priceValue", "0.5")
+            page.fill("#priceCurrency", "BHD")
+            page.press("#priceValue", "Enter")
+            page.locator("#priceDialog[open]").wait_for(state="detached")
+            page.wait_for_selector("#savedBody .fig-note")
             page.click("[data-id=youtube] [data-want=block]")
             page.wait_for_selector("[data-id=youtube].tile-blocked")
             page.click("[data-act=pause]")

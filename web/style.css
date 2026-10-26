@@ -182,10 +182,12 @@ body.is-busy .app button{cursor:progress}
 .saved-figs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .fig{display:grid;gap:2px;align-content:start;min-width:0}
 .fig-label,.fig-note{font-size:var(--fs-s);color:var(--ink-2)}
-.fig-value{font-size:var(--fs-l);font-weight:600;line-height:1.15;overflow-wrap:anywhere}
+.fig-value{font-size:var(--fs-l);font-weight:600;line-height:1.15;overflow-wrap:break-word}
 .fig-about{font-size:var(--fs-s);font-weight:400;color:var(--ink-2)}
 [lang="ar"] .fig-value{font-size:1.6rem;line-height:1.35}
 .fig-note .link{font-size:inherit;padding:0;min-height:44px;text-decoration:underline}
+/* on a phone the two big figures stand one above the other: side by side, "1 hr 8 mins" would break in two */
+@media (max-width:519px){.saved-figs{grid-template-columns:minmax(0,1fr)}}
 .saved-rows{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
 .saved-row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);font-size:.9375rem}
 .saved-row-value{font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}

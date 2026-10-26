@@ -34,8 +34,8 @@ Parental controls that live on a small box in your home, in Arabic and English.<
 </p>
 
 <p align="center">
-  <img src="docs/img/desktop-en.png" alt="The main page on a computer, in three columns. Left: the control panel says Children’s internet is on, with a green dot, an orange Turn internet off key and smaller keys for 30 minutes, an hour or until the morning; under it the Homework and Free time keys and the card What Sinko did for you, with this week’s numbers and a chart of the ads stopped each day. Middle: every app with an Allow and a Block key, the blocked ones filled in. Right: the children’s devices with Pause keys, and bedtime in one sentence" width="760"><br>
-  <sub>The main page on a computer: the one big key, what Sinko did this week, the apps, the devices and bedtime</sub>
+  <img src="docs/img/desktop-en.png" alt="The main page on a computer, in three columns. Left: the control panel says Children’s internet is on, with a green dot, an orange Turn internet off key and smaller keys for 30 minutes, an hour or until the morning; under it the Homework and Free time keys and the card What Sinko did for you, with the last 7 days’ numbers and a chart of the ads stopped each day. Middle: every app with an Allow and a Block key, the blocked ones filled in. Right: the children’s devices with Pause keys, and bedtime in one sentence" width="760"><br>
+  <sub>The main page on a computer: the one big key, what Sinko did in the last 7 days, the apps, the devices and bedtime</sub>
 </p>
 
 <p align="center">
@@ -65,7 +65,7 @@ panel of a home appliance, and the first thing on it is one big key. From your p
 - **pause** one child's device;
 - set a **Bedtime** that turns the internet off at night and back on in the morning;
 - see **What Sinko did for you**: the ads and trackers it stopped, the waiting and the data that saved, how often blocked
-  apps tried to open, and how many nights bedtime was kept, today, this week and since the start
+  apps tried to open, and how many nights bedtime was kept: today, over the last 7 days and since the box started counting
   ([how it counts](#what-sinko-did-for-you));
 - **See it live**: a picture of what the box is checking and stopping, in words a parent can follow;
 - let the box **learn new addresses** of the apps you block: a small AI model on the box spots an app you blocked trying a
@@ -78,20 +78,21 @@ after the first set-up. Light and dark, in Arabic and English.
 
 ## What Sinko did for you
 
-A card on the page shows what the box did for your family: **today**, **this week**, or **since it started counting**.
+A card on the page shows what the box did for your family: **Today**, the **Last 7 days**, or **Since** it started counting.
 
 | On the card | Where the number comes from |
 |---|---|
-| Ads and trackers stopped | The box's own records: every time its ad lists said no, on every device at home |
+| Ads and trackers stopped | Pi-hole's own records, which the box reads every 15 minutes: every time an ad list said no, on every device at home |
 | Less waiting for ads | About **50 ms** for each one stopped (the estimate the Brave browser publishes) |
 | Data saved | About **10 KB** for each one stopped (a deliberately low guess); in money too, if you type what 1 GB costs you |
 | *App* tried to open | How often each blocked app tried, on the children's devices |
 | Internet off at bedtime | Nights the internet stayed off for practically the whole of bedtime |
 | Children's internet off | Every minute it was off for the children: bedtime, breaks and when you switched it off |
 
-Every figure says "about" because it is an estimate, and **How we count** on the card explains each one. The numbers are
-counts the box keeps for itself (no websites, addresses or device names); they stay on the box and are never sent to the
-project. The price you type stays on your phone.
+Every estimate says "about", and **How we count** on the card explains each figure. The numbers are counts the box keeps
+for itself (no websites, addresses or device names); they stay on the box and are never sent to the project. The price
+you type stays on your phone. Ads are counted from the ad lists on the box (Pi-hole's installer offers one); a box without
+one says so on the card, and the apps, bedtime and time off are still counted.
 
 ## See it work
 

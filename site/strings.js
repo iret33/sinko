@@ -120,7 +120,7 @@ window.SINKO_STRINGS = {
 
     shotsTitle: 'See it',
     shotPanelEn: 'The home page, in English',
-    shotPanelEnAlt: 'The Sinko home page in English: the children’s internet is on, with the Turn internet off key and what Sinko did this week',
+    shotPanelEnAlt: 'The Sinko home page in English: the children’s internet is on, with the Turn internet off key and what Sinko did in the last 7 days',
     shotPanelAr: 'The home page, in Arabic',
     shotPanelArAlt: 'The Sinko home page in Arabic, laid out right to left',
     shotLive: 'The live picture',
@@ -263,7 +263,7 @@ window.SINKO_STRINGS = {
 
     shotsTitle: 'شاهده بنفسك',
     shotPanelEn: 'الصفحة الرئيسية بالإنجليزية',
-    shotPanelEnAlt: 'الصفحة الرئيسية لسينكو بالإنجليزية: إنترنت الأطفال يعمل، مع زر «أوقف الإنترنت» وما فعله سينكو هذا الأسبوع',
+    shotPanelEnAlt: 'الصفحة الرئيسية لسينكو بالإنجليزية: إنترنت الأطفال يعمل، مع زر «أوقف الإنترنت» وما فعله سينكو في آخر 7 أيام',
     shotPanelAr: 'الصفحة الرئيسية بالعربية',
     shotPanelArAlt: 'الصفحة الرئيسية لسينكو بالعربية، مرتّبة من اليمين إلى اليسار',
     shotLive: 'الصورة الحيّة',

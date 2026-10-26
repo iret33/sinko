@@ -31,6 +31,11 @@ ap.add_argument("--out", default=os.path.join(ROOT, "docs", "img"), help="direct
 args = ap.parse_args()
 os.makedirs(args.out, exist_ok=True)
 
+# The demo box says it is on Asia/Bahrain time (box.json), and a box counts its days on its own clock: so does this run, or the week
+# of "What Sinko did for you" would be counted on this machine's dates, a day behind the box's late in the evening.
+os.environ["TZ"] = mock_pihole.default_box_info()["tz"]
+time.tzset()
+
 loader = importlib.machinery.SourceFileLoader("pb", os.path.join(ROOT, "bin", "sinko"))
 spec = importlib.util.spec_from_loader("pb", loader)
 pb = importlib.util.module_from_spec(spec)
@@ -88,7 +93,8 @@ def sign_in(browser, lang, **view):
     page.fill("#pw", mock_pihole.PASSWORD)
     page.press("#pw", "Enter")
     page.wait_for_selector(".tile")
-    page.wait_for_selector("#savedBody .saved-msg, #savedBody .fig-value")
+    page.wait_for_selector("#savedBody .fig-value")
+    assert page.locator("#savedBody .saved-msg").count() == 0, "the savings card should show numbers, not a note: " + page.inner_text("#savedBody")
     time.sleep(0.4)
     return ctx, page
 
