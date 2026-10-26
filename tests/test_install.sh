@@ -76,6 +76,39 @@ EOF
 )"
 [[ "$lists" == "20 https://raw.githubusercontent.com/iret33/sinko/master/lists/"* ]] || fail "lists: $lists"
 
+echo "--- the box announces itself to the Sinko app (Bonjour), and box.json says which box it is"
+svc="$ROOT/etc/avahi/services/sinko.service"
+check_announcement() {  # version: the file avahi reads is exactly what the app looks for
+  python3 - "$svc" "$1" <<'PYEOF'
+import sys, xml.etree.ElementTree as ET
+root = ET.parse(sys.argv[1]).getroot()
+name = root.find("name")
+assert name.text == "%h" and name.get("replace-wildcards") == "yes", "the name must follow the host name"
+services = root.findall("service")
+assert len(services) == 1, "one service only, not _http._tcp as well"
+s = services[0]
+assert s.find("type").text == "_sinko._tcp" and s.find("port").text == "80", (s.find("type").text, s.find("port").text)
+txt = [t.text for t in s.findall("txt-record")]
+assert txt == ["v=1", "version=" + sys.argv[2], "path=/", "info=/pb/box.json"], txt
+PYEOF
+}
+[[ -f "$svc" && "$(stat -c %a "$svc")" == 644 ]] || fail "no announcement for the app in avahi's services folder (or not readable by avahi)"
+check_announcement "$(tr -d '[:space:]' <"$REPO/VERSION")" || fail "the announcement is not what the app looks for"
+grep -q 'systemctl --no-block try-reload-or-restart avahi-daemon.service' "$WORK/calls.log" || fail "avahi was not asked to reload the new announcement"
+[[ -z "$(find "$ROOT/etc/avahi/services" -name '*.sinko-new')" ]] || fail "a temporary file was left in avahi's folder"
+grep -q "The Sinko app can find this box" "$WORK/install.out" || fail "the installer does not say that the box is announced"
+BOX_ID="$(cat "$ROOT/var/lib/sinko/box-id")"
+[[ "$BOX_ID" =~ ^[0-9a-f]{32}$ && "$(stat -c %a "$ROOT/var/lib/sinko/box-id")" == 600 ]] || fail "the installation made no box id, or one that is not root-only"
+[[ "$BOX_ID" != "$(cat "$ROOT/var/lib/sinko/install-id" 2>/dev/null)" ]] || fail "the box id is the counter's id"
+check_box_json() {  # box id
+  python3 - "$ROOT/var/www/html/pb/box.json" "$1" <<'PYEOF'
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert d["v"] == 1 and d["api"] == 1 and d["boxId"] == sys.argv[2] and d["hostname"] == "kidsbox", d
+PYEOF
+}
+check_box_json "$BOX_ID" || fail "box.json does not say which box it is"
+
 echo "--- the start page is stamped with the release's version (a phone must never mix the new page with the old scripts it still holds)"
 VER="$(tr -d '[:space:]' <"$REPO/VERSION")"
 page="$ROOT/var/www/html/index.html"
@@ -116,6 +149,9 @@ check_asset_urls "$page" 7.8.9 || fail "the stamped page does not carry the vers
 grep -q '<meta name="sinko-version" content="7.8.9">' "$page" || fail "the version meta tag was not stamped"
 grep -q '7.8.9 and 7.8.9</body>' "$page" || fail "every marker on the page must be replaced, not only the first"
 [[ "$(cat "$ROOT/var/www/html/pb/version.txt")" == 7.8.9 && "$(stat -c %a "$page")" == 644 && -z "$(find "$ROOT/var/www/html" -maxdepth 1 -name '*.sinko-new')" ]] || fail "the stamped page is not installed cleanly"
+echo "    the announcement for the app follows the update; the box keeps its id"
+check_announcement 7.8.9 || fail "the announcement still says the old version after an update"
+check_box_json "$BOX_ID" || fail "an update changed the box id (the app would take the box for another one)"
 echo "    a VERSION that is not a version number (it goes into the page's addresses) stops the installer before anything is changed"
 BADV="$(src_copy badversion)"
 printf '3.0.0;touch /tmp/x\n' >"$BADV/VERSION"
@@ -125,6 +161,7 @@ grep -q "does not hold a version number" "$WORK/badver.out" || { cat "$WORK/badv
 [[ "$(sha256sum "$ROOT/opt/sinko/bin/sinko")" == "$program_before" ]] || fail "files were changed although the VERSION file is unusable"
 bash "$REPO/install.sh" >"$WORK/stamp2.out" 2>&1 || { cat "$WORK/stamp2.out"; fail "putting the real release back failed"; }
 [[ "$(cat "$ROOT/var/www/html/pb/version.txt")" == "$VER" ]] || fail "the real release was not put back"
+check_announcement "$VER" || fail "the announcement did not follow the version back"
 
 "$ROOT/usr/local/bin/sinko" status | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["version"] and d["devices"] == []' || fail "status output is not the expected JSON"
 "$ROOT/usr/local/bin/sinko" use-mac --dry-run | grep -q "Nothing to convert" || fail "use-mac did not run"
@@ -487,6 +524,7 @@ bash "$REPO/install.sh" >"$WORK/e1.out" 2>&1 || { cat "$WORK/e1.out"; fail "run 
 grep -q 'apt-get install' "$WORK/calls.log" && fail "installed a package that was already installed"
 [[ ! -e "$ua" ]] || fail "rewrote the settings of an unattended-upgrades that was already installed"
 grep -q "already installed (left as it is)" "$WORK/e1.out" || fail "no note about avahi"
+grep -q 'try-reload-or-restart avahi' "$WORK/calls.log" && fail "avahi was asked to reload although the announcement did not change"
 grep -q "already set up (left as they are)" "$WORK/e1.out" || fail "no note about the automatic updates"
 echo "    avahi that is not running: no .local line in the summary"
 rm -f "$WORK/units/avahi-daemon.service.active"
@@ -495,8 +533,15 @@ grep -q '\.local/' "$WORK/e1b.out" && fail "the summary shows a .local name alth
 echo "    SINKO_MDNS=0 and SINKO_OS_UPDATES=0 install nothing and are remembered"
 sed -i '/^avahi-daemon$/d; /^unattended-upgrades$/d' "$WORK/dpkg-installed"
 : >"$WORK/calls.log"
+[[ -f "$svc" ]] || fail "test setup: the announcement should be there before SINKO_MDNS=0"
 SINKO_MDNS=0 SINKO_OS_UPDATES=0 bash "$REPO/install.sh" >"$WORK/e2.out" 2>&1 || fail "run with both switches off failed"
+[[ ! -e "$svc" ]] || fail "the announcement for the app stayed although SINKO_MDNS=0"
+grep -q "announcement for the Sinko app was removed" "$WORK/e2.out" || fail "no message that the announcement was removed"
+grep -q 'systemctl --no-block try-reload-or-restart avahi-daemon.service' "$WORK/calls.log" || fail "avahi was not asked to withdraw the announcement"
+echo '<service-group><!-- the owner own --></service-group>' >"$svc"
 bash "$REPO/install.sh" >"$WORK/e3.out" 2>&1 || fail "run after switching off failed"
+grep -q 'the owner own' "$svc" || fail "a file of that name that the installer did not write was removed"
+rm -f "$svc"
 grep -q 'apt-get install' "$WORK/calls.log" && fail "installed a package although the switch is off (or forgot it)"
 grep -q '^SINKO_MDNS=0$' "$ROOT/etc/sinko/config" || fail "SINKO_MDNS=0 was not remembered"
 grep -q '^SINKO_OS_UPDATES=0$' "$ROOT/etc/sinko/config" || fail "SINKO_OS_UPDATES=0 was not remembered"
@@ -614,8 +659,12 @@ env -u SINKO_NONINTERACTIVE SINKO_TTY="$WORK/answer" bash "$ROOT/opt/sinko/unins
 grep -q "Nothing changed" "$WORK/un0.out" || fail "no confirmation that nothing changed"
 [[ -x "$ROOT/opt/sinko/bin/sinko" && -d "$ROOT/var/lib/sinko" ]] || fail "uninstall removed files although the answer was no"
 : >"$WORK/calls.log"
+[[ -f "$svc" ]] || fail "test setup: the announcement should be there before the uninstall"
 bash "$ROOT/opt/sinko/uninstall.sh" >"$WORK/un.out" 2>&1 || { cat "$WORK/un.out"; fail "uninstall failed"; }
 grep -q '^pihole -g' "$WORK/calls.log" || fail "uninstall did not refresh Pi-hole's block lists (through the gravity lock)"
+[[ ! -e "$svc" ]] || fail "the announcement for the app was left behind: avahi would keep announcing a box without Sinko"
+grep -q 'systemctl --no-block try-reload-or-restart avahi-daemon.service' "$WORK/calls.log" || fail "avahi was not asked to withdraw the announcement"
+[[ -d "$ROOT/etc/avahi/services" ]] || fail "avahi's own folder was removed"
 [[ ! -e "$ROOT/opt/sinko" && ! -e "$ROOT/var/www/html/pb" && ! -e "$ROOT/etc/sinko" ]] || fail "files left behind"
 [[ ! -e "$ROOT/var/lib/sinko" ]] || fail "the runtime data folder (install-id, update results, first-start flag) was left behind"
 [[ ! -e "$ROOT/etc/systemd/system/sinko-firstboot.service" && ! -e "$ROOT/etc/systemd/system/sinko.service" && ! -e "$ROOT/etc/systemd/system/sinko-lists.timer" ]] || fail "a unit file was left behind"

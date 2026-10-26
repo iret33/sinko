@@ -3,7 +3,7 @@
 All notable changes to Sinko. Versions follow [Semantic Versioning](https://semver.org); the newest release is at the top.
 Boxes learn about a release from this repository's GitHub releases, whose notes are the section of this file.
 
-## [3.2.0] - Unreleased
+## [3.3.0] - Unreleased
 
 ### Added
 - **Terms of use at first set-up.** After you choose the parent password (or the first time you sign in after this update),
@@ -16,6 +16,30 @@ Boxes learn about a release from this repository's GitHub releases, whose notes 
   counter still sends nothing until you have answered, starts switched off on a box where you already said no to it, and
   is not offered at all on a box that has no counter address. The setup list no longer asks about the counter.
 - The installer's counter question now suggests yes (`[Y/n]`).
+
+## [3.2.0] - 2026-10-23
+
+### Added
+- **The Sinko app can find the box at home.** The box announces itself on the home network (Bonjour, the way printers
+  do) with its name, its Sinko version and where its page is, so the coming Sinko app for phones can list it without
+  being told an address. On your own box, `SINKO_MDNS=0` when you install switches it off, together with the `.local`
+  name, and removing Sinko removes the announcement.
+- The box's small information file (`/pb/box.json`, which any device at home can read) now also gives the box's name
+  (the one that ends in `.local`), a random number the box makes for itself so that the app knows it again after the
+  router gave it a new address, and the number of the contract between the box and the app. That number is not the
+  counter's code and is never sent anywhere; a ready-made box makes its own when it is first started. On a box you set
+  up yourself the name is the one you gave the computer, so if it says something about your family, devices at home can
+  read it, as they already could through the `.local` name. The privacy statement says this.
+
+### Fixed
+- **Changing the password with two-factor sign-in on.** When the 6-digit code was wrong, or had just been used, *My box*
+  said nothing and the button simply came back. It now says "Enter the password and the 6-digit code." and puts you in
+  the code field.
+
+### Known limits
+- A box that has no password yet opens its welcome screen at `http://sinko.local/` and at its address. With Pi-hole's
+  FTL 6.8 or newer, `http://family.lan/` shows the sign-in instead until a password is chosen, because Pi-hole then
+  answers only for its own names.
 
 ## [3.1.0] - 2026-10-14
 

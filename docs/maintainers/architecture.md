@@ -49,6 +49,7 @@ rules).
 | File | Purpose |
 |---|---|
 | `install-id` | random 128-bit hex used by the optional counter; created lazily, removed by `seal` |
+| `box-id` | random 128-bit hex shown as `boxId` in `/pb/box.json`, so the app knows the box again at another address; made by the first box.json write (the installer's, or `firstboot.sh` on a ready-made box), removed by `seal`. Never the `install-id`: that one is the counter's, forgotten when the counter is switched off, and must not be readable on the home network |
 | `handled.json` | `{"update": <nonce>, "check": <nonce>, "power": <nonce>}`: last request markers acted on |
 | `update-result.json` | written by the update runner when it ends: `{"status":"ok|failed","from","to","error","at"}` |
 | `cache/sinko-<version>.tar.gz` | the installed release and the newest older one (the rollback target); offline rollback |
@@ -105,7 +106,8 @@ Latest-release metadata: `https://api.github.com/repos/<slug>/releases/latest` (
   chooses a password. `docs/install.md` says both.
 * Apt and dpkg answers that are read are asked for in the C locale (`LC_ALL=C`), and "installed" means
   `dpkg-query` says `install ok installed`.
-* Installs `avahi-daemon` so the box answers to `<hostname>.local` (`SINKO_MDNS=0` skips), `unattended-upgrades` for Debian
+* Installs `avahi-daemon` so the box answers to `<hostname>.local` and announces itself to the app (`SINKO_MDNS=0` skips both; see
+  *Finding the box*), `unattended-upgrades` for Debian
   security updates (`SINKO_OS_UPDATES=0` skips; left alone when already installed, switched on or off) and, when the box has
   no time service at all, `systemd-timesyncd` (no battery-backed clock; another service that is installed but off is left to
   the owner, with a warning).
@@ -159,6 +161,12 @@ Read and written by the page **and** by the scheduler. Both normalise with `pars
   "terms": {"agreed": 0}                        // page: the version of the terms of use the parent agreed to (0 = none, 0-9999)
 }
 ```
+
+**The app's contract number (`api` in `/pb/box.json`, `BOX_API` in `bin/sinko`).** Raise it whenever `pb-state` gains or
+changes a key, or any other behaviour the app relies on changes (a request it may send, what a field means, an address it
+reads). The app refuses to write `pb-state` to a box whose `api` is higher than the one it knows, because every parser drops
+the keys it does not know: an app that wrote back what it read would wipe the box's new fields. A lower or missing `api` (a box
+older than 3.2) is the app's to handle. The page needs no such rule: it is installed with the program it belongs to.
 
 **Request protocol.** A request marker is the time of the request in milliseconds on the **box's** clock: the page takes
 the box's time from the `Date` header of Pi-hole's answers, so a phone with a wrong clock is no problem. The scheduler acts
@@ -283,6 +291,34 @@ The scheduler compares the default-route IPv4 with `SINKO_IP` every 5 minutes; w
 `sinko configure --ip <new> --hostname <name>` and rewrites `SINKO_IP`, so the local name keeps pointing at the box after
 the router hands out a new address (and after a ready-made unit is switched on in a different network).
 
+## Finding the box (Bonjour)
+
+The app finds boxes on the home network by DNS-SD over mDNS. When `SINKO_MDNS=1` (the default) and avahi is installed, every
+installer run writes `/etc/avahi/services/sinko.service` (mode 644, through a temporary `sinko.service.sinko-new` that avahi
+does not read, and only when the content changed):
+
+* service type `_sinko._tcp`, port 80 (where Pi-hole serves the page as it installs itself; an own Pi-hole moved to another
+  port is not followed), instance name `<name replace-wildcards="yes">%h</name>`, so a new host name needs nothing more (`firstboot.sh` restarts avahi). When two
+  boxes share a name, avahi renames the second host (`sinko-2.local`) and the instance follows; box.json's `hostname` still
+  says the system's name then, so the app goes by the host the service resolves to and tells boxes apart by `boxId`;
+* TXT `v=1` (the version of these records), `version=<x.y.z>` (the installed release), `path=/` (the page), `info=/pb/box.json`
+  (what to read next: the version, `api`, `boxId` and the rest are there, and box.json is what the app believes; the records are
+  only what a list shows before it asks).
+
+avahi-daemon notices the file by itself: on Linux it watches its services folder with inotify (`avahi-daemon/main.c`) and on
+every change reloads each service file whose modification time (whole seconds) differs from the one it loaded
+(`static_service_load`). The installer also runs `systemctl --no-block try-reload-or-restart avahi-daemon.service` when it
+wrote or removed the file, which costs nothing and covers an avahi that runs without the watch (it warns and goes on when it is
+out of inotify instances). The step runs after the new scheduler has proved itself, so a failed update does not announce its
+version. `SINKO_MDNS=0` and `uninstall.sh` remove the file (only one that carries the installer's comment) and ask avahi to
+reload; avahi itself is left alone, as before. A box rolled back to a release older than 3.2 keeps the file of the newer one
+until its next update (its version record is then wrong, which is why the app reads box.json).
+
+**Not announced as `_http._tcp`.** It would be harmless (another record on the network, the same port and path) but it buys
+nothing: no phone browser lists `_http._tcp` services, parents open the box by `<hostname>.local`, and the app looks for
+`_sinko._tcp`. What it would add is the box in every list of web devices on the network (home-automation hubs, network
+scanners, NAS tools), which then probe it, and a second record to keep right.
+
 ## Optional anonymous counter ("boxes online")
 
 * Nothing is sent until the parent says yes (`telemetry.on == true` in the state). The terms screen at first sign-in asks,
@@ -317,9 +353,15 @@ the router hands out a new address (and after a ready-made unit is switched on i
   version exists. Since then also the **terms screen** (see *Terms of use* below).
 * Pi-hole API calls used by the new features (from the FTL OpenAPI specs; copies in the maintainers' scratch notes,
   upstream: `pi-hole/FTL/src/api/docs/content/specs/*.yaml`):
-  `GET /api/auth` (no `sid` + `session.valid` true ⇒ no password set ⇒ claim screen),
+  `GET /api/auth` (no `sid` + `session.valid` true ⇒ no password set ⇒ claim screen; FTL v6.8 and later answer a box that
+  has no password this way only for a `Host` that is an address, `localhost`, `pi.hole`, `webserver.domain` or the host name
+  (alone, or followed by `.local` or `dns.domain.name`), and 401 otherwise, so the claim screen opens by the address or
+  `<hostname>.local`, not by the local name `SINKO_HOSTNAME`. Sinko does not set `webserver.domain` to that name: FTL redirects
+  `/` on `webserver.domain` to `/admin/` and names the HTTPS certificate it makes after it),
   `PATCH /api/config` with `{"config":{"webserver":{"api":{"password":"…"}}}}` (write-only property; the session is
-  invalidated afterwards, so sign in again), `GET /api/info/system`, `/api/info/sensors`, `/api/info/host`,
+  invalidated afterwards, so sign in again), `POST /api/auth` to check the current password before a change (with two-factor
+  sign-in: a wrong password is 401 with a `session`; a missing code 400, a wrong or reused code 401 with only an `error`,
+  `Invalid 2FA token` or `Reused 2FA token`; `src/api/auth.c`), `GET /api/info/system`, `/api/info/sensors`, `/api/info/host`,
   `GET /api/teleporter` (zip), `POST /api/teleporter` (multipart `file` + `import` JSON), `GET /api/dns/blocking`, and
   `GET /api/info/version` for **About** (the core's local version, read each time the sheet opens, shown as "Pi-hole v6.x"
   only when it is a plain release number; a failure or a development build leaves the row out), and `GET /api/domains` and
@@ -340,10 +382,13 @@ the router hands out a new address (and after a ready-made unit is switched on i
 
 Golden-unit method: install Sinko on a fresh Armbian minimal (Debian Trixie) image, run `tools/seal.sh`, copy the SD
 card to an `.img`, compress, flash many cards. Sealing removes everything that must be unique or private (SSH host keys,
-machine-id, install-id, query history, parent password so the page offers the **claim screen**, shell history, logs),
+machine-id, install-id, the box id and the page's `box.json` that shows it, query history, parent password so the page
+offers the **claim screen**, shell history, logs),
 locks the default root password / password SSH logins, removes Armbian's first-login wizard file, and arms
-`sinko-firstboot.service`. First boot regenerates host keys, repairs the local name/address for the actual network
-(`sinko configure`), refreshes `SINKO_IP`, then deletes the flag. `docs/product-image.md` is the seller's procedure.
+`sinko-firstboot.service`. First boot regenerates host keys, sets the host name, makes the box its own box id and writes
+`box.json` with it (`sinko box-info --write`, once, before the address: a retry keeps the id the app may know already),
+repairs the local name/address for the actual network (`sinko configure`), refreshes `SINKO_IP`, then deletes the flag.
+`docs/product-image.md` is the seller's procedure.
 
 The seal refuses a unit that is not ready (it names every problem; the account check is made again before the last step so
 `--skip-checks` cannot bypass it): a service or timer not enabled, no avahi, automatic security updates not installed or not
@@ -358,8 +403,8 @@ as done only on "No space left on device"; a leftover zero file is deleted by th
 ## Things only real hardware can prove
 
 Listed in `docs/hardware-test-checklist.md`; nothing in CI exercises: a real Pi-hole v6 (password config, teleporter,
-sensors), systemd behaviour (`systemd-run`, reboot from the service), Armbian first boot, mDNS on phones, the
-Orange Pi Zero 3's thermal sensor path, and a real GitHub release round trip. Also the things that depend on how slow a
+sensors), systemd behaviour (`systemd-run`, reboot from the service), Armbian first boot, mDNS on phones and the app finding
+`_sinko._tcp`, the Orange Pi Zero 3's thermal sensor path, and a real GitHub release round trip. Also the things that depend on how slow a
 real card and board are (the 20-second self-check, the restore window, the 15-second watchdog during a restart), on the
 board's driver (Shut down and `CONFIG_WATCHDOG_NOWAYOUT`), on the real web server (the one-hour cache and the `?v=` addresses),
 and on a cut of the power at the one moment between the program's replacement and the page's swap.
@@ -377,8 +422,16 @@ the whole state); `tests/fixtures/state-cases.json` is the spec. The parsers dro
 component (after a rollback, or a phone that still holds the old page) wipes a field that a newer release added: that is
 accepted, and it is why every key must be known to both sides in the release that introduces it.
 
-**`/pb/box.json`** (written by the box program as root, mode 644, atomically; read by the page without signing in):
-`{"v":1,"version":"3.0.0","ip":"192.168.1.50","tz":"Asia/Bahrain","utcOffset":"+03:00","counter":true,"mdns":true,"at":1790000000}`.
+**`/pb/box.json`** (written by the box program as root, mode 644, atomically; read by the page and the app without signing in):
+`{"v":1,"api":1,"version":"3.2.0","boxId":"<32 hex>","hostname":"sinko","ip":"192.168.1.50","tz":"Asia/Bahrain","utcOffset":"+03:00","counter":true,"mdns":true,"at":1790000000}`.
+`api`, `boxId` and `hostname` are additions of 3.2, so `v` stays 1, and a reader treats each as absent when it is missing or
+malformed (`parseBoxInfo` gives 0 or ''). `api` is the app's contract number (*Shared state*). `boxId` is the box's own random
+number (`/var/lib/sinko/box-id`), so the app knows the box again after its address changed. `hostname` is the system's host
+name as avahi announces it (`/etc/hostname`, the part before the first dot, small letters; null when it is not a plain
+name), so the app can show and try `<hostname>.local`. Until 3.1 the file identified nothing; it now tells one box from
+another, on purpose. It is public on the home network, and the host name on an own install is the owner's choice and can say
+something about the family, but avahi already announces that name to the same network. Nothing else about the family is in
+it: not the local name `SINKO_HOSTNAME`, the children, the rules, or the counter's id or address.
 `ip` is the default-route IPv4 (what the router's DNS setting needs; the page never puts a *name* there), `counter` is
 "the counter address is configured", `mdns` is "avahi answers for this host", `at` is the box clock when it was written.
 Written by `sinko box-info --write` (the installer calls it after the page swap; `sinko configure` and the address watch call

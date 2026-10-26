@@ -70,13 +70,15 @@ This is the section sellers copy onto a product page, so every sentence has to s
 *"Sinko keeps your family's names, devices, rules and history on the box and never sends them to us or to anyone else.
 Like any DNS filter, the box asks an upstream DNS service (Cloudflare for Families, unless you change it) to find the
 address of the sites it does not block, and that service sees those site names and your home's internet address. The only
-optional message to us is an anonymous counter (a random code, the version and the kind of box), which is off until you
-say yes, and switching it off deletes the box's record."*
+optional message to us is an anonymous counter (a random code, the version and the kind of box). It sends nothing until
+you answer: it is one of the choices on the terms of use at first set-up, where it starts switched on, and switching it
+off, there or at any time later, deletes the box's record."*
 
 In Arabic: *«يحتفظ سينكو بأسماء أفراد العائلة وأجهزتها وقواعدها وسجلّها على الصندوق، ولا يرسلها إلينا ولا إلى أي جهة أخرى.
 ومثل أي مرشّح DNS، يسأل الصندوق خدمة DNS خارجية (Cloudflare for Families ما لم تغيّرها) عن عنوان المواقع التي لا يحظرها،
 فترى هذه الخدمة أسماء تلك المواقع وعنوان إنترنت بيتكم. والرسالة الوحيدة الاختيارية إلينا هي عدّاد مجهول (رمز عشوائي ورقم
-الإصدار ونوع الصندوق)، وهو متوقف حتى توافقوا، وإيقافه يحذف سجل الصندوق.»*
+الإصدار ونوع الصندوق). ولا يرسل شيئًا قبل أن تجيبوا: فهو أحد الخيارات في شروط الاستخدام عند الإعداد الأول، ويبدأ هناك مشغّلًا،
+وإيقافه، هناك أو في أي وقت بعد ذلك، يحذف سجل الصندوق.»*
 
 Do **not** write "nothing leaves the box", "no data is sent", or "your children's browsing is private": the box does send
 site names to its upstream DNS service, as any DNS filter does. If the unit you ship uses a different upstream (the seller

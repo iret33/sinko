@@ -73,7 +73,7 @@ Pass these as environment variables after `sudo`, for example
 | `SINKO_RELEASE_BASE`, `SINKO_RELEASE_API` | GitHub's | Where releases and the "latest release" answer come from; **https only** (a mirror of your own) |
 | `SINKO_LISTS_BASE` | this project's `lists/` on GitHub | Where Pi-hole downloads the app block lists |
 | `SINKO_TELEMETRY` | ask (default *yes*) | `1` = count this box in the anonymous number of Sinko boxes online, `0` = no. The question is asked only when this copy of Sinko has a counter address; not asked and not set: the page asks with the terms of use at first sign-in, where it starts switched on (and shows nothing when there is no counter address). What is sent: [`privacy.md`](privacy.md) |
-| `SINKO_MDNS` | on | `0` = do not install Avahi (the box then has no `.local` name) |
+| `SINKO_MDNS` | on | `0` = do not install Avahi (the box then has no `.local` name) and do not announce the box to the Sinko app |
 | `SINKO_OS_UPDATES` | on | `0` = do not set up automatic Debian **security** updates (the box never restarts by itself for them). An `unattended-upgrades` that is already installed is left exactly as it is, switched on or off |
 | `SINKO_NONINTERACTIVE` | – | `1` = never prompt |
 

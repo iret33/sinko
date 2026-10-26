@@ -113,9 +113,10 @@ box runs: list fixes reach boxes without a new release, and a box can be pointed
 |---|---|
 | Program, lists, tools, the last downloaded release | `/opt/sinko` (`bin/sinko`, `lists/`, `tools/`, `src/`, `LICENSE`, `NOTICE`) |
 | Settings | `/etc/sinko/config` (`KEY=value`, read by the installer and the program) |
-| Runtime data (root only) | `/var/lib/sinko/` (counter id, handled requests, cached releases for rollback, update results and notes, the lock that keeps two block-list refreshes apart, the note of the last self-repair) |
+| Runtime data (root only) | `/var/lib/sinko/` (counter id, the box's own id that box.json shows the app, handled requests, cached releases for rollback, update results and notes, the lock that keeps two block-list refreshes apart, the note of the last self-repair) |
 | The parent page | `/var/www/html/index.html` and `/var/www/html/pb/` (includes `pb/box.json`, written by the program) |
 | Services | `sinko.service` (scheduler), `sinko-lists.timer` (nightly list refresh), `sinko-firstboot.service` (ready-made boxes only) |
+| The announcement for the Sinko app | `/etc/avahi/services/sinko.service` (Bonjour, `_sinko._tcp`; not with `SINKO_MDNS=0`) |
 | Install log | `/var/log/sinko-install.log` (never contains a password) |
 
 ## Going deeper

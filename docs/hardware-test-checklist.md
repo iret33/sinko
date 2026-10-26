@@ -87,6 +87,8 @@ mounting the card on a computer.
       nothing else on the sheet changes.
 - [ ] Scroll *My box* to its very end by touch on both phones: the sheet does not slide away or leave a blank page.
 - [ ] *Change password*: the new password works, the old one does not, the scheduler keeps running (`systemctl status sinko`).
+      With two-factor sign-in on in Pi-hole: the sheet asks for the code; a wrong code, and a code that was just used to sign
+      in, both say "Enter the password and the 6-digit code." under the form (not nothing), and the next code works.
 - [ ] *Backup* downloads a file; *Restore* of that file on a second box brings back devices, rules, timers, bedtime, and does
       **not** change that box's password or address. Restore a backup made **before** a migration or from a box that had
       other lists: the page says honestly what came back, and `sudo sinko doctor` is clean afterwards.
@@ -124,6 +126,12 @@ mounting the card on a computer.
       on the real Pi-hole that `curl -sI 'http://<box>/pb/app.js?v=3.0.0'` answers `200` (the part after the `?` is ignored
       by its static file handler) and look at its `Cache-Control` header. Then open the page on a second phone that has not
       been told anything: it says its own version in the footer and reloads once into the new one.
+- [ ] **The app still finds the box after the update.** From a Linux computer at home with `avahi-utils`,
+      `avahi-browse -rt _sinko._tcp` lists the box (by its name, at its address, port 80) with the text records `v=1`,
+      `version=<the new version>`, `path=/` and `info=/pb/box.json` (on a Mac: `dns-sd -B _sinko._tcp`, then `dns-sd -L
+      <name> _sinko._tcp`). `http://sinko.local/pb/box.json` shows `hostname`, `api` and `boxId`, and the `boxId` is the
+      one it had before the update. With `SINKO_MDNS=0` (own install, run the installer again) the box is no longer listed
+      within a minute, and `avahi-browse` lists it again after the installer runs without it.
 - [ ] Unplug the internet and try again: a clear failure, nothing broken.
 - [ ] Not enough room: on a [test unit] leave less than 200 MB free (`fallocate -l …G /var/tmp/fill`): *Update now* fails
       at once, the page says the previous version is back (a check of the untouched box passed), `sudo journalctl -u
@@ -232,6 +240,10 @@ computer. Only a unit built for testing has a shell.
       sinko-firstboot ssh` [test unit] look right, and on a box where SSH is socket-activated the host keys still get made.
 - [ ] `sinko.local` answers on an iPhone, a Mac and an Android phone from the very first start (Avahi is installed and
       enabled on the shipped image).
+- [ ] **Each box has its own box id.** Note the `boxId` in `http://<golden unit>/pb/box.json` before the seal. On a card
+      flashed from the image, after its first start, `http://sinko.local/pb/box.json` shows another `boxId` (and a second
+      card yet another), `hostname` is `sinko` and `avahi-browse -rt _sinko._tcp` lists it. After a power cut and after an
+      update the `boxId` stays the same.
 - [ ] Pull the power five times during normal use: no corruption; the box starts every time.
 - [ ] Leave it running for 72 hours with a few phones: no memory growth (`free -m`), temperature acceptable in the case,
       SD card writes modest (`cat /sys/block/mmcblk0/stat`, compare before and after).
@@ -264,6 +276,11 @@ computer. Only a unit built for testing has a shell.
 - [ ] While the box is unclaimed (the welcome screen is showing), another phone that opens the page also sees the welcome
       screen; after the first one chooses a password, the second sees the sign-in. Test units are not left running on a
       shared network.
+- [ ] **Which names open the welcome screen.** On an unclaimed box, with the router pointed at it, open `http://sinko.local/`,
+      `http://<address>/` and `http://family.lan/`, and write down the Pi-hole version (`pihole-FTL -vv`) and what each
+      shows. From FTL v6.8 on, a Pi-hole without a password answers the page only for its own names, so `family.lan` is
+      expected to show the sign-in instead of the welcome screen (*Parent page contract* in
+      [`maintainers/architecture.md`](maintainers/architecture.md)).
 
 ## F. The counter (only when you deployed it)
 

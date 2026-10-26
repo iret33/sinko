@@ -21,7 +21,9 @@ spec = importlib.util.spec_from_loader("sinko_cli", loader)
 pb = importlib.util.module_from_spec(spec)
 loader.exec_module(pb)
 
-KEYS = ["v", "version", "ip", "tz", "utcOffset", "counter", "mdns", "at"]
+# Since 3.2 the file also says which box it is (boxId, hostname) and which contract with the app it keeps (api): additions for
+# the app, so "v" stays 1 (architecture.md, "Amendments").
+KEYS = ["v", "api", "version", "boxId", "hostname", "ip", "tz", "utcOffset", "counter", "mdns", "at"]
 
 
 class Box(unittest.TestCase):
@@ -35,7 +37,7 @@ class Box(unittest.TestCase):
         env = mock.patch.dict(os.environ, {
             "SINKO_WEBROOT": self.webroot, "SINKO_API_URL": "http://127.0.0.1:1",
             "SINKO_LOCALTIME": os.path.join(self.tmp, "localtime"), "SINKO_TIMEZONE_FILE": os.path.join(self.tmp, "timezone"),
-            "SINKO_STATE_DIR": os.path.join(self.tmp, "state")})
+            "SINKO_STATE_DIR": os.path.join(self.tmp, "state"), "SINKO_ETC_HOSTNAME": os.path.join(self.tmp, "hostname")})
         env.start()
         self.addCleanup(env.stop)
         os.environ.pop("SINKO_TELEMETRY_URL", None)
@@ -47,6 +49,11 @@ class Box(unittest.TestCase):
             patch.start()
             self.addCleanup(patch.stop)
         self.set_zone("Asia/Bahrain")
+        self.set_hostname("sinko")
+
+    def set_hostname(self, text):
+        with open(os.path.join(self.tmp, "hostname"), "w", encoding="utf-8") as fh:
+            fh.write(text + "\n")
 
     def set_zone(self, name):
         path = os.path.join(self.tmp, "localtime")
@@ -70,7 +77,11 @@ class ContentTests(Box):
         info = pb.box_info({"SINKO_TELEMETRY_URL": "https://counter.example"}, when=1790000000)
         self.assertEqual(list(info), KEYS)
         self.assertEqual(info["v"], 1)
+        self.assertEqual(info["api"], 1)
+        self.assertIs(type(info["api"]), int)
         self.assertEqual(info["version"], pb.VERSION)
+        self.assertRegex(info["boxId"], r"^[0-9a-f]{32}\Z")
+        self.assertEqual(info["hostname"], "sinko")
         self.assertEqual(info["ip"], "192.168.1.50")
         self.assertEqual(info["tz"], "Asia/Bahrain")
         self.assertRegex(info["utcOffset"], r"^[+-]\d\d:\d\d$")
@@ -79,12 +90,68 @@ class ContentTests(Box):
         self.assertEqual(info["at"], 1790000000)
         self.assertIsInstance(info["at"], int)
 
-    def test_nothing_in_it_identifies_the_family_or_the_box(self):
+    def test_it_tells_the_box_apart_and_says_nothing_else_about_the_family(self):
+        # Until 3.1 the promise was "nothing in it identifies the family or the box". The app needs to know a box again
+        # after its address changed (boxId) and to try <hostname>.local, so both are in it now, on purpose. The rest of the
+        # promise stands: not the page's local name, not the counter's id or address, not the saved address.
+        pb.reset_install_id()
         conf = {"SINKO_HOSTNAME": "smiths.lan", "SINKO_IP": "10.9.9.9", "SINKO_TELEMETRY_URL": "https://counter.example/secret-path"}
-        text = json.dumps(pb.box_info(conf))
-        for secret in ("smiths", "10.9.9.9", "secret-path", "counter.example"):
+        info = pb.box_info(conf)
+        text = json.dumps(info)
+        for secret in ("smiths", "10.9.9.9", "secret-path", "counter.example", pb.install_id(create=False)):
             self.assertNotIn(secret, text)
-        self.assertLessEqual(len(text), 300)
+        self.assertEqual(info["hostname"], "sinko", "the box's own name (avahi announces it anyway), not the page's local name")
+        self.assertLessEqual(len(text), 400)
+
+    def test_the_box_id_is_made_once_kept_root_only_and_is_not_the_counters(self):
+        path = os.path.join(self.tmp, "state", "box-id")
+        self.assertFalse(os.path.exists(path))
+        first = pb.box_info({})["boxId"]
+        self.assertRegex(first, r"^[0-9a-f]{32}\Z")
+        with open(path) as fh:
+            self.assertEqual(fh.read(), first + "\n")
+        self.assertEqual(stat.S_IMODE(os.stat(path).st_mode), 0o600)
+        self.assertEqual(stat.S_IMODE(os.stat(os.path.dirname(path)).st_mode), 0o700)
+        self.assertEqual(pb.box_info({})["boxId"], first, "the same box keeps its number")
+        self.assertFalse(os.path.exists(os.path.join(self.tmp, "state", "install-id")), "box.json never makes the counter's id")
+        self.assertNotEqual(pb.install_id(), first)
+        pb.drop_install_id()                                  # the counter is switched off: its id goes, the box's stays
+        self.assertEqual(pb.box_info({})["boxId"], first)
+        os.unlink(path)                                       # what the seal does: the next box.json has a new number
+        self.assertNotEqual(pb.box_info({})["boxId"], first)
+
+    def test_a_garbled_box_id_is_replaced_and_one_that_cannot_be_made_is_null(self):
+        path = os.path.join(self.tmp, "state", "box-id")
+        os.makedirs(os.path.dirname(path), mode=0o700)
+        for bad in ("", "xyz\n", "0123456789ABCDEF0123456789ABCDEF\n", "0" * 31 + "\n", "0" * 33 + "\n"):
+            with open(path, "w") as fh:
+                fh.write(bad)
+            self.assertRegex(pb.box_info({})["boxId"], r"^[0-9a-f]{32}\Z", repr(bad))
+        os.unlink(path)
+        with mock.patch.object(pb, "atomic_write", side_effect=PermissionError(13, "Permission denied")):
+            info = pb.box_info({})
+        self.assertIsNone(info["boxId"], "a run without root still prints the rest")
+        self.assertEqual(info["version"], pb.VERSION)
+
+    def test_the_host_name_is_the_one_avahi_announces(self):
+        for text, want in (("sinko", "sinko"), ("Smiths-Pi", "smiths-pi"), ("box.example.org", "box"), ("  kids \n", "kids"),
+                           ("a" * 63, "a" * 63)):
+            self.set_hostname(text)
+            self.assertEqual(pb.box_info({})["hostname"], want, repr(text))
+        for bad in ("-box", "box-", "a" * 64, "has space", "bad_name", "صندوق", ".lan"):
+            self.set_hostname(bad)
+            self.assertIsNone(pb.box_info({})["hostname"], repr(bad))
+        os.unlink(os.path.join(self.tmp, "hostname"))
+        with mock.patch.object(pb.socket, "gethostname", lambda: "Fallback.local"):
+            self.assertEqual(pb.system_hostname(), "fallback", "without /etc/hostname: the kernel's name")
+        with mock.patch.object(pb.socket, "gethostname", side_effect=OSError("no name")):
+            self.assertIsNone(pb.system_hostname())
+
+    def test_api_is_the_contract_number_and_box_api_says_when_it_rises(self):
+        self.assertEqual(pb.BOX_API, 1)
+        self.assertEqual(pb.box_info({})["api"], pb.BOX_API)
+        with mock.patch.object(pb, "BOX_API", 2):
+            self.assertEqual(pb.box_info({})["api"], 2)
 
     def test_counter_means_an_address_is_configured_and_acceptable(self):
         self.assertIs(pb.box_info({})["counter"], False)
@@ -180,6 +247,22 @@ class WriteTests(Box):
         self.assertIs(self.read()["counter"], True)
         self.assertEqual(pb.write_box_info({"SINKO_TELEMETRY_URL": "https://c.example"}, ip="10.0.0.9", mdns=False, when=1003), "written")
         self.assertIs(self.read()["mdns"], False)
+
+    def test_a_file_written_by_an_older_version_gets_the_new_fields_at_once(self):
+        self.make_pb()
+        old = {"v": 1, "version": "3.1.0", "ip": "192.168.1.50", "tz": "Asia/Bahrain", "utcOffset": pb.utc_offset_text(),
+               "counter": False, "mdns": True, "at": 1000}
+        with open(self.path(), "w") as fh:
+            json.dump(old, fh)
+        self.assertEqual(pb.write_box_info({}, when=1001), "written")
+        self.assertEqual(list(self.read()), KEYS)
+
+    def test_a_new_host_name_is_written_at_once(self):
+        self.make_pb()
+        pb.write_box_info({}, when=1000)
+        self.set_hostname("kidsbox")
+        self.assertEqual(pb.write_box_info({}, when=1001), "written")
+        self.assertEqual(self.read()["hostname"], "kidsbox")
 
     def test_a_file_from_the_future_is_not_fresh_because_the_clock_was_wrong_when_it_was_written(self):
         self.make_pb()
