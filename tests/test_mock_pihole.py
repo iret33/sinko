@@ -674,7 +674,8 @@ class StopsAndLedgerTests(unittest.TestCase):
         self.now = time.mktime((2026, 10, 21, 15, 0, 0, 0, 0, -1))
 
     def list_id(self, comment):
-        return next(l["id"] for l in self.store.lists if l.get("comment") == comment)
+        """The list_id FTL notes for a stop by the block list with this comment: -(its id + 2)."""
+        return mock_pihole.gravity_list_id(next(l["id"] for l in self.store.lists if l.get("comment") == comment))
 
     def rule_id(self, comment_start):
         return next(d["id"] for d in self.store.domains if (d.get("comment") or "").startswith(comment_start))
@@ -690,12 +691,25 @@ class StopsAndLedgerTests(unittest.TestCase):
         self.assertIsNone(add("ads.doubleclick.net", "GRAVITY"), "no ad list on this box yet")
         ad = self.store.add_ad_list()
         self.assertEqual(self.store.add_ad_list(), ad, "added once")
-        self.assertEqual(add("ads.doubleclick.net", "GRAVITY"), ad)
-        self.assertEqual(add("logs.netflix.com", "GRAVITY"), ad, "Netflix is allowed: its own list did not stop it")
+        self.assertEqual(add("ads.doubleclick.net", "GRAVITY"), mock_pihole.gravity_list_id(ad))
+        self.assertEqual(add("logs.netflix.com", "GRAVITY"), mock_pihole.gravity_list_id(ad),
+                         "Netflix is allowed: its own list did not stop it")
         self.assertEqual(add("www.youtube.com", "REGEX"), self.rule_id("sinko: blocks everything"), "internet off")
         self.api.request("POST", "/api/domains/deny/regex", {"domain": r"(^|\.)tiktokv\.com$", "comment": "pb-learned:tiktok 2026-10-01",
                                                              "groups": [0], "enabled": True})
         self.assertEqual(add("api.tiktokv.com", "REGEX"), self.rule_id("pb-learned:tiktok"))
+        self.api.put_group("pb-offline", "", True)
+        self.assertEqual(add("api.tiktokv.com", "REGEX"), self.rule_id("sinko: blocks everything"),
+                         "internet off: FTL takes the first matching rule by id, the block-everything rule made at setup")
+        self.api.put_group("pb-offline", "", False)
+        gid = {g["name"]: g["id"] for g in self.api.groups()}
+        self.api.request("POST", "/api/clients",
+                         {"client": "AA:BB:CC:00:00:99", "comment": "Sara", "groups": [0, gid["pb-paused"]]})
+        self.store.devices.append({"id": 90, "hwaddr": "aa:bb:cc:00:00:99", "macVendor": "", "lastQuery": 0, "numQueries": 0,
+                                   "ips": [{"ip": "192.168.1.77", "name": ""}]})
+        self.store.add_query("api.tiktokv.com", "REGEX", client="192.168.1.77")
+        self.assertEqual(self.store.query_log[-1]["list_id"], self.rule_id("sinko: blocks everything"), "a paused device: the same")
+        self.assertEqual(add("api.tiktokv.com", "REGEX"), self.rule_id("pb-learned:tiktok"), "another device: the learned rule")
         self.assertIsNone(add("www.apple.com", "FORWARDED"))
         self.assertIsNone(add("x.example", "EXTERNAL_BLOCKED_NXRA"), "the upstream refused it: nothing on the box did")
         rows = self.box_queries()

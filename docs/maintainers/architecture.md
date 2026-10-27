@@ -283,13 +283,17 @@ and then every `LEDGER_REFRESH` (15 minutes), read-only through `sql_rows` (`pih
 library's `sqlite3` without it), with only whole numbers in the SQL:
 `SELECT status, list_id, COUNT(*) AS n FROM query_storage WHERE timestamp >= <start> AND timestamp < <end> AND status IN
 (<BLOCKED_STATUS>) GROUP BY status, list_id`, for [box-local midnight, now) and, from `LEDGER_SETTLE` (5 minutes) after
-midnight (FTL writes its database every `database.DBinterval`, a minute), for the whole of every day of the last week that
-the ledger holds and has not read whole since it ended; such a day is then final. FTL 6 notes in `list_id` the list (for a
-block-list status) or the rule (for a regex or denylist status) that stopped a lookup; the comments in `gravity.db` say whose:
+midnight, for the whole of every day of the last week that the ledger holds and has not read whole since it ended; such a day
+is then final, but only once FTL has written its end to disk: FTL writes every `database.DBinterval` (a minute unless the owner
+set more; a Pi-hole 5 setting in minutes becomes an hour) and keeps its last 30 seconds back, so a day is read "whole" from
+`DBinterval` + `LEDGER_WRITE_LAG` (90 s) after it ended, and counted as it stands (and read again) before that. FTL 6 notes in
+`list_id` the list (for a block-list status) or the rule (for a regex or denylist status) that stopped a lookup, in one column:
+a rule by its own `domainlist` id (0 and up), a list as `-(adlist id + 2)` (-2 is list 0, -3 list 1; -1 is none; `adlist_of`,
+the same in every FTL 6). The comments in `gravity.db` say whose:
 
 | Status (QUERY_STATUS) | `list_id` points at | Counted as |
 |---|---|---|
-| 1, 9 (gravity, also by CNAME) | `adlist` with comment `pb:<sid>`, `<sid>` in the catalog | `apps[sid]` |
+| 1, 9 (gravity, also by CNAME) | `adlist` `-list_id - 2` with comment `pb:<sid>`, `<sid>` in the catalog | `apps[sid]` |
 | | `adlist` `pb:guard` | not counted (the outside-DNS guard) |
 | | any other `adlist` (not `pb:`) | `ads` |
 | | an unknown id, or `pb:` of an app this release does not know | not counted |
@@ -298,6 +302,11 @@ block-list status) or the rule (for a regex or denylist status) that stopped a l
 | | any other rule (the owner's) | not counted |
 | 5, 11 (denylist) | the owner's exact rule | not counted |
 | 6, 7, 8, 18 (upstream), 15, 16 | | not counted |
+
+FTL names one list or rule, the first that matched, and two of its rules decide which: an exact entry on any of the client's
+lists beats an ABP pattern (Sinko's app lists are ABP only, so a tracker name of an app that StevenBlack's list also holds
+counts as an ad, which is what the card calls it), and of the deny regexes the first by id wins (Sinko's `^.*$`, made at
+setup, comes before every learned rule, so while the internet is off a stop in a learned zone counts as internet off).
 
 The table is the one with `list_id` (`PRAGMA table_info` of `query_storage`, then of `queries`). An FTL without it is read
 `GROUP BY status, domain`: a block-list stop of a name on an app's list (`service_domain_map`) is that app's, of a name on the
@@ -334,18 +343,30 @@ stops the scheduler). Written with each read of the stops (or every 15 minutes s
 ```jsonc
 {
   "v": 1,
+  "counted": 2,                        // how the stops were counted (LEDGER_COUNTED); see below
   "since": "YYYY-MM-DD" | null,        // first day with stop counts
   "keptSince": "YYYY-MM-DD" | null,    // first day the scheduler counted time off and nights
   "adLists": 1 | null,                 // switched-on block lists that are not Sinko's, from gravity.db
   "days": {                            // box-local days; LEDGER_KEEP_DAYS (35), today included
     "YYYY-MM-DD": {"ads": 12345 | null, "apps": {"tiktok": 40} | null, "final": true,   // read whole after the day ended
                    "off": 32400.0, "seen": 86400.0,                                       // seconds off, seconds watched
-                   "kept": 1 | 0 | null}                                                  // the night that started that day
+                   "kept": 1 | 0 | null,                                                  // the night that started that day
+                   "recount": true}                                // only while it waits to be counted again (below)
   },
   "night": {"d": "YYYY-MM-DD", "seen": 3600.0, "off": 3600.0, "planned": 32400} | null,  // the bedtime that is on
   "before": {"ads": 0, "apps": {}, "off": 0.0, "nights": 0, "kept": 0}                   // the rows folded away
 }
 ```
+
+`counted` says how the stops were counted. 3.3.0 wrote none and read a block list's `list_id` as the list's own id, so its
+ads and app tries are 0 where they were not: a file without `counted: 2` keeps its time off, nights and `keptSince`; the
+stop counts of its days (`ads`, `apps`) become `null`, those it had folded (`before.ads`, `before.apps`) 0 and `{}`, and
+`since` `null`, so the total is not known until a day is counted again (`merge` then sets `since` to the first such day).
+Each of its days is marked `"recount": true` (kept in the file until it is read) and not final; `windows` offers every such
+day, however old, `fold` does not close it, and `read_stops` reads it while the database holds the whole of it, or any of it
+on the day counting began (`keptSince`, `"part"`: Pi-hole's database may begin in it, when the box was set up that day); the
+mark goes with the first count. On any other day, a part means Pi-hole has deleted the rest (`database.maxDBdays`): such a
+day stays `null`.
 
 Rows older than 35 days are folded into `before`, so the totals outlive both the rows and Pi-hole's own limit; a row older than
 a week that was never read whole is final as it is.
@@ -359,8 +380,9 @@ next such moment (at once after a start). Never while an update runs (`update.st
 `box.json`), never after `sinko remove` (the `removed` flag). **After midnight** nothing is written, whatever made it due,
 until a read of the stops that began in the new day is back (one that fails or finds the database off counts too): a copy
 made earlier would say that today's stops are `null` (not known), and the card would show that until the next write, an hour
-later. The day's first read is made due for `LEDGER_SETTLE` after midnight, so it also reads yesterday whole and the new day's
-first copy has both; should it not come back, the copy goes `LEDGER_REFRESH` after it was due. Meanwhile the page still has
+later. The day's first read is made due for `LEDGER_SETTLE` after midnight, so it also reads yesterday whole (with the default
+`database.DBinterval`; with a longer one, as far as FTL has written it, and yesterday closes at a later read) and the new
+day's first copy has both; should it not come back, the copy goes `LEDGER_REFRESH` after it was due. Meanwhile the page still has
 the copy of the day before (`today` is yesterday) and says that today's numbers are not in yet. A write that fails (Pi-hole
 busy, its database locked by a list rebuild) changes none of this bookkeeping: it is tried again on the next pass. The
 comment, compact JSON, version 1:

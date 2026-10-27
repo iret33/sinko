@@ -118,7 +118,8 @@ CREATE TABLE queries (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp INTEGER NO
                       domain TEXT, client TEXT, list_id INTEGER);
 """
 
-# gravity.db: the ids of the two tables overlap on purpose: the status says which table a list_id is from.
+# gravity.db: the ids of the two tables overlap on purpose. FTL notes a rule by its own id and a block list as -(id + 2) (G),
+# so a stop read with the wrong table, or a list id taken as it is, lands in the wrong bucket and shows.
 ADLISTS = [  # id, address, enabled, comment, type (0 block, 1 allow)
     (1, "file:///opt/sinko/lists/tiktok.txt", 1, "pb:tiktok", 0),
     (2, "file:///opt/sinko/lists/youtube.txt", 1, "pb:youtube", 0),
@@ -136,6 +137,11 @@ RULES = [  # id, type (1 exact deny, 3 regex deny), domain, enabled, comment
     (4, 1, "example.com", 1, "my own exact rule"),
     (5, 3, r"(^|\.)gone-app\.com$", 1, "pb-learned:retired 2026-10-01"),
 ]
+
+
+def G(adlist_id):
+    """The list_id FTL notes for a stop by block list `adlist_id` (dnsmasq_interface.c: -2 is list 0, -3 list 1, ...)."""
+    return -(adlist_id + 2)
 
 
 class Databases:
@@ -223,11 +229,11 @@ class ClassifyTests(unittest.TestCase):
         return pb.stop_source(status, list_id, self.adlists, self.rules, SERVICES)
 
     def test_each_source_by_its_list_id(self):
-        self.assertEqual(self.source(1, 1), ("app", "tiktok"), "the family's app list")
-        self.assertEqual(self.source(9, 2), ("app", "youtube"), "also through a CNAME")
-        self.assertEqual(self.source(1, 3), ("guard", None), "the guard list is not an ad list")
-        self.assertEqual(self.source(1, 4), ("ads", None), "a general list")
-        self.assertEqual(self.source(1, 8), ("ads", None), "a general list without a comment")
+        self.assertEqual(self.source(1, G(1)), ("app", "tiktok"), "the family's app list")
+        self.assertEqual(self.source(9, G(2)), ("app", "youtube"), "also through a CNAME")
+        self.assertEqual(self.source(1, G(3)), ("guard", None), "the guard list is not an ad list")
+        self.assertEqual(self.source(1, G(4)), ("ads", None), "a general list")
+        self.assertEqual(self.source(1, G(8)), ("ads", None), "a general list without a comment")
         self.assertEqual(self.source(4, 1), ("off", None), "the block-everything rule: internet off, not an ad")
         self.assertEqual(self.source(10, 2), ("app", "tiktok"), "a rule the box learned for an app")
         self.assertEqual(self.source(4, 3), ("own", None), "the owner's own regex")
@@ -235,13 +241,24 @@ class ClassifyTests(unittest.TestCase):
         self.assertEqual(self.source(11, 4), ("own", None))
 
     def test_the_status_says_which_table_the_id_is_from(self):
-        self.assertEqual(self.source(1, 1), ("app", "tiktok"))           # adlist 1
+        self.assertEqual(self.source(1, G(1)), ("app", "tiktok"))        # adlist 1, noted as -3
         self.assertEqual(self.source(4, 1), ("off", None))               # domainlist 1
 
+    def test_a_block_list_is_noted_as_minus_its_id_minus_two(self):
+        # FTL 6 keeps rules and lists in one column (dnsmasq_interface.c): a rule by its own id, -1 for none, -2 for list 0,
+        # -3 for list 1, ... Read as it is, every block-list stop would be "other": no ads and no app tries on a real box.
+        self.assertEqual(pb.adlist_of(-2), 0)
+        self.assertEqual(pb.adlist_of(-6), 4)
+        for raw in (-1, 0, 4, None, "-6", True, -6.0):
+            self.assertIsNone(pb.adlist_of(raw), raw)
+        self.assertEqual(self.source(1, -6), ("ads", None), "list 4, StevenBlack's, as FTL notes it")
+        self.assertEqual(self.source(1, 4), ("other", None), "a block-list stop never carries a list's own id")
+        self.assertEqual(self.source(1, -1), ("other", None))
+
     def test_what_cannot_be_told_is_never_an_ad(self):
-        self.assertEqual(self.source(1, 5), ("other", None), "the list of an app this release does not know")
+        self.assertEqual(self.source(1, G(5)), ("other", None), "the list of an app this release does not know")
         self.assertEqual(self.source(4, 5), ("own", None), "a rule learned for such an app")
-        self.assertEqual(self.source(1, 99), ("other", None), "a list deleted since")
+        self.assertEqual(self.source(1, G(99)), ("other", None), "a list deleted since")
         self.assertEqual(self.source(1, None), ("other", None))
         self.assertEqual(self.source(4, 99), ("other", None))
         for status in (6, 7, 8, 18):
@@ -250,11 +267,13 @@ class ClassifyTests(unittest.TestCase):
             self.assertEqual(self.source(status, 4)[0], "other", status)
 
     def test_classify_adds_up_and_skips_rows_that_make_no_sense(self):
-        rows = [{"status": 1, "list_id": 4, "n": 100}, {"status": 9, "list_id": 4, "n": 5}, {"status": 1, "list_id": 1, "n": 7},
+        rows = [{"status": 1, "list_id": G(4), "n": 100}, {"status": 9, "list_id": G(4), "n": 5},
+                {"status": 1, "list_id": G(1), "n": 7},
                 {"status": 10, "list_id": 2, "n": 3}, {"status": 4, "list_id": 1, "n": 40}, {"status": 6, "list_id": None, "n": 2},
-                {"status": 1, "list_id": 3, "n": 9}, {"status": 5, "list_id": 4, "n": 1},
-                {"status": 1, "list_id": 4, "n": 0}, {"status": 1, "list_id": 4, "n": "5"}, {"status": None, "list_id": 4, "n": 5},
-                {"status": 1, "list_id": 4, "n": True}]
+                {"status": 1, "list_id": G(3), "n": 9}, {"status": 5, "list_id": 4, "n": 1},
+                {"status": 1, "list_id": G(4), "n": 0}, {"status": 1, "list_id": G(4), "n": "5"},
+                {"status": None, "list_id": 4, "n": 5},
+                {"status": 1, "list_id": G(4), "n": True}]
         got = pb.classify_stops(rows, self.adlists, self.rules, SERVICES)
         self.assertEqual(got, {"ads": 105, "apps": {"tiktok": 10}, "off": 40, "guard": 9, "own": 1, "upstream": 2, "other": 0})
 
@@ -277,13 +296,13 @@ class ClassifyTests(unittest.TestCase):
 # --------------------------------------------------------------------------- reading Pi-hole's database
 class ReadStopsTests(DatabaseCase):
     def rows_today(self):
-        return [(self.at(0, 9), 1, "ads.doubleclick.net", 4), (self.at(0, 9), 1, "ads.doubleclick.net", 4),
-                (self.at(0, 10), 1, "www.tiktok.com", 1), (self.at(0, 11), 9, "www.youtube.com", 2),
+        return [(self.at(0, 9), 1, "ads.doubleclick.net", G(4)), (self.at(0, 9), 1, "ads.doubleclick.net", G(4)),
+                (self.at(0, 10), 1, "www.tiktok.com", G(1)), (self.at(0, 11), 9, "www.youtube.com", G(2)),
                 (self.at(0, 11), 4, "www.example.org", 1), (self.at(0, 12), 10, "api.tiktokv.com", 2),
-                (self.at(0, 12), 1, "dns.google", 3), (self.at(0, 13), 6, "blocked.example", None),
+                (self.at(0, 12), 1, "dns.google", G(3)), (self.at(0, 13), 6, "blocked.example", None),
                 (self.at(0, 13), 2, "www.apple.com", None),                         # answered: not a stop
-                (self.at(1, 23, 59), 1, "ads.doubleclick.net", 4),                 # yesterday
-                (self.at(0, 15, 1), 1, "ads.doubleclick.net", 4)]                  # after "now": not yet
+                (self.at(1, 23, 59), 1, "ads.doubleclick.net", G(4)),              # yesterday
+                (self.at(0, 15, 1), 1, "ads.doubleclick.net", G(4))]               # after "now": not yet
 
     def test_list_ids_are_used_when_the_database_has_them(self):
         self.db.ftl(self.rows_today())
@@ -385,9 +404,27 @@ class ReadStopsTests(DatabaseCase):
         self.assertEqual(got["days"][self.today.isoformat()]["ads"], 2)
         slept.assert_called_once()
 
+    def test_a_day_to_count_again_needs_only_some_of_it_in_the_database(self):
+        # The install day of a box first set up with 3.3.0: Pi-hole's database begins in the middle of it.
+        self.db.ftl([(self.at(2, 14), 1, "ads.doubleclick.net", G(4)), (self.at(1, 9), 1, "ads.doubleclick.net", G(4))])
+        days = [self.today - dt.timedelta(days=n) for n in (3, 2, 1)]
+        got = self.read(windows=[window(d, whole=True, gap="part") for d in days])
+        self.assertEqual(sorted(got["days"]), [days[1].isoformat(), days[2].isoformat()], "a day it holds none of stays unread")
+        self.assertEqual(got["days"][days[1].isoformat()]["ads"], 1)
+
+    def test_a_past_day_is_whole_only_once_ftl_has_written_its_end(self):
+        self.db.ftl([(self.at(1, 23, 50), 1, "ads.doubleclick.net", G(4))])
+        yesterday = self.today - dt.timedelta(days=1)
+        end = pb.day_start(self.today)
+        for interval, after, whole in (("60", 5 * 60, True), ("3600", 5 * 60, False), ("3600", 3600 + 120, True),
+                                       (None, 5 * 60, True), ("x", 5 * 60, True), ("nan", 5 * 60, True)):
+            got = self.read(windows=[window(yesterday, whole=True)], setting=settings(database__DBinterval=interval),
+                            now=end + after)
+            self.assertEqual(got["days"][yesterday.isoformat()], {"ads": 1, "apps": {}, "whole": whole}, (interval, after))
+
     def test_a_gap_is_counted_only_when_the_database_holds_the_whole_day(self):
-        self.db.ftl([(self.at(2, 0, 30), 1, "ads.doubleclick.net", 4), (self.at(1, 8), 1, "ads.doubleclick.net", 4),
-                     (self.at(0, 9), 1, "ads.doubleclick.net", 4)])
+        self.db.ftl([(self.at(2, 0, 30), 1, "ads.doubleclick.net", G(4)), (self.at(1, 8), 1, "ads.doubleclick.net", G(4)),
+                     (self.at(0, 9), 1, "ads.doubleclick.net", G(4))])
         days = [self.today - dt.timedelta(days=n) for n in (3, 2, 1)]
         got = self.read(windows=[window(d, whole=True, gap=True) for d in days] + [window(self.today, now=self.now)])
         self.assertEqual(sorted(got["days"]), [days[2].isoformat(), self.today.isoformat()],
@@ -518,8 +555,8 @@ class BackfillTests(DatabaseCase):
         rows = []
         for back in range(first_days_ago, -1, -1):
             for hour in (0, 12, 14):
-                rows.append((self.at(back, hour, 30 if back == first_days_ago else 0), 1, "ads.doubleclick.net", 4))
-            rows.append((self.at(back, 13), 1, "www.tiktok.com", 1))
+                rows.append((self.at(back, hour, 30 if back == first_days_ago else 0), 1, "ads.doubleclick.net", G(4)))
+            rows.append((self.at(back, 13), 1, "www.tiktok.com", G(1)))
         self.db.ftl(rows)
 
     def test_the_first_run_fills_the_week_from_what_the_database_holds(self):
@@ -748,7 +785,8 @@ class SavingsFileTests(LedgerCase):
     def test_a_field_that_makes_no_sense_loses_only_itself(self):
         good = {"ads": 5, "apps": {"tiktok": 2, "BAD ID": 3, "youtube": -1, "roblox": True}, "final": True, "off": 60, "seen": 60,
                 "kept": 1}
-        self.write(json.dumps({"v": 1, "since": "2026-13-01", "keptSince": "2026-10-01", "adLists": "1", "night": {"d": "x"},
+        self.write(json.dumps({"v": 1, "counted": pb.LEDGER_COUNTED, "since": "2026-13-01", "keptSince": "2026-10-01",
+                               "adLists": "1", "night": {"d": "x"},
                                "days": {"2026-10-20": good, "2026-02-30": good, "yesterday": good,
                                         "2026-10-19": {"ads": 1.5, "apps": {"tiktok": 1}, "kept": True, "off": "x", "seen": None}},
                                "before": {"ads": 10 ** 13, "nights": 3, "kept": 2, "apps": [], "off": -5}}))
@@ -758,6 +796,53 @@ class SavingsFileTests(LedgerCase):
         self.assertEqual(data["days"]["2026-10-19"], {"ads": None, "apps": None, "final": False, "off": 0.0, "seen": 0.0, "kept": None})
         self.assertEqual((data["since"], data["keptSince"], data["adLists"], data["night"]), (None, "2026-10-01", None, None))
         self.assertEqual(data["before"], {"ads": 0, "apps": {}, "off": 0.0, "nights": 3, "kept": 2})
+
+    def test_stops_counted_by_3_3_0_are_counted_again_and_the_rest_stays(self):
+        # 3.3.0 wrote no "counted" and took FTL's list_id of a block-list stop as the list's own id: its ads and app tries are
+        # 0 where they were not. They become not known and are read again; time off, nights and the start days stay.
+        old_day = {"ads": 0, "apps": {}, "final": True, "off": 3600.0, "seen": 86400.0, "kept": 1}
+        self.write(json.dumps({"v": 1, "since": self.day(3), "keptSince": self.day(3), "adLists": 1, "night": None,
+                               "days": {self.day(n): dict(old_day) for n in (3, 2, 1)} | {self.day(0): dict(old_day, final=False)},
+                               "before": {"ads": 7, "apps": {"tiktok": 1}, "off": 60.0, "nights": 2, "kept": 1}}))
+        with self.assertLogs("sinko", level="INFO"):
+            data = self.ledger.load()
+        self.assertTrue(self.ledger.dirty, "so that the next save carries the new counting")
+        for n in (3, 2, 1, 0):
+            self.assertEqual(data["days"][self.day(n)], {"ads": None, "apps": None, "final": False, "off": 3600.0, "seen": 86400.0,
+                                                         "kept": 1, "recount": True})
+        self.assertEqual((data["since"], data["keptSince"]), (None, self.day(3)),
+                         "the first day with stop counts is the first one counted again: none yet")
+        self.assertIsNone(self.payload()["tot"]["ads"], "the 'since' total is not known until then, never 3.3.0's 0")
+        self.assertEqual(data["before"], {"ads": 0, "apps": {}, "off": 60.0, "nights": 2, "kept": 1})
+        self.assertEqual(self.payload()["days"][-1]["ads"], None, "until it is read again: not known, never the old 0")
+        wanted = {d for d, _s, _e, _w, _g in self.ledger.windows(self.now)}
+        self.assertLessEqual({self.day(n) for n in (3, 2, 1, 0)}, wanted, "each day is read again")
+        self.ledger.merge(self.result({0: 900, 1: 1500, 2: 1400, 3: 1300}, whole={1, 2, 3}), self.now)
+        self.assertEqual([d["ads"] for d in self.payload()["days"]], [1300, 1400, 1500, 900])
+        self.assertEqual((self.payload()["since"], self.payload()["tot"]["ads"]), (self.day(3), 5100))
+        self.ledger.save()
+        self.assertEqual(self.saved()["counted"], pb.LEDGER_COUNTED)
+        again = pb.Ledger()
+        self.assertEqual(again.load()["days"][self.day(1)]["ads"], 1500)
+        self.assertFalse(again.dirty, "a file of this version is taken as it is")
+        self.assertNotIn("recount", again.load()["days"][self.day(1)], "counted again: the mark is gone")
+
+    def test_a_recount_reaches_every_day_the_ledger_holds_and_waits_for_it(self):
+        # A box that ran 3.3.0 for weeks: days 8 to 34 back are past the week, and would otherwise be final as they are.
+        old_day = {"ads": 0, "apps": {}, "final": True, "off": 0.0, "seen": 86400.0, "kept": None}
+        self.write(json.dumps({"v": 1, "since": self.day(34), "keptSince": self.day(20), "adLists": 1, "night": None,
+                               "days": {self.day(n): dict(old_day) for n in range(34, 0, -1)}}))
+        self.ledger.observe(self.now, 0, False, True, False, OffTimeTests.SCHED)       # a pass folds: nothing may close them
+        rows = self.ledger.load()["days"]
+        self.assertTrue(all(rows[self.day(n)]["recount"] and not rows[self.day(n)]["final"] for n in range(34, 0, -1)))
+        got = {d: g for d, _s, _e, _w, g in self.ledger.windows(self.now)}
+        self.assertEqual({d for d in got if d != self.day(0)}, {self.day(n) for n in range(34, 0, -1)}, "every one, however old")
+        self.assertEqual(got[self.day(20)], "part", "the day counting began: Pi-hole's database may begin in it")
+        self.assertEqual({got[self.day(n)] for n in range(34, 0, -1) if n != 20}, {True},
+                         "any other day only whole: a part of it means Pi-hole has deleted the rest")
+        self.ledger.merge(self.result({n: 100 + n for n in range(34, 0, -1)}, whole=set(range(34, 0, -1))), self.now)
+        self.assertEqual(self.ledger.load()["days"][self.day(30)]["ads"], 130)
+        self.assertEqual({d for d, *_ in self.ledger.windows(self.now)}, {self.day(0)}, "all read: nothing more to ask")
 
 
 # --------------------------------------------------------------------------- the scheduler's side and the page's copy
