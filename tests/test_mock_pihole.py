@@ -702,6 +702,14 @@ class StopsAndLedgerTests(unittest.TestCase):
         self.assertEqual(add("api.tiktokv.com", "REGEX"), self.rule_id("sinko: blocks everything"),
                          "internet off: FTL takes the first matching rule by id, the block-everything rule made at setup")
         self.api.put_group("pb-offline", "", False)
+        gid = {g["name"]: g["id"] for g in self.api.groups()}
+        self.api.request("POST", "/api/clients",
+                         {"client": "AA:BB:CC:00:00:99", "comment": "Sara", "groups": [0, gid["pb-paused"]]})
+        self.store.devices.append({"id": 90, "hwaddr": "aa:bb:cc:00:00:99", "macVendor": "", "lastQuery": 0, "numQueries": 0,
+                                   "ips": [{"ip": "192.168.1.77", "name": ""}]})
+        self.store.add_query("api.tiktokv.com", "REGEX", client="192.168.1.77")
+        self.assertEqual(self.store.query_log[-1]["list_id"], self.rule_id("sinko: blocks everything"), "a paused device: the same")
+        self.assertEqual(add("api.tiktokv.com", "REGEX"), self.rule_id("pb-learned:tiktok"), "another device: the learned rule")
         self.assertIsNone(add("www.apple.com", "FORWARDED"))
         self.assertIsNone(add("x.example", "EXTERNAL_BLOCKED_NXRA"), "the upstream refused it: nothing on the box did")
         rows = self.box_queries()

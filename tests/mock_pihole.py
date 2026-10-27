@@ -281,7 +281,7 @@ class Store:
         qid = next(self.query_ids)
         blocked = status in BLOCKED
         if list_id is None and blocked:
-            list_id = self.blocking_list_id(domain, status)
+            list_id = self.blocking_list_id(domain, status, client)
         self.query_log.append({
             "id": qid, "time": float(time.time() if when is None else when), "type": "A", "domain": domain,
             "status": status, "client": {"ip": client, "name": name}, "dnssec": "UNKNOWN",
@@ -300,11 +300,19 @@ class Store:
             self.lists.append(row)
         return row["id"]
 
-    def blocking_list_id(self, domain, status):
+    def client_groups(self, ip):
+        """The groups of the client row a lookup from `ip` falls under (the device's MAC row, else a row for the address), or
+        None when the box has no row for it."""
+        macs = {d["hwaddr"].lower() for d in self.devices if any(a.get("ip") == ip for a in d.get("ips", []))}
+        row = next((c for c in self.clients if c["client"].lower() in macs or c["client"] == ip), None)
+        return None if row is None else set(row.get("groups", []))
+
+    def blocking_list_id(self, domain, status, client=None):
         """The list_id FTL would note for a stop: the app's own list (pb:<id>) while that app is blocked, else the general ad
-        list (if the box has one) for a block-list stop; a learned rule over the name, else Sinko's block-everything rule, for a
-        regex stop; the owner's exact rule for a denylist stop. None when nothing on the box explains it (as for an upstream
-        refusal)."""
+        list (if the box has one) for a block-list stop; for a regex stop the first deny regex by id that applies, as FTL takes
+        it: Sinko's block-everything rule (made at setup, before any learned rule) while the internet is off or the device is
+        paused, else a learned rule over the name whose group is on, else the block-everything rule; the owner's exact rule for
+        a denylist stop. None when nothing on the box explains it (as for an upstream refusal)."""
         name = (domain or "").lower().rstrip(".")
         if status in ("GRAVITY", "GRAVITY_CNAME"):
             sid = app_of(name)
@@ -317,14 +325,17 @@ class Store:
         if status in ("REGEX", "REGEX_CNAME"):
             rules = [d for d in self.domains if d["type"] == "deny" and d["kind"] == "regex" and d.get("enabled", True)]
             every = next((d for d in rules if d["domain"] == "^.*$"), None)
-            offline = next((g for g in self.groups if g["name"] == "pb-offline"), None)
-            if every is not None and offline is not None and offline.get("enabled"):
-                # FTL takes the first deny regex that matches, by id: while the internet is off that is Sinko's ^.*$, made at
-                # setup before any rule the box learned, even for a name under a learned zone
-                return every["id"]
+            by_name = {g["name"]: g for g in self.groups}
+            by_id = {g["id"]: g for g in self.groups}
+            paused = by_name.get("pb-paused")
+            mine = self.client_groups(client) if client is not None else None
+            off = by_name.get("pb-offline") is not None and by_name["pb-offline"].get("enabled")
+            if every is not None and (off or (paused is not None and mine is not None and paused["id"] in mine)):
+                return every["id"]           # the first deny regex by id, even for a name under a learned zone
             for d in rules:
                 zone = load_cli().regex_zone(d["domain"]) if (d.get("comment") or "").startswith("pb-learned:") else None
-                if zone and (name == zone or name.endswith("." + zone)):
+                on = any(by_id.get(g, {}).get("enabled") for g in d.get("groups", [0]))
+                if zone and on and (name == zone or name.endswith("." + zone)):
                     return d["id"]
             return every["id"] if every is not None else None
         if status in ("DENYLIST", "DENYLIST_CNAME"):

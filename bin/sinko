@@ -3495,7 +3495,7 @@ LEDGER_WRITE_LAG = 90            # what FTL leaves off disk past its last write 
 LEDGER_KEEP_DAYS = 35            # daily rows kept in savings.json; older ones are folded into the running totals
 LEDGER_REFRESH = 15 * 60         # seconds between two reads of Pi-hole's database (the first right after the start)
 LEDGER_PUBLISH_EVERY = 60 * 60   # pb-ledger is written at most this often: every group write makes Pi-hole reload its lists
-LEDGER_SETTLE = 5 * 60           # a day is read whole this long after it ended: FTL writes its database once a minute
+LEDGER_SETTLE = 5 * 60           # yesterday is first read whole this long after it ended (FTL's default write: a minute)
 LEDGER_STEP_MAX = 120            # seconds one pass may count, however long ago the last counted pass was
 LEDGER_BACKFILL = 6              # whole days before today read on the first run, so that the week is full on day one
 LEDGER_WEEK = 7                  # days in pb-ledger, today included
@@ -3823,8 +3823,9 @@ class Ledger:
        "before": {"ads": n, "apps": {sid: n}, "off": s, "nights": n, "kept": n}}
     "ads"/"apps" are the stops Pi-hole's database showed (read_stops), "final" says the day was read whole after it ended,
     "seen" and "off" are the seconds the scheduler watched the day and the children's internet was off in them, "kept" is
-    the bedtime night that started on that day, "recount" a day whose stops an earlier version counted the wrong way. "night" is the bedtime that is on (or was on when the scheduler stopped),
-    and "before" the totals of the rows folded away after LEDGER_KEEP_DAYS days."""
+    the bedtime night that started on that day, "recount" a day whose stops an earlier version counted the wrong way.
+    "night" is the bedtime that is on (or was on when the scheduler stopped), and "before" the totals of the rows folded
+    away after LEDGER_KEEP_DAYS days."""
 
     def __init__(self, path: str | None = None):
         self.path = path                     # None: savings.json in the state folder, looked up when it is read
@@ -3891,6 +3892,8 @@ class Ledger:
         data = cls._fresh()
         for key in ("since", "keptSince"):
             data[key] = raw[key] if _is_day(raw.get(key)) else None
+        if recount:
+            data["since"] = None         # the first day with stop counts is the first one counted again (merge)
         data["adLists"] = _ledger_count(raw.get("adLists"))
         for day, row in raw["days"].items():
             if _is_day(day) and isinstance(row, dict):
@@ -3990,13 +3993,15 @@ class Ledger:
     # ----- what Pi-hole's database says, read by the background job -----
     def windows(self, now: dt.datetime) -> list:
         """What read_stops should count: [(day, start, end, whole, gap)]. Today so far; every day of the last week the ledger
-        holds and has not read whole since it ended (yesterday only LEDGER_SETTLE after midnight, when FTL has written its
-        end); and the LEDGER_BACKFILL days before today that the ledger has nothing for and that came before it began
-        counting (keptSince; until anything was counted at all, all of them) as gaps, counted only when the database holds
-        the whole day, so that the week is full on the first day. Not only on the first read: a first read in the
+        holds and has not read whole since it ended (yesterday from LEDGER_SETTLE after midnight, when FTL has written its
+        end with its default database.DBinterval; read_stops keeps a day open until FTL has); and the LEDGER_BACKFILL days
+        before today that the ledger has nothing for and that came before it began counting (keptSince; until anything was
+        counted at all, all of them) as gaps, counted only when the database holds the whole day, so that the week is full
+        on the first day. Not only on the first read: a first read in the
         LEDGER_SETTLE after midnight has to leave yesterday for later, and must not leave it a gap for good. And every day
-        marked "recount", however old: read again while the database holds any of it (from keptSince, when this counting
-        ran and read it as it went) or the whole of it (before: the first run's backfill), "part" or a gap to read_stops."""
+        marked "recount", however old: read again while the database holds the whole of it (a gap), or any of it on the day
+        this counting began (keptSince: Pi-hole's database may begin in it, when the box was set up that day), "part" to
+        read_stops. On any other day a part means Pi-hole has deleted the rest (database.maxDBdays): it stays not known."""
         data = self.load()
         today = now.date()
         out = [(today.isoformat(), day_start(today), now.timestamp(), False, False)]
@@ -4008,8 +4013,7 @@ class Ledger:
             row = data["days"].get(day.isoformat())
             whole = (day.isoformat(), day_start(day), day_start(day + dt.timedelta(days=1)), True)
             if row is not None and row.get("recount"):
-                part = data["keptSince"] is not None and day.isoformat() >= data["keptSince"]
-                out.append(whole + ("part" if part else True,))
+                out.append(whole + ("part" if day.isoformat() == data["keptSince"] else True,))
             elif back > LEDGER_WEEK:
                 continue
             elif row is not None and not row["final"]:
@@ -4777,7 +4781,8 @@ class Maintenance:
         if self._ledger_today is not None and today != self._ledger_today:
             # A new day. Until a read of it is back, a copy for the page would say that today's stops are not known, and the
             # next write could be an hour away: _publish_ledger waits for that read (at most _ledger_hold). It is the one
-            # LEDGER_SETTLE after midnight, which also reads yesterday whole, rather than whichever of every LEDGER_REFRESH.
+            # LEDGER_SETTLE after midnight, which also reads yesterday whole (as far as FTL has written it: with a long
+            # database.DBinterval the day closes at a later read), rather than whichever of every LEDGER_REFRESH.
             wait = max(0.0, day_start(today) + LEDGER_SETTLE - now.timestamp())
             self._next_ledger = self.mono() + wait
             self._ledger_hold = self.mono() + wait + LEDGER_REFRESH

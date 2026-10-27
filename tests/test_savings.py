@@ -267,10 +267,12 @@ class ClassifyTests(unittest.TestCase):
             self.assertEqual(self.source(status, 4)[0], "other", status)
 
     def test_classify_adds_up_and_skips_rows_that_make_no_sense(self):
-        rows = [{"status": 1, "list_id": G(4), "n": 100}, {"status": 9, "list_id": G(4), "n": 5}, {"status": 1, "list_id": G(1), "n": 7},
+        rows = [{"status": 1, "list_id": G(4), "n": 100}, {"status": 9, "list_id": G(4), "n": 5},
+                {"status": 1, "list_id": G(1), "n": 7},
                 {"status": 10, "list_id": 2, "n": 3}, {"status": 4, "list_id": 1, "n": 40}, {"status": 6, "list_id": None, "n": 2},
                 {"status": 1, "list_id": G(3), "n": 9}, {"status": 5, "list_id": 4, "n": 1},
-                {"status": 1, "list_id": G(4), "n": 0}, {"status": 1, "list_id": G(4), "n": "5"}, {"status": None, "list_id": 4, "n": 5},
+                {"status": 1, "list_id": G(4), "n": 0}, {"status": 1, "list_id": G(4), "n": "5"},
+                {"status": None, "list_id": 4, "n": 5},
                 {"status": 1, "list_id": G(4), "n": True}]
         got = pb.classify_stops(rows, self.adlists, self.rules, SERVICES)
         self.assertEqual(got, {"ads": 105, "apps": {"tiktok": 10}, "off": 40, "guard": 9, "own": 1, "upstream": 2, "other": 0})
@@ -416,7 +418,8 @@ class ReadStopsTests(DatabaseCase):
         end = pb.day_start(self.today)
         for interval, after, whole in (("60", 5 * 60, True), ("3600", 5 * 60, False), ("3600", 3600 + 120, True),
                                        (None, 5 * 60, True), ("x", 5 * 60, True), ("nan", 5 * 60, True)):
-            got = self.read(windows=[window(yesterday, whole=True)], setting=settings(database__DBinterval=interval), now=end + after)
+            got = self.read(windows=[window(yesterday, whole=True)], setting=settings(database__DBinterval=interval),
+                            now=end + after)
             self.assertEqual(got["days"][yesterday.isoformat()], {"ads": 1, "apps": {}, "whole": whole}, (interval, after))
 
     def test_a_gap_is_counted_only_when_the_database_holds_the_whole_day(self):
@@ -782,8 +785,8 @@ class SavingsFileTests(LedgerCase):
     def test_a_field_that_makes_no_sense_loses_only_itself(self):
         good = {"ads": 5, "apps": {"tiktok": 2, "BAD ID": 3, "youtube": -1, "roblox": True}, "final": True, "off": 60, "seen": 60,
                 "kept": 1}
-        self.write(json.dumps({"v": 1, "counted": pb.LEDGER_COUNTED, "since": "2026-13-01", "keptSince": "2026-10-01", "adLists": "1",
-                               "night": {"d": "x"},
+        self.write(json.dumps({"v": 1, "counted": pb.LEDGER_COUNTED, "since": "2026-13-01", "keptSince": "2026-10-01",
+                               "adLists": "1", "night": {"d": "x"},
                                "days": {"2026-10-20": good, "2026-02-30": good, "yesterday": good,
                                         "2026-10-19": {"ads": 1.5, "apps": {"tiktok": 1}, "kept": True, "off": "x", "seen": None}},
                                "before": {"ads": 10 ** 13, "nights": 3, "kept": 2, "apps": [], "off": -5}}))
@@ -807,13 +810,16 @@ class SavingsFileTests(LedgerCase):
         for n in (3, 2, 1, 0):
             self.assertEqual(data["days"][self.day(n)], {"ads": None, "apps": None, "final": False, "off": 3600.0, "seen": 86400.0,
                                                          "kept": 1, "recount": True})
-        self.assertEqual((data["since"], data["keptSince"]), (self.day(3), self.day(3)))
+        self.assertEqual((data["since"], data["keptSince"]), (None, self.day(3)),
+                         "the first day with stop counts is the first one counted again: none yet")
+        self.assertIsNone(self.payload()["tot"]["ads"], "the 'since' total is not known until then, never 3.3.0's 0")
         self.assertEqual(data["before"], {"ads": 0, "apps": {}, "off": 60.0, "nights": 2, "kept": 1})
         self.assertEqual(self.payload()["days"][-1]["ads"], None, "until it is read again: not known, never the old 0")
         wanted = {d for d, _s, _e, _w, _g in self.ledger.windows(self.now)}
         self.assertLessEqual({self.day(n) for n in (3, 2, 1, 0)}, wanted, "each day is read again")
         self.ledger.merge(self.result({0: 900, 1: 1500, 2: 1400, 3: 1300}, whole={1, 2, 3}), self.now)
         self.assertEqual([d["ads"] for d in self.payload()["days"]], [1300, 1400, 1500, 900])
+        self.assertEqual((self.payload()["since"], self.payload()["tot"]["ads"]), (self.day(3), 5100))
         self.ledger.save()
         self.assertEqual(self.saved()["counted"], pb.LEDGER_COUNTED)
         again = pb.Ledger()
@@ -831,9 +837,9 @@ class SavingsFileTests(LedgerCase):
         self.assertTrue(all(rows[self.day(n)]["recount"] and not rows[self.day(n)]["final"] for n in range(34, 0, -1)))
         got = {d: g for d, _s, _e, _w, g in self.ledger.windows(self.now)}
         self.assertEqual({d for d in got if d != self.day(0)}, {self.day(n) for n in range(34, 0, -1)}, "every one, however old")
-        self.assertEqual({got[self.day(n)] for n in range(20, 0, -1)}, {"part"},
-                         "from keptSince on, 3.3.0 read the day as it went: some of it in the database is enough")
-        self.assertEqual({got[self.day(n)] for n in range(34, 20, -1)}, {True}, "before it, the backfill's rule: the whole day")
+        self.assertEqual(got[self.day(20)], "part", "the day counting began: Pi-hole's database may begin in it")
+        self.assertEqual({got[self.day(n)] for n in range(34, 0, -1) if n != 20}, {True},
+                         "any other day only whole: a part of it means Pi-hole has deleted the rest")
         self.ledger.merge(self.result({n: 100 + n for n in range(34, 0, -1)}, whole=set(range(34, 0, -1))), self.now)
         self.assertEqual(self.ledger.load()["days"][self.day(30)]["ads"], 130)
         self.assertEqual({d for d, *_ in self.ledger.windows(self.now)}, {self.day(0)}, "all read: nothing more to ask")

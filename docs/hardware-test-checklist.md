@@ -336,9 +336,9 @@ Pi-hole shows that the shape and the ids are what the program expects. All of th
       timestamp > strftime('%s','now','-15 minutes') GROUP BY status, list_id"` shows status 1 with `-(id + 2)` of the list
       commented `pb:tiktok` (list 5 shows as -7), status 4 with the id of the `^.*$` rule as it is, and status 1 with
       `-(id + 2)` of a list that is not Sinko's (look the ids up with `SELECT id, comment FROM adlist` and
-      `SELECT id, domain, comment FROM domainlist` in `/etc/pihole/gravity.db`). Then `sudo systemctl restart sinko` (the first count comes right after the start), and a minute
-      later `sudo sinko diagnose` and the card on the page show the TikTok tries and the ads, and the internet-off stops in
-      neither.
+      `SELECT id, domain, comment FROM domainlist` in `/etc/pihole/gravity.db`). Then `sudo systemctl restart sinko` (the
+      first count comes right after the start), and a minute later `sudo sinko diagnose` and the card on the page show the
+      TikTok tries and the ads, and the internet-off stops in neither.
 - [ ] **Pi-hole's own ad list.** On a box Pi-hole's unattended installer set up (a fresh own install, and a ready-made box):
       `sudo pihole-FTL sqlite3 -readonly /etc/pihole/gravity.db "SELECT id, enabled, address, comment FROM adlist"`. Write
       down whether there is a list besides Sinko's `pb:` ones: StevenBlack's should be there (Pi-hole's unattended
@@ -355,7 +355,8 @@ Pi-hole shows that the shape and the ids are what the program expects. All of th
       `sudo systemctl restart sinko` makes the first write: write down the longest gap.
 - [ ] **The new day.** Keep the page open on *Today* across midnight: until about 5 minutes after midnight it says the box has
       not counted the new day yet, and within a minute after that it shows the new day's numbers (a count, never "not known"),
-      while the bar of the day before is that whole day.
+      while the bar of the day before is that whole day (with Pi-hole's default `database.DBinterval`, a minute; check it with
+      `sudo pihole-FTL --config database.DBinterval`: with an hour, that bar fills up at the read after FTL's next write).
 - [ ] **A power cut loses at most a quarter of an hour.** Switch the internet off on the page, wait 40 minutes, pull the plug,
       start the box again: `sudo cat /var/lib/sinko/savings.json` holds at least 25 minutes of that day's `off`, and the card
       shows the time off again within a few minutes of the start.
