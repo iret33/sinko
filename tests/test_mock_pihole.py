@@ -674,7 +674,8 @@ class StopsAndLedgerTests(unittest.TestCase):
         self.now = time.mktime((2026, 10, 21, 15, 0, 0, 0, 0, -1))
 
     def list_id(self, comment):
-        return next(l["id"] for l in self.store.lists if l.get("comment") == comment)
+        """The list_id FTL notes for a stop by the block list with this comment: -(its id + 2)."""
+        return mock_pihole.gravity_list_id(next(l["id"] for l in self.store.lists if l.get("comment") == comment))
 
     def rule_id(self, comment_start):
         return next(d["id"] for d in self.store.domains if (d.get("comment") or "").startswith(comment_start))
@@ -690,8 +691,9 @@ class StopsAndLedgerTests(unittest.TestCase):
         self.assertIsNone(add("ads.doubleclick.net", "GRAVITY"), "no ad list on this box yet")
         ad = self.store.add_ad_list()
         self.assertEqual(self.store.add_ad_list(), ad, "added once")
-        self.assertEqual(add("ads.doubleclick.net", "GRAVITY"), ad)
-        self.assertEqual(add("logs.netflix.com", "GRAVITY"), ad, "Netflix is allowed: its own list did not stop it")
+        self.assertEqual(add("ads.doubleclick.net", "GRAVITY"), mock_pihole.gravity_list_id(ad))
+        self.assertEqual(add("logs.netflix.com", "GRAVITY"), mock_pihole.gravity_list_id(ad),
+                         "Netflix is allowed: its own list did not stop it")
         self.assertEqual(add("www.youtube.com", "REGEX"), self.rule_id("sinko: blocks everything"), "internet off")
         self.api.request("POST", "/api/domains/deny/regex", {"domain": r"(^|\.)tiktokv\.com$", "comment": "pb-learned:tiktok 2026-10-01",
                                                              "groups": [0], "enabled": True})

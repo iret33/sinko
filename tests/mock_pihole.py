@@ -81,6 +81,12 @@ AD_DOMAINS = ("ads.doubleclick.net", "securepubads.g.doubleclick.net", "pagead2.
               "settings.crashlytics.com", "data.flurry.com", "ads.mopub.com", "track.adform.net")
 
 
+def gravity_list_id(adlist_id):
+    """The list_id FTL notes for a stop by a block list: -(id + 2), so that the one column also holds rules by their own ids
+    (0 and up) and -1 for none (FTL's dnsmasq_interface.c, the same in every FTL 6). bin/sinko's adlist_of reads it back."""
+    return -(adlist_id + 2)
+
+
 class Store:
     def __init__(self):
         self.lock = threading.Lock()
@@ -305,9 +311,9 @@ class Store:
             group = next((g for g in self.groups if g["name"] == "pb-svc-%s" % sid), None) if sid else None
             mine = next((l for l in self.lists if l.get("comment") == "pb:%s" % sid), None) if sid else None
             if mine is not None and (sid == "guard" or (group is not None and group.get("enabled"))):
-                return mine["id"]
+                return gravity_list_id(mine["id"])
             ad = next((l for l in self.lists if l.get("comment") == AD_LIST_COMMENT), None)
-            return ad["id"] if ad is not None else None
+            return gravity_list_id(ad["id"]) if ad is not None else None
         if status in ("REGEX", "REGEX_CNAME"):
             rules = [d for d in self.domains if d["type"] == "deny" and d["kind"] == "regex" and d.get("enabled", True)]
             for d in rules:
@@ -1189,7 +1195,7 @@ def seed_history(store, count=2600, seed=11, now=None):
         if ads.random() * 7 > weights[int(time.strftime("%H", time.localtime(t)))]:
             continue
         ip, name, _child, _w = ads.choices(devices, weights=[d[3] for d in devices])[0]
-        store.add_query(ads.choice(AD_DOMAINS), "GRAVITY", ip, name, t, list_id=ad_list)
+        store.add_query(ads.choice(AD_DOMAINS), "GRAVITY", ip, name, t, list_id=gravity_list_id(ad_list))
         made += 1
     store.query_log.sort(key=lambda q: q["time"])
     for i, q in enumerate(store.query_log, 1):          # ids grow with time, as in FTL
@@ -1268,10 +1274,11 @@ def seed_ledger(store, now=None, seed=3):
         share = 1.0 if back else (now - pb.day_start(today)) / 86400.0          # today is not over yet
         tries = {"tiktok": rng.randint(40, 95), "roblox": rng.randint(25, 70), "youtube": rng.randint(30, 85),
                  "instagram": rng.randint(0, 12), "snapchat": rng.randint(0, 8)}
-        rows = [{"status": 1, "list_id": ad_list, "n": int(rng.randint(10000, 17000) * share)},
+        rows = [{"status": 1, "list_id": gravity_list_id(ad_list), "n": int(rng.randint(10000, 17000) * share)},
                 {"status": 4, "list_id": block_all, "n": int(rng.randint(300, 900) * share)},
                 {"status": 6, "list_id": None, "n": int(rng.randint(5, 40) * share)}]
-        rows += [{"status": rng.choice((1, 1, 1, 9)), "list_id": ids["pb:" + sid], "n": int(n * share)} for sid, n in tries.items()]
+        rows += [{"status": rng.choice((1, 1, 1, 9)), "list_id": gravity_list_id(ids["pb:" + sid]), "n": int(n * share)}
+                 for sid, n in tries.items()]
         got = pb.classify_stops([r for r in rows if r["n"] > 0], adlists, rules, services)
         stops[day.isoformat()] = {"ads": got["ads"], "apps": got["apps"], "whole": back > 0}
     sched = bedtime_of(store)

@@ -285,11 +285,13 @@ library's `sqlite3` without it), with only whole numbers in the SQL:
 (<BLOCKED_STATUS>) GROUP BY status, list_id`, for [box-local midnight, now) and, from `LEDGER_SETTLE` (5 minutes) after
 midnight (FTL writes its database every `database.DBinterval`, a minute), for the whole of every day of the last week that
 the ledger holds and has not read whole since it ended; such a day is then final. FTL 6 notes in `list_id` the list (for a
-block-list status) or the rule (for a regex or denylist status) that stopped a lookup; the comments in `gravity.db` say whose:
+block-list status) or the rule (for a regex or denylist status) that stopped a lookup, in one column: a rule by its own
+`domainlist` id (0 and up), a list as `-(adlist id + 2)` (-2 is list 0, -3 list 1; -1 is none; `adlist_of`, the same in
+every FTL 6). The comments in `gravity.db` say whose:
 
 | Status (QUERY_STATUS) | `list_id` points at | Counted as |
 |---|---|---|
-| 1, 9 (gravity, also by CNAME) | `adlist` with comment `pb:<sid>`, `<sid>` in the catalog | `apps[sid]` |
+| 1, 9 (gravity, also by CNAME) | `adlist` `-list_id - 2` with comment `pb:<sid>`, `<sid>` in the catalog | `apps[sid]` |
 | | `adlist` `pb:guard` | not counted (the outside-DNS guard) |
 | | any other `adlist` (not `pb:`) | `ads` |
 | | an unknown id, or `pb:` of an app this release does not know | not counted |
@@ -334,6 +336,7 @@ stops the scheduler). Written with each read of the stops (or every 15 minutes s
 ```jsonc
 {
   "v": 1,
+  "counted": 2,                        // how the stops were counted (LEDGER_COUNTED); see below
   "since": "YYYY-MM-DD" | null,        // first day with stop counts
   "keptSince": "YYYY-MM-DD" | null,    // first day the scheduler counted time off and nights
   "adLists": 1 | null,                 // switched-on block lists that are not Sinko's, from gravity.db
@@ -346,6 +349,11 @@ stops the scheduler). Written with each read of the stops (or every 15 minutes s
   "before": {"ads": 0, "apps": {}, "off": 0.0, "nights": 0, "kept": 0}                   // the rows folded away
 }
 ```
+
+`counted` says how the stops were counted. 3.3.0 wrote none and read a block list's `list_id` as the list's own id, so its
+ads and app tries are 0 where they were not: a file without `counted: 2` keeps its time off, nights and start days, and its
+stop counts (`ads`, `apps`, `before.ads`, `before.apps`) become `null` and not final, to be read again while Pi-hole's
+database still holds each day (`windows`).
 
 Rows older than 35 days are folded into `before`, so the totals outlive both the rows and Pi-hole's own limit; a row older than
 a week that was never read whole is final as it is.

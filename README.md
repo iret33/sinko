@@ -91,7 +91,7 @@ A card on the page shows what the box did for your family: **Today**, the **Last
 
 Every estimate says "about", and **How we count** on the card explains each figure. The numbers are counts the box keeps
 for itself (no websites, addresses or device names); they stay on the box and are never sent to the project. The price
-you type stays on your phone. Ads are counted from the ad lists on the box (Pi-hole's installer offers one); a box without
+you type stays on your phone. Ads are counted from the ad lists on the box (Pi-hole's installer adds a standard one); a box without
 one says so on the card, and the apps, bedtime and time off are still counted.
 
 ## See it work

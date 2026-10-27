@@ -3488,6 +3488,9 @@ class Learner:
 # say nothing about the children or the rules.
 G_LEDGER = "pb-ledger"           # disabled, never joined by a client: its comment is the page's copy of the ledger
 SAVINGS_FILE = "savings.json"
+# How the stops in savings.json were counted. 3.3.0 (no "counted") read FTL's list_id of a block-list stop as the list's own
+# id, so its ads and app tries are 0 where they were not: a file from it drops those counts, to be read again (adlist_of).
+LEDGER_COUNTED = 2
 LEDGER_KEEP_DAYS = 35            # daily rows kept in savings.json; older ones are folded into the running totals
 LEDGER_REFRESH = 15 * 60         # seconds between two reads of Pi-hole's database (the first right after the start)
 LEDGER_PUBLISH_EVERY = 60 * 60   # pb-ledger is written at most this often: every group write makes Pi-hole reload its lists
@@ -3504,8 +3507,8 @@ LEDGER_COUNT_MAX = 10 ** 12      # no count of a home comes near this; a bigger 
 DAY_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 SID_RE = re.compile(r"[a-z0-9][a-z0-9_-]{0,39}")
 
-# What stopped a lookup, by FTL's status code (QUERY_STATUS). For the first two kinds, the query's list_id is the id of the
-# block list (gravity.db's adlist) or of the rule (domainlist) that stopped it.
+# What stopped a lookup, by FTL's status code (QUERY_STATUS). For the first two kinds, the query's list_id says which block
+# list (gravity.db's adlist, encoded: adlist_of) or which rule (domainlist, its own id) stopped it.
 STOP_GRAVITY = {1, 9}            # a block list, also through a CNAME
 STOP_REGEX = {4, 10}             # a deny regex: Sinko's block-everything rule, a learned rule, or one of the owner's
 STOP_DENY = {5, 11}              # an exact deny rule: always the owner's
@@ -3568,6 +3571,13 @@ def bedtime_seconds(sched: dict, night: str) -> int:
     return max(int(round(ends.timestamp() - begins.timestamp())), 0)
 
 
+def adlist_of(list_id):
+    """The block list (gravity.db's adlist id) a block-list stop names. FTL keeps rules and lists in the one column list_id:
+    a rule by its own id (0 and up), a list as -(id + 2) (-2 is list 0, -3 list 1, ...), -1 for none (dnsmasq_interface.c,
+    the same in every FTL 6). Anything else names no list."""
+    return -list_id - 2 if _is_int(list_id) and list_id <= -2 else None
+
+
 def stop_source(status, list_id, adlists: dict, rules: dict, services) -> tuple:
     """What stopped one lookup, from the list or rule FTL names (list_id) and the comment gravity.db holds on it:
     ("ads", None) a general block list (any list that is not Sinko's), ("app", sid) the list of an app the family blocked
@@ -3576,7 +3586,7 @@ def stop_source(status, list_id, adlists: dict, rules: dict, services) -> tuple:
     own rules, ("upstream", None) the upstream service, ("other", None) whatever cannot be told: a list deleted since, the
     list of an app this release does not know, a status that is no stop."""
     if status in STOP_GRAVITY:
-        comment = adlists.get(list_id)
+        comment = adlists.get(adlist_of(list_id))
         if comment is None:
             return "other", None
         if not comment.startswith(LIST_COMMENT_PREFIX):
@@ -3793,7 +3803,7 @@ class Ledger:
 
     savings.json, version 1 (architecture.md, "Savings ledger (pb-ledger)"); days are box-local "YYYY-MM-DD" and null is
     "not known", never 0:
-      {"v": 1, "since": day|null, "keptSince": day|null, "adLists": n|null,
+      {"v": 1, "counted": LEDGER_COUNTED, "since": day|null, "keptSince": day|null, "adLists": n|null,
        "days": {day: {"ads": n|null, "apps": {sid: n}|null, "final": bool, "off": s, "seen": s, "kept": 1|0|null}},
        "night": {"d": day, "seen": s, "off": s, "planned": s}|null,
        "before": {"ads": n, "apps": {sid: n}, "off": s, "nights": n, "kept": n}}
@@ -3824,7 +3834,11 @@ class Ledger:
     def load(self) -> dict:
         if self.data is None:
             path = self.file()
-            self.data = self._clean(read_json_file(path))
+            raw = read_json_file(path)
+            self.data = self._clean(raw)
+            if self.data is not None and raw.get("counted") != LEDGER_COUNTED:
+                log.info("%s: the ads and app tries counted by an earlier version are counted again", SAVINGS_FILE)
+                self.dirty = True
             if self.data is None:
                 self.data = self._fresh()
                 if os.path.exists(path):
@@ -3847,15 +3861,18 @@ class Ledger:
 
     @staticmethod
     def _fresh() -> dict:
-        return {"v": 1, "since": None, "keptSince": None, "adLists": None, "days": {}, "night": None,
-                "before": {"ads": 0, "apps": {}, "off": 0.0, "nights": 0, "kept": 0}}
+        return {"v": 1, "counted": LEDGER_COUNTED, "since": None, "keptSince": None, "adLists": None, "days": {},
+                "night": None, "before": {"ads": 0, "apps": {}, "off": 0.0, "nights": 0, "kept": 0}}
 
     @classmethod
     def _clean(cls, raw):
         """savings.json as this version keeps it, or None when it is not one (corrupt, another program's, another version).
-        A field that makes no sense loses only itself."""
+        A field that makes no sense loses only itself. Stops counted by other rules (LEDGER_COUNTED) are not known: each day
+        is read again while Pi-hole's database still holds it (windows), and what it no longer holds stays not known; the
+        time off and the nights were counted by the scheduler itself and stay."""
         if not isinstance(raw, dict) or raw.get("v") != 1 or not isinstance(raw.get("days"), dict):
             return None
+        recount = raw.get("counted") != LEDGER_COUNTED
         data = cls._fresh()
         for key in ("since", "keptSince"):
             data[key] = raw[key] if _is_day(raw.get(key)) else None
@@ -3865,15 +3882,18 @@ class Ledger:
                 ads = _ledger_count(row.get("ads"))
                 apps = _ledger_apps(row.get("apps")) if ads is not None else None
                 kept = row.get("kept") if _is_int(row.get("kept")) and row.get("kept") in (0, 1) else None
+                if recount:
+                    ads = apps = None
                 data["days"][day] = {"ads": ads, "apps": apps if apps is not None or ads is None else {},
-                                     "final": row.get("final") is True, "off": _ledger_seconds(row.get("off")),
+                                     "final": row.get("final") is True and not recount, "off": _ledger_seconds(row.get("off")),
                                      "seen": _ledger_seconds(row.get("seen")), "kept": kept}
         night = raw.get("night")
         if isinstance(night, dict) and _is_day(night.get("d")):
             data["night"] = {"d": night["d"], "seen": _ledger_seconds(night.get("seen")), "off": _ledger_seconds(night.get("off")),
                              "planned": int(_ledger_seconds(night.get("planned")))}
         before = raw.get("before") if isinstance(raw.get("before"), dict) else {}
-        data["before"] = {"ads": _ledger_count(before.get("ads")) or 0, "apps": _ledger_apps(before.get("apps")) or {},
+        data["before"] = {"ads": 0 if recount else _ledger_count(before.get("ads")) or 0,
+                          "apps": {} if recount else _ledger_apps(before.get("apps")) or {},
                           "off": _ledger_seconds(before.get("off")), "nights": _ledger_count(before.get("nights")) or 0,
                           "kept": _ledger_count(before.get("kept")) or 0}
         return data
