@@ -3,6 +3,16 @@
 All notable changes to Sinko. Versions follow [Semantic Versioning](https://semver.org); the newest release is at the top.
 Boxes learn about a release from this repository's GitHub releases, whose notes are the section of this file.
 
+## [3.3.1] - 2026-10-27
+
+### Fixed
+- **What Sinko did for you showed no ads and no app tries on a real box.** Pi-hole notes which list stopped a lookup in a
+  way of its own, and 3.3.0 read it wrong, so every stop by an ad list or an app's list was left out (Sinko's stand-in for
+  Pi-hole in its tests made the same mistake, so no test saw it). After the update the box counts again, from Pi-hole's own
+  history, the days 3.3.0 counted; the time the internet was off and the bedtime nights were right and stay.
+- A day is closed only once Pi-hole has written all of it to its history (on some boxes that happens only once an hour),
+  so the last minutes of a day are no longer missed.
+
 ## [3.3.0] - 2026-10-27
 
 ### Changed
