@@ -316,11 +316,16 @@ class Store:
             return gravity_list_id(ad["id"]) if ad is not None else None
         if status in ("REGEX", "REGEX_CNAME"):
             rules = [d for d in self.domains if d["type"] == "deny" and d["kind"] == "regex" and d.get("enabled", True)]
+            every = next((d for d in rules if d["domain"] == "^.*$"), None)
+            offline = next((g for g in self.groups if g["name"] == "pb-offline"), None)
+            if every is not None and offline is not None and offline.get("enabled"):
+                # FTL takes the first deny regex that matches, by id: while the internet is off that is Sinko's ^.*$, made at
+                # setup before any rule the box learned, even for a name under a learned zone
+                return every["id"]
             for d in rules:
                 zone = load_cli().regex_zone(d["domain"]) if (d.get("comment") or "").startswith("pb-learned:") else None
                 if zone and (name == zone or name.endswith("." + zone)):
                     return d["id"]
-            every = next((d for d in rules if d["domain"] == "^.*$"), None)
             return every["id"] if every is not None else None
         if status in ("DENYLIST", "DENYLIST_CNAME"):
             exact = next((d for d in self.domains if d["type"] == "deny" and d["kind"] == "exact" and d["domain"] == name), None)
@@ -1166,6 +1171,7 @@ def seed_history(store, count=2600, seed=11, now=None):
     weights = [1, 1, 1, 1, 1, 2, 2, 3, 3, 3, 3, 4, 4, 4, 5, 5, 6, 6, 7, 7, 7, 6, 4, 2]       # by hour of day
     bedtime = bedtime_of(store)
     pb = load_cli()
+    every = next((d["id"] for d in store.domains if d["kind"] == "regex" and d["domain"] == "^.*$"), None)   # block everything
 
     def asleep(t):
         return bedtime is not None and pb.in_schedule(bedtime, datetime.datetime.fromtimestamp(t))
@@ -1184,9 +1190,11 @@ def seed_history(store, count=2600, seed=11, now=None):
             status = "GRAVITY" if child and group is not None and group["enabled"] else rng.choice(["FORWARDED", "FORWARDED", "CACHE"])
         else:
             domain, status = rng.choice(noise), rng.choice(["FORWARDED", "CACHE", "CACHE"])
+        list_id = None
         if child and status != "GRAVITY" and asleep(t):
             status = "REGEX"                         # FTL looks at the lists first: only what they let through meets the rule
-        store.add_query(domain, status, ip, name, t)
+            list_id = every                          # ... and of the rules, the first by id: the block-everything rule
+        store.add_query(domain, status, ip, name, t, list_id=list_id)
         made += 1
     ads, ad_list = random.Random(seed + 1), store.add_ad_list()       # a generator of its own: the lookups above stay as they were
     made = 0

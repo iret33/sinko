@@ -3491,6 +3491,7 @@ SAVINGS_FILE = "savings.json"
 # How the stops in savings.json were counted. 3.3.0 (no "counted") read FTL's list_id of a block-list stop as the list's own
 # id, so its ads and app tries are 0 where they were not: a file from it drops those counts, to be read again (adlist_of).
 LEDGER_COUNTED = 2
+LEDGER_WRITE_LAG = 90            # what FTL leaves off disk past its last write (its last 30 s), with some to spare
 LEDGER_KEEP_DAYS = 35            # daily rows kept in savings.json; older ones are folded into the running totals
 LEDGER_REFRESH = 15 * 60         # seconds between two reads of Pi-hole's database (the first right after the start)
 LEDGER_PUBLISH_EVERY = 60 * 60   # pb-ledger is written at most this often: every group write makes Pi-hole reload its lists
@@ -3676,7 +3677,7 @@ def stop_names(services, rule_rows: list, lists_dir: str | None = None) -> dict:
     return {"apps": apps, "guard": guard, "zones": zones}
 
 
-def read_stops(windows: list, services, setting=None, sql=None, lists_dir: str | None = None) -> dict:
+def read_stops(windows: list, services, setting=None, sql=None, lists_dir: str | None = None, now=None) -> dict:
     """Count what Pi-hole stopped, by what stopped it, in each window of the ledger (Ledger.windows), read-only from Pi-hole's
     long-term database and gravity.db's comments. It runs programs and can take a while on a busy day: only ever in the
     ledger's background job, never on the tick thread. Only whole numbers reach the SQL (sql_ints and int()).
@@ -3684,8 +3685,12 @@ def read_stops(windows: list, services, setting=None, sql=None, lists_dir: str |
     Returns {"days": {day: {"ads": n, "apps": {sid: n}, "whole": bool}}, "adLists": n, "why": None}. What cannot be counted
     is None, never 0, and `why` says why: Pi-hole keeps no history (database.maxDBdays 0, or no database file), a database
     cannot be read, or the privacy level keeps out what is needed. A window that would only fill a gap (the first run's
-    days before today) is left out unless the database holds the whole of it."""
+    days before today) is left out unless the database holds the whole of it, a day to count again ("part") unless it
+    holds some of it. A past day is "whole" (final) only once FTL has written its end to disk: FTL writes every
+    database.DBinterval (a minute unless the owner set more, an hour on some boxes moved from Pi-hole 5), keeping the last
+    30 seconds back; until then it is counted as it stands and read again."""
     setting = setting or ftl_try
+    now = time.time() if now is None else now
     sql = sql or sql_rows
     out = {"days": {}, "adLists": None, "why": None}
 
@@ -3732,6 +3737,13 @@ def read_stops(windows: list, services, setting=None, sql=None, lists_dir: str |
         ftl_db = value.strip() if err is None else FTL_DB
     level, err = setting("misc.privacylevel")
     level = int(level.strip()) if err is None and level.strip().isdigit() else 0
+    interval, err = setting("database.DBinterval")
+    try:
+        interval = float(interval) if err is None else 60.0
+    except (TypeError, ValueError):
+        interval = 60.0
+    interval = min(max(interval, 1.0), 86400.0) if interval == interval else 60.0      # (NaN is not equal to itself)
+    on_disk = now - interval - LEDGER_WRITE_LAG       # FTL has written everything before this to disk
     if level >= 3:
         return unknown("Pi-hole's privacy level 3 keeps no history")
     try:
@@ -3748,8 +3760,9 @@ def read_stops(windows: list, services, setting=None, sql=None, lists_dir: str |
         first = ask(ftl_db, "SELECT MIN(timestamp) AS t FROM %s" % table)
         oldest = first[0].get("t") if first else None
         for day, start, end, whole, gap in windows:
-            if gap and not (_is_number(oldest) and oldest < start):
-                continue                       # the database does not hold the whole day: a gap stays a gap
+            if gap and not (_is_number(oldest) and oldest < (end if gap == "part" else start)):
+                continue                       # the database does not hold the whole day (or, to count again, any of it)
+            whole = whole and end <= on_disk
             rows = ask(ftl_db, "SELECT status, %s, COUNT(*) AS n FROM %s WHERE timestamp >= %d AND timestamp < %d "
                                "AND status IN (%s) GROUP BY status, %s"
                        % (key, table, int(start), int(end), sql_ints(sorted(BLOCKED_STATUS)), key))
@@ -3804,12 +3817,13 @@ class Ledger:
     savings.json, version 1 (architecture.md, "Savings ledger (pb-ledger)"); days are box-local "YYYY-MM-DD" and null is
     "not known", never 0:
       {"v": 1, "counted": LEDGER_COUNTED, "since": day|null, "keptSince": day|null, "adLists": n|null,
-       "days": {day: {"ads": n|null, "apps": {sid: n}|null, "final": bool, "off": s, "seen": s, "kept": 1|0|null}},
+       "days": {day: {"ads": n|null, "apps": {sid: n}|null, "final": bool, "off": s, "seen": s, "kept": 1|0|null,
+                      "recount": true (only while it waits to be counted again)}},
        "night": {"d": day, "seen": s, "off": s, "planned": s}|null,
        "before": {"ads": n, "apps": {sid: n}, "off": s, "nights": n, "kept": n}}
     "ads"/"apps" are the stops Pi-hole's database showed (read_stops), "final" says the day was read whole after it ended,
     "seen" and "off" are the seconds the scheduler watched the day and the children's internet was off in them, "kept" is
-    the bedtime night that started on that day. "night" is the bedtime that is on (or was on when the scheduler stopped),
+    the bedtime night that started on that day, "recount" a day whose stops an earlier version counted the wrong way. "night" is the bedtime that is on (or was on when the scheduler stopped),
     and "before" the totals of the rows folded away after LEDGER_KEEP_DAYS days."""
 
     def __init__(self, path: str | None = None):
@@ -3868,8 +3882,9 @@ class Ledger:
     def _clean(cls, raw):
         """savings.json as this version keeps it, or None when it is not one (corrupt, another program's, another version).
         A field that makes no sense loses only itself. Stops counted by other rules (LEDGER_COUNTED) are not known: each day
-        is read again while Pi-hole's database still holds it (windows), and what it no longer holds stays not known; the
-        time off and the nights were counted by the scheduler itself and stay."""
+        is marked "recount" and read again while Pi-hole's database still holds it (windows, as far back as the rows go),
+        and what it no longer holds stays not known; the time off and the nights were counted by the scheduler itself and
+        stay."""
         if not isinstance(raw, dict) or raw.get("v") != 1 or not isinstance(raw.get("days"), dict):
             return None
         recount = raw.get("counted") != LEDGER_COUNTED
@@ -3882,11 +3897,14 @@ class Ledger:
                 ads = _ledger_count(row.get("ads"))
                 apps = _ledger_apps(row.get("apps")) if ads is not None else None
                 kept = row.get("kept") if _is_int(row.get("kept")) and row.get("kept") in (0, 1) else None
-                if recount:
+                again = recount or row.get("recount") is True
+                if again:
                     ads = apps = None
                 data["days"][day] = {"ads": ads, "apps": apps if apps is not None or ads is None else {},
-                                     "final": row.get("final") is True and not recount, "off": _ledger_seconds(row.get("off")),
+                                     "final": row.get("final") is True and not again, "off": _ledger_seconds(row.get("off")),
                                      "seen": _ledger_seconds(row.get("seen")), "kept": kept}
+                if again:
+                    data["days"][day]["recount"] = True
         night = raw.get("night")
         if isinstance(night, dict) and _is_day(night.get("d")):
             data["night"] = {"d": night["d"], "seen": _ledger_seconds(night.get("seen")), "off": _ledger_seconds(night.get("off")),
@@ -3976,18 +3994,25 @@ class Ledger:
         end); and the LEDGER_BACKFILL days before today that the ledger has nothing for and that came before it began
         counting (keptSince; until anything was counted at all, all of them) as gaps, counted only when the database holds
         the whole day, so that the week is full on the first day. Not only on the first read: a first read in the
-        LEDGER_SETTLE after midnight has to leave yesterday for later, and must not leave it a gap for good."""
+        LEDGER_SETTLE after midnight has to leave yesterday for later, and must not leave it a gap for good. And every day
+        marked "recount", however old: read again while the database holds any of it (from keptSince, when this counting
+        ran and read it as it went) or the whole of it (before: the first run's backfill), "part" or a gap to read_stops."""
         data = self.load()
         today = now.date()
         out = [(today.isoformat(), day_start(today), now.timestamp(), False, False)]
         settled = now.timestamp() - day_start(today) >= LEDGER_SETTLE
-        for back in range(1, LEDGER_WEEK + 1):
+        for back in range(1, LEDGER_KEEP_DAYS):
             day = today - dt.timedelta(days=back)
             if back == 1 and not settled:
                 continue
             row = data["days"].get(day.isoformat())
             whole = (day.isoformat(), day_start(day), day_start(day + dt.timedelta(days=1)), True)
-            if row is not None and not row["final"]:
+            if row is not None and row.get("recount"):
+                part = data["keptSince"] is not None and day.isoformat() >= data["keptSince"]
+                out.append(whole + ("part" if part else True,))
+            elif back > LEDGER_WEEK:
+                continue
+            elif row is not None and not row["final"]:
                 # A day with no counts yet is read only when the database holds the whole of it, like a gap.
                 out.append(whole + (row["ads"] is None,))
             elif row is None and back <= LEDGER_BACKFILL and (
@@ -4018,6 +4043,7 @@ class Ledger:
             if row["ads"] is None or ads + sum(apps.values()) >= row["ads"] + sum(row["apps"].values()):
                 row["ads"], row["apps"] = ads, apps
             row["final"] = got.get("whole") is True
+            row.pop("recount", None)
             if data["since"] is None or day < data["since"]:
                 data["since"] = day
         self.fold(now.date())
@@ -4025,8 +4051,8 @@ class Ledger:
 
     def fold(self, today: dt.date) -> None:
         """Rows older than LEDGER_KEEP_DAYS days go into the running totals ("before"), which so outlive both the rows and
-        Pi-hole's own limit. A row too old to be read whole again is final as it is. Rows of days after today (the clock
-        was set back) are left alone: the clock comes right again."""
+        Pi-hole's own limit. A row too old to be read whole again is final as it is, unless it waits for a recount. Rows of
+        days after today (the clock was set back) are left alone: the clock comes right again."""
         data = self.load()
         self._folded = today
         oldest = (today - dt.timedelta(days=LEDGER_KEEP_DAYS - 1)).isoformat()
@@ -4046,7 +4072,7 @@ class Ledger:
                     b["kept"] += row["kept"]
                 del data["days"][day]
                 self.dirty = True
-            elif day < last_read and not row["final"]:
+            elif day < last_read and not row["final"] and not row.get("recount"):
                 row["final"] = True
                 self.dirty = True
 

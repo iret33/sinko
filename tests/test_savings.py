@@ -402,6 +402,23 @@ class ReadStopsTests(DatabaseCase):
         self.assertEqual(got["days"][self.today.isoformat()]["ads"], 2)
         slept.assert_called_once()
 
+    def test_a_day_to_count_again_needs_only_some_of_it_in_the_database(self):
+        # The install day of a box first set up with 3.3.0: Pi-hole's database begins in the middle of it.
+        self.db.ftl([(self.at(2, 14), 1, "ads.doubleclick.net", G(4)), (self.at(1, 9), 1, "ads.doubleclick.net", G(4))])
+        days = [self.today - dt.timedelta(days=n) for n in (3, 2, 1)]
+        got = self.read(windows=[window(d, whole=True, gap="part") for d in days])
+        self.assertEqual(sorted(got["days"]), [days[1].isoformat(), days[2].isoformat()], "a day it holds none of stays unread")
+        self.assertEqual(got["days"][days[1].isoformat()]["ads"], 1)
+
+    def test_a_past_day_is_whole_only_once_ftl_has_written_its_end(self):
+        self.db.ftl([(self.at(1, 23, 50), 1, "ads.doubleclick.net", G(4))])
+        yesterday = self.today - dt.timedelta(days=1)
+        end = pb.day_start(self.today)
+        for interval, after, whole in (("60", 5 * 60, True), ("3600", 5 * 60, False), ("3600", 3600 + 120, True),
+                                       (None, 5 * 60, True), ("x", 5 * 60, True), ("nan", 5 * 60, True)):
+            got = self.read(windows=[window(yesterday, whole=True)], setting=settings(database__DBinterval=interval), now=end + after)
+            self.assertEqual(got["days"][yesterday.isoformat()], {"ads": 1, "apps": {}, "whole": whole}, (interval, after))
+
     def test_a_gap_is_counted_only_when_the_database_holds_the_whole_day(self):
         self.db.ftl([(self.at(2, 0, 30), 1, "ads.doubleclick.net", G(4)), (self.at(1, 8), 1, "ads.doubleclick.net", G(4)),
                      (self.at(0, 9), 1, "ads.doubleclick.net", G(4))])
@@ -789,7 +806,7 @@ class SavingsFileTests(LedgerCase):
         self.assertTrue(self.ledger.dirty, "so that the next save carries the new counting")
         for n in (3, 2, 1, 0):
             self.assertEqual(data["days"][self.day(n)], {"ads": None, "apps": None, "final": False, "off": 3600.0, "seen": 86400.0,
-                                                         "kept": 1})
+                                                         "kept": 1, "recount": True})
         self.assertEqual((data["since"], data["keptSince"]), (self.day(3), self.day(3)))
         self.assertEqual(data["before"], {"ads": 0, "apps": {}, "off": 60.0, "nights": 2, "kept": 1})
         self.assertEqual(self.payload()["days"][-1]["ads"], None, "until it is read again: not known, never the old 0")
@@ -802,6 +819,24 @@ class SavingsFileTests(LedgerCase):
         again = pb.Ledger()
         self.assertEqual(again.load()["days"][self.day(1)]["ads"], 1500)
         self.assertFalse(again.dirty, "a file of this version is taken as it is")
+        self.assertNotIn("recount", again.load()["days"][self.day(1)], "counted again: the mark is gone")
+
+    def test_a_recount_reaches_every_day_the_ledger_holds_and_waits_for_it(self):
+        # A box that ran 3.3.0 for weeks: days 8 to 34 back are past the week, and would otherwise be final as they are.
+        old_day = {"ads": 0, "apps": {}, "final": True, "off": 0.0, "seen": 86400.0, "kept": None}
+        self.write(json.dumps({"v": 1, "since": self.day(34), "keptSince": self.day(20), "adLists": 1, "night": None,
+                               "days": {self.day(n): dict(old_day) for n in range(34, 0, -1)}}))
+        self.ledger.observe(self.now, 0, False, True, False, OffTimeTests.SCHED)       # a pass folds: nothing may close them
+        rows = self.ledger.load()["days"]
+        self.assertTrue(all(rows[self.day(n)]["recount"] and not rows[self.day(n)]["final"] for n in range(34, 0, -1)))
+        got = {d: g for d, _s, _e, _w, g in self.ledger.windows(self.now)}
+        self.assertEqual({d for d in got if d != self.day(0)}, {self.day(n) for n in range(34, 0, -1)}, "every one, however old")
+        self.assertEqual({got[self.day(n)] for n in range(20, 0, -1)}, {"part"},
+                         "from keptSince on, 3.3.0 read the day as it went: some of it in the database is enough")
+        self.assertEqual({got[self.day(n)] for n in range(34, 20, -1)}, {True}, "before it, the backfill's rule: the whole day")
+        self.ledger.merge(self.result({n: 100 + n for n in range(34, 0, -1)}, whole=set(range(34, 0, -1))), self.now)
+        self.assertEqual(self.ledger.load()["days"][self.day(30)]["ads"], 130)
+        self.assertEqual({d for d, *_ in self.ledger.windows(self.now)}, {self.day(0)}, "all read: nothing more to ask")
 
 
 # --------------------------------------------------------------------------- the scheduler's side and the page's copy

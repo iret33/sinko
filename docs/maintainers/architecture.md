@@ -283,8 +283,10 @@ and then every `LEDGER_REFRESH` (15 minutes), read-only through `sql_rows` (`pih
 library's `sqlite3` without it), with only whole numbers in the SQL:
 `SELECT status, list_id, COUNT(*) AS n FROM query_storage WHERE timestamp >= <start> AND timestamp < <end> AND status IN
 (<BLOCKED_STATUS>) GROUP BY status, list_id`, for [box-local midnight, now) and, from `LEDGER_SETTLE` (5 minutes) after
-midnight (FTL writes its database every `database.DBinterval`, a minute), for the whole of every day of the last week that
-the ledger holds and has not read whole since it ended; such a day is then final. FTL 6 notes in `list_id` the list (for a
+midnight, for the whole of every day of the last week that the ledger holds and has not read whole since it ended; such a
+day is then final, but only once FTL has written its end to disk: FTL writes every `database.DBinterval` (a minute unless the
+owner set more; a Pi-hole 5 setting in minutes becomes an hour) and keeps its last 30 seconds back, so a day is read "whole"
+from `DBinterval` + `LEDGER_WRITE_LAG` (90 s) after it ended, and counted as it stands (and read again) before that. FTL 6 notes in `list_id` the list (for a
 block-list status) or the rule (for a regex or denylist status) that stopped a lookup, in one column: a rule by its own
 `domainlist` id (0 and up), a list as `-(adlist id + 2)` (-2 is list 0, -3 list 1; -1 is none; `adlist_of`, the same in
 every FTL 6). The comments in `gravity.db` say whose:
@@ -300,6 +302,11 @@ every FTL 6). The comments in `gravity.db` say whose:
 | | any other rule (the owner's) | not counted |
 | 5, 11 (denylist) | the owner's exact rule | not counted |
 | 6, 7, 8, 18 (upstream), 15, 16 | | not counted |
+
+FTL names one list or rule, the first that matched, and two of its rules decide which: an exact entry on any of the client's
+lists beats an ABP pattern (Sinko's app lists are ABP only, so a tracker name of an app that StevenBlack's list also holds
+counts as an ad, which is what the card calls it), and of the deny regexes the first by id wins (Sinko's `^.*$`, made at
+setup, comes before every learned rule, so while the internet is off a stop in a learned zone counts as internet off).
 
 The table is the one with `list_id` (`PRAGMA table_info` of `query_storage`, then of `queries`). An FTL without it is read
 `GROUP BY status, domain`: a block-list stop of a name on an app's list (`service_domain_map`) is that app's, of a name on the
@@ -343,7 +350,8 @@ stops the scheduler). Written with each read of the stops (or every 15 minutes s
   "days": {                            // box-local days; LEDGER_KEEP_DAYS (35), today included
     "YYYY-MM-DD": {"ads": 12345 | null, "apps": {"tiktok": 40} | null, "final": true,   // read whole after the day ended
                    "off": 32400.0, "seen": 86400.0,                                       // seconds off, seconds watched
-                   "kept": 1 | 0 | null}                                                  // the night that started that day
+                   "kept": 1 | 0 | null,                                                  // the night that started that day
+                   "recount": true}                                // only while it waits to be counted again (below)
   },
   "night": {"d": "YYYY-MM-DD", "seen": 3600.0, "off": 3600.0, "planned": 32400} | null,  // the bedtime that is on
   "before": {"ads": 0, "apps": {}, "off": 0.0, "nights": 0, "kept": 0}                   // the rows folded away
@@ -352,8 +360,11 @@ stops the scheduler). Written with each read of the stops (or every 15 minutes s
 
 `counted` says how the stops were counted. 3.3.0 wrote none and read a block list's `list_id` as the list's own id, so its
 ads and app tries are 0 where they were not: a file without `counted: 2` keeps its time off, nights and start days, and its
-stop counts (`ads`, `apps`, `before.ads`, `before.apps`) become `null` and not final, to be read again while Pi-hole's
-database still holds each day (`windows`).
+stop counts (`ads`, `apps`, `before.ads`, `before.apps`) become `null`. Each of its days is marked `"recount": true` (kept in
+the file until it is read) and not final; `windows` offers every such day, however old, `fold` does not close it, and
+`read_stops` reads it while the database holds any of it (a day from `keptSince` on, which 3.3.0 read as it went; `"part"`)
+or the whole of it (a day before, as the first run's backfill), the mark going with the first count. What the database no
+longer holds stays `null`.
 
 Rows older than 35 days are folded into `before`, so the totals outlive both the rows and Pi-hole's own limit; a row older than
 a week that was never read whole is final as it is.

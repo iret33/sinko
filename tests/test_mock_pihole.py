@@ -698,6 +698,10 @@ class StopsAndLedgerTests(unittest.TestCase):
         self.api.request("POST", "/api/domains/deny/regex", {"domain": r"(^|\.)tiktokv\.com$", "comment": "pb-learned:tiktok 2026-10-01",
                                                              "groups": [0], "enabled": True})
         self.assertEqual(add("api.tiktokv.com", "REGEX"), self.rule_id("pb-learned:tiktok"))
+        self.api.put_group("pb-offline", "", True)
+        self.assertEqual(add("api.tiktokv.com", "REGEX"), self.rule_id("sinko: blocks everything"),
+                         "internet off: FTL takes the first matching rule by id, the block-everything rule made at setup")
+        self.api.put_group("pb-offline", "", False)
         self.assertIsNone(add("www.apple.com", "FORWARDED"))
         self.assertIsNone(add("x.example", "EXTERNAL_BLOCKED_NXRA"), "the upstream refused it: nothing on the box did")
         rows = self.box_queries()
