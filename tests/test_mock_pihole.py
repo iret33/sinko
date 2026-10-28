@@ -727,8 +727,8 @@ class StopsAndLedgerTests(unittest.TestCase):
         self.assertTrue(ads and all(q["status"] == "GRAVITY" and q["list_id"] == ad for q in ads))
         self.assertEqual({q["client"]["ip"] for q in ads}, {"192.168.1.21", "192.168.1.22", "192.168.1.9", "192.168.1.1"},
                          "every device, the children's included")
-        # (the history also asks for the name "domain", a word of the lists' header line: on no list, so stopped by none)
-        apps = [q for q in self.store.query_log if q["status"] == "GRAVITY" and mock_pihole.app_of(q["domain"])]
+        self.assertNotIn("domain", {q["domain"] for q in self.store.query_log}, "a word of the lists' header line, not one of their names")
+        apps =[q for q in self.store.query_log if q["status"] == "GRAVITY" and mock_pihole.app_of(q["domain"])]
         self.assertTrue(apps and all(q["list_id"] == self.list_id("pb:tiktok") for q in apps), "only TikTok is blocked")
         self.assertFalse([q for q in self.store.query_log if q["status"] == "REGEX"], "no bedtime set: no bedtime stops")
         self.assertEqual([q["id"] for q in self.store.query_log], list(range(1, len(self.store.query_log) + 1)))

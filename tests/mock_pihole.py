@@ -1173,7 +1173,8 @@ def seed_history(store, count=2600, seed=11, now=None):
     rng = random.Random(seed)
     now = time.time() if now is None else now
     lists_dir = os.path.join(HERE, "..", "lists")
-    apps = {sid: [l[2:-1] for l in open(os.path.join(lists_dir, sid + ".txt")).read().split() if l.startswith("||")]
+    pb = load_cli()
+    apps = {sid: [pb.bare_domain(d) for d in pb.list_domains(sid, lists_dir)]       # the ||name^ lines, as gravity reads them
             for sid in ("youtube", "tiktok", "instagram", "roblox", "snapchat", "netflix", "minecraft", "discord")}
     devices = [("192.168.1.21", "Sara-iPad", True, 4), ("192.168.1.22", "ali-galaxy", True, 3), ("192.168.1.9", "parents-phone", False, 2),
                ("192.168.1.1", "router", False, 1)]
@@ -1181,7 +1182,6 @@ def seed_history(store, count=2600, seed=11, now=None):
              "connectivitycheck.gstatic.com", "mesu.apple.com", "ocsp.digicert.com", "www.msftconnecttest.com"]
     weights = [1, 1, 1, 1, 1, 2, 2, 3, 3, 3, 3, 4, 4, 4, 5, 5, 6, 6, 7, 7, 7, 6, 4, 2]       # by hour of day
     bedtime = bedtime_of(store)
-    pb = load_cli()
     every = next((d["id"] for d in store.domains if d["kind"] == "regex" and d["domain"] == "^.*$"), None)   # block everything
 
     def asleep(t):
@@ -1228,7 +1228,8 @@ def start_live(store, seed=7):
     A child's query for an app is answered GRAVITY while that app's group is enabled (blocked), like Pi-hole.
     """
     rng = random.Random(seed)
-    domains = {sid: [l[2:-1] for l in open(os.path.join(HERE, "..", "lists", sid + ".txt")).read().split() if l.startswith("||")]
+    pb = load_cli()
+    domains = {sid: [pb.bare_domain(d) for d in pb.list_domains(sid, os.path.join(HERE, "..", "lists"))]
                for sid in ("youtube", "tiktok", "instagram", "roblox", "snapchat", "netflix")}
     devices = [("192.168.1.21", "Sara-iPad", True), ("192.168.1.22", "ali-galaxy", True), ("192.168.1.9", "parents-phone", False)]
     noise = ["www.apple.com", "api.github.com", "time.android.com", "www.bahrain.bh", "fonts.gstatic.com", "play.googleapis.com"]
